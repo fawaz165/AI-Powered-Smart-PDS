@@ -1,0 +1,31 @@
+{
+    "best_model": "Linear Regression",
+    "best_model_file": "demand_model_best.joblib",
+    "preprocessor_file": "demand_preprocessor.joblib",
+    "evaluation_metrics": {
+        "Linear Regression": {
+            "MAE": 289.22,
+            "MSE": 166283.48,
+            "RMSE": 407.78,
+            "R2": 0.9994
+        },
+        "Decision Tree": {
+            "MAE": 479.07,
+            "MSE": 575524.12,
+            "RMSE": 758.63,
+            "R2": 0.9978
+        },
+        "Random Forest": {
+            "MAE": 373.9,
+            "MSE": 358789.09,
+            "RMSE": 598.99,
+            "R2": 0.9986
+        },
+        "XGBoost Regressor": {
+            "MAE": 390.63,
+            "MSE": 361767.87,
+            "RMSE": 601.47,
+            "R2": 0.9986
+        }
+    }
+}

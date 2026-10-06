@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Beneficiaries Directory | AI-Powered Smart PDS</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="brand-badge"><i class="fa-solid fa-wheat-awn" style="color: #fff;"></i></div>
+        <div class="brand-text">
+          <h2>Smart PDS</h2>
+          <span>AI Distribution</span>
+        </div>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="dashboard.html" class="nav-link"><i class="icon fa-solid fa-chart-pie"></i> Dashboard</a>
+        <a href="beneficiaries.html" class="nav-link active"><i class="icon fa-solid fa-users"></i> Beneficiaries</a>
+        <a href="commodities.html" class="nav-link"><i class="icon fa-solid fa-boxes-stacked"></i> Commodities</a>
+        <a href="inventory.html" class="nav-link"><i class="icon fa-solid fa-warehouse"></i> Inventory Stock</a>
+        <a href="transactions.html" class="nav-link"><i class="icon fa-solid fa-arrow-right-arrow-left"></i> Transactions</a>
+        <a href="predictions.html" class="nav-link"><i class="icon fa-solid fa-wand-magic-sparkles"></i> Demand Forecast</a>
+        <a href="fraud.html" class="nav-link"><i class="icon fa-solid fa-shield-halved"></i> Anomaly & Fraud</a>
+        <a href="reports.html" class="nav-link"><i class="icon fa-solid fa-file-excel"></i> Reports Export</a>
+        <a href="about.html" class="nav-link"><i class="icon fa-solid fa-circle-info"></i> Viva Guide & About</a>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="user-snippet">
+          <div class="user-avatar"><i class="fa-solid fa-user-shield"></i></div>
+          <div class="user-details">
+            <h4 id="sidebar-user-name">Administrator</h4>
+            <p id="sidebar-user-role">PDS CHIEF OFFICER</p>
+          </div>
+        </div>
+        <button class="btn-logout" title="Logout" onclick="handleLogout()"><i class="fa-solid fa-arrow-right-from-bracket"></i></button>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-wrapper">
+      <header class="top-navbar">
+        <div class="page-title-box">
+          <h1>Beneficiary Ration Card Registry</h1>
+          <p>National Food Security Act (NFSA) beneficiary entitlement directory and cardholder management</p>
+        </div>
+        <div class="nav-actions">
+          <button class="btn btn-primary btn-sm" onclick="openModal('add-beneficiary-modal')">
+            <i class="fa-solid fa-user-plus"></i> Register Beneficiary
+          </button>
+        </div>
+      </header>
+
+      <div class="content-body">
+        <div class="data-panel">
+          <div class="panel-header">
+            <h3>Cardholder Directory</h3>
+            <div class="panel-actions">
+              <input type="text" id="ben-search" class="form-control" placeholder="Search by name, ID, or card number..." style="width: 280px;" oninput="filterBeneficiaries()">
+              <select id="ben-filter-region" class="form-control" style="width: 170px;" onchange="filterBeneficiaries()">
+                <option value="">All Regions</option>
+                <option value="Chennai">Chennai</option>
+                <option value="Coimbatore">Coimbatore</option>
+                <option value="Madurai">Madurai</option>
+                <option value="Salem">Salem</option>
+                <option value="Tiruchirappalli">Tiruchirappalli</option>
+              </select>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table class="custom-table">
+              <thead>
+                <tr>
+                  <th>Beneficiary ID</th>
+                  <th>Full Name</th>
+                  <th>Region</th>
+                  <th>Family Size</th>
+                  <th>Ration Card Type</th>
+                  <th>Monthly Quota</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="beneficiaries-tbody">
+                <tr><td colspan="8" style="text-align: center; color: var(--text-muted);">Loading beneficiaries...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Modal: Add Beneficiary -->
+  <div id="add-beneficiary-modal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-user-plus" style="color: var(--primary);"></i> Register New Beneficiary</h3>
+        <button class="modal-close" onclick="closeModal('add-beneficiary-modal')">&times;</button>
+      </div>
+      <form id="add-beneficiary-form">
+        <div class="modal-body">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="new-ben-id">Beneficiary ID</label>
+              <input type="text" id="new-ben-id" class="form-control" placeholder="e.g. BEN011" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="new-ben-name">Full Name</label>
+              <input type="text" id="new-ben-name" class="form-control" placeholder="e.g. Ramesh Kumar" required>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="new-ben-region">Region</label>
+              <select id="new-ben-region" class="form-control" required>
+                <option value="Chennai">Chennai</option>
+                <option value="Coimbatore">Coimbatore</option>
+                <option value="Madurai">Madurai</option>
+                <option value="Salem">Salem</option>
+                <option value="Tiruchirappalli">Tiruchirappalli</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="new-ben-size">Family Size</label>
+              <input type="number" id="new-ben-size" class="form-control" min="1" max="15" value="4" required>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="new-ben-type">Ration Card Type</label>
+            <select id="new-ben-type" class="form-control" required>
+              <option value="Priority (PHH)">Priority Household (PHH)</option>
+              <option value="Antyodaya Anna Yojana (AAY)">Antyodaya Anna Yojana (AAY)</option>
+              <option value="Non-Priority (NPHH)">Non-Priority (NPHH)</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('add-beneficiary-modal')">Cancel</button>
+          <button type="submit" class="btn btn-primary"><i class="fa-solid fa-save"></i> Save Beneficiary</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="toast-container" class="toast-container"></div>
+
+  <script src="js/api.js"></script>
+  <script src="js/beneficiaries.js"></script>
+</body>
+</html>

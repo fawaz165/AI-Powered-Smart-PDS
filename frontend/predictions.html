@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Demand Prediction Workbench | AI-Powered Smart PDS</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="brand-badge"><i class="fa-solid fa-wheat-awn" style="color: #fff;"></i></div>
+        <div class="brand-text">
+          <h2>Smart PDS</h2>
+          <span>AI Distribution</span>
+        </div>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="dashboard.html" class="nav-link"><i class="icon fa-solid fa-chart-pie"></i> Dashboard</a>
+        <a href="beneficiaries.html" class="nav-link"><i class="icon fa-solid fa-users"></i> Beneficiaries</a>
+        <a href="commodities.html" class="nav-link"><i class="icon fa-solid fa-boxes-stacked"></i> Commodities</a>
+        <a href="inventory.html" class="nav-link"><i class="icon fa-solid fa-warehouse"></i> Inventory Stock</a>
+        <a href="transactions.html" class="nav-link"><i class="icon fa-solid fa-arrow-right-arrow-left"></i> Transactions</a>
+        <a href="predictions.html" class="nav-link active"><i class="icon fa-solid fa-wand-magic-sparkles"></i> Demand Forecast</a>
+        <a href="fraud.html" class="nav-link"><i class="icon fa-solid fa-shield-halved"></i> Anomaly & Fraud</a>
+        <a href="reports.html" class="nav-link"><i class="icon fa-solid fa-file-excel"></i> Reports Export</a>
+        <a href="about.html" class="nav-link"><i class="icon fa-solid fa-circle-info"></i> Viva Guide & About</a>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="user-snippet">
+          <div class="user-avatar"><i class="fa-solid fa-user-shield"></i></div>
+          <div class="user-details">
+            <h4 id="sidebar-user-name">Administrator</h4>
+            <p id="sidebar-user-role">PDS CHIEF OFFICER</p>
+          </div>
+        </div>
+        <button class="btn-logout" title="Logout" onclick="handleLogout()"><i class="fa-solid fa-arrow-right-from-bracket"></i></button>
+      </div>
+    </aside>
+
+    <main class="main-wrapper">
+      <header class="top-navbar">
+        <div class="page-title-box">
+          <h1>Machine Learning Demand Prediction Workbench</h1>
+          <p>Supervised regression forecasting using historical lags, seasonal indices, and beneficiary demographics</p>
+        </div>
+      </header>
+
+      <div class="content-body">
+
+        <!-- Two Column Layout: Predictor Form on Left, Result & Visuals on Right -->
+        <div class="charts-grid" style="grid-template-columns: 1fr 1fr;">
+          
+          <!-- Prediction Form Card -->
+          <div class="chart-card">
+            <div class="chart-header">
+              <h3><i class="fa-solid fa-sliders" style="color: var(--primary);"></i> Forecasting Parameters</h3>
+              <button class="btn btn-secondary btn-sm" onclick="fillProjectExample()">
+                <i class="fa-solid fa-wand-magic"></i> Load Project Scenario
+              </button>
+            </div>
+
+            <form id="demand-forecast-form">
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label" for="pred-commodity">Commodity</label>
+                  <select id="pred-commodity" class="form-control" required>
+                    <option value="Rice">Rice</option>
+                    <option value="Wheat">Wheat</option>
+                    <option value="Sugar">Sugar</option>
+                    <option value="Dal">Dal</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="pred-region">Region / District</label>
+                  <select id="pred-region" class="form-control" required>
+                    <option value="Chennai">Chennai</option>
+                    <option value="Coimbatore">Coimbatore</option>
+                    <option value="Madurai">Madurai</option>
+                    <option value="Salem">Salem</option>
+                    <option value="Tiruchirappalli">Tiruchirappalli</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label" for="pred-month">Forecast Month</label>
+                  <select id="pred-month" class="form-control" required>
+                    <option value="1">January (Pongal Festival Peak)</option>
+                    <option value="2">February</option>
+                    <option value="3">March</option>
+                    <option value="4">April</option>
+                    <option value="5">May (Summer Peak)</option>
+                    <option value="6">June</option>
+                    <option value="7">July</option>
+                    <option value="8">August</option>
+                    <option value="9">September</option>
+                    <option value="10">October (Diwali Season)</option>
+                    <option value="11" selected>November</option>
+                    <option value="12">December</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="pred-beneficiaries">Beneficiary Card Count</label>
+                  <input type="number" id="pred-beneficiaries" class="form-control" value="12500" required>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label" for="pred-stock">Current Stock in Depot (kg)</label>
+                  <input type="number" step="10" id="pred-stock" class="form-control" value="3800" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="pred-prev-demand">Previous Month Demand (kg)</label>
+                  <input type="number" step="10" id="pred-prev-demand" class="form-control" value="4200" required>
+                </div>
+              </div>
+
+              <button type="submit" class="btn btn-primary" style="width: 100%; padding: 14px; margin-top: 10px;" id="btn-predict-demand">
+                <i class="fa-solid fa-microchip"></i> Execute ML Demand Prediction
+              </button>
+            </form>
+          </div>
+
+          <!-- Prediction Result Card -->
+          <div class="chart-card" id="result-card" style="display: flex; flex-direction: column; justify-content: space-between;">
+            <div class="chart-header">
+              <h3><i class="fa-solid fa-circle-nodes" style="color: var(--accent-emerald);"></i> Intelligent Inventory Assessment</h3>
+              <span id="res-status-badge" class="badge badge-success">Awaiting Input</span>
+            </div>
+
+            <div id="result-display-box" style="flex: 1; display: flex; flex-direction: column; justify-content: center;">
+              <div style="text-align: center; padding: 20px 0;">
+                <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 8px;">Predicted Monthly Demand</p>
+                <div id="res-predicted-demand" style="font-size: 3rem; font-weight: 800; font-family: 'Outfit', sans-serif; color: #fff;">
+                  4,618 <span style="font-size: 1.2rem; color: var(--text-secondary); font-weight: 500;">kg</span>
+                </div>
+              </div>
+
+              <div style="background: rgba(13, 20, 36, 0.8); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 18px; margin: 15px 0;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                  <span style="color: var(--text-secondary);">Current Warehouse Stock:</span>
+                  <strong id="res-current-stock">3,800 kg</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                  <span style="color: var(--text-secondary);">Detected Shortage:</span>
+                  <strong id="res-shortage" style="color: var(--accent-rose);">818 kg</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; padding-top: 8px; border-top: 1px dashed var(--border-subtle);">
+                  <span style="font-weight: 600; color: #fed7aa;">Recommended Procurement:</span>
+                  <strong id="res-procurement" style="color: var(--accent-amber); font-size: 1.15rem;">818 kg</strong>
+                </div>
+              </div>
+
+              <div id="res-ai-message" style="padding: 12px; border-radius: var(--radius-sm); font-size: 0.85rem; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); color: #fde68a;">
+                <i class="fa-solid fa-triangle-exclamation"></i> Potential shortage: 818 kg. Recommended procurement: 818 kg.
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Comparative Model Benchmark Panel -->
+        <div class="data-panel" style="margin-top: 24px;">
+          <div class="panel-header">
+            <div>
+              <h3><i class="fa-solid fa-award" style="color: var(--accent-amber);"></i> ML Regression Models Benchmark & Comparison</h3>
+              <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 4px;">
+                Evaluated on unseen test set using MAE, MSE, RMSE, and R² scores. The best model is loaded during Flask startup.
+              </p>
+            </div>
+            <span class="badge badge-success"><i class="fa-solid fa-check-double"></i> Real Test Metrics</span>
+          </div>
+          <div class="table-responsive">
+            <table class="custom-table">
+              <thead>
+                <tr>
+                  <th>Algorithm</th>
+                  <th>Mean Absolute Error (MAE)</th>
+                  <th>Mean Squared Error (MSE)</th>
+                  <th>Root Mean Squared Error (RMSE)</th>
+                  <th>R² Score (Accuracy)</th>
+                  <th>Model Status</th>
+                </tr>
+              </thead>
+              <tbody id="metrics-tbody">
+                <tr><td colspan="6" style="text-align: center; color: var(--text-muted);">Loading benchmark metrics...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <div id="toast-container" class="toast-container"></div>
+
+  <script src="js/api.js"></script>
+  <script src="js/predictions.js"></script>
+</body>
+</html>

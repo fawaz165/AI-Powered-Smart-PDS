@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.git/
+.gitignore
+.env
+.pytest_cache/
+.coverage
+htmlcov/
+tests/
+reports/*.xlsx
+node_modules/

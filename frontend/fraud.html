@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fraud & Anomaly Review Console | AI-Powered Smart PDS</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="brand-badge"><i class="fa-solid fa-wheat-awn" style="color: #fff;"></i></div>
+        <div class="brand-text">
+          <h2>Smart PDS</h2>
+          <span>AI Distribution</span>
+        </div>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="dashboard.html" class="nav-link"><i class="icon fa-solid fa-chart-pie"></i> Dashboard</a>
+        <a href="beneficiaries.html" class="nav-link"><i class="icon fa-solid fa-users"></i> Beneficiaries</a>
+        <a href="commodities.html" class="nav-link"><i class="icon fa-solid fa-boxes-stacked"></i> Commodities</a>
+        <a href="inventory.html" class="nav-link"><i class="icon fa-solid fa-warehouse"></i> Inventory Stock</a>
+        <a href="transactions.html" class="nav-link"><i class="icon fa-solid fa-arrow-right-arrow-left"></i> Transactions</a>
+        <a href="predictions.html" class="nav-link"><i class="icon fa-solid fa-wand-magic-sparkles"></i> Demand Forecast</a>
+        <a href="fraud.html" class="nav-link active"><i class="icon fa-solid fa-shield-halved"></i> Anomaly & Fraud</a>
+        <a href="reports.html" class="nav-link"><i class="icon fa-solid fa-file-excel"></i> Reports Export</a>
+        <a href="about.html" class="nav-link"><i class="icon fa-solid fa-circle-info"></i> Viva Guide & About</a>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="user-snippet">
+          <div class="user-avatar"><i class="fa-solid fa-user-shield"></i></div>
+          <div class="user-details">
+            <h4 id="sidebar-user-name">Administrator</h4>
+            <p id="sidebar-user-role">PDS CHIEF OFFICER</p>
+          </div>
+        </div>
+        <button class="btn-logout" title="Logout" onclick="handleLogout()"><i class="fa-solid fa-arrow-right-from-bracket"></i></button>
+      </div>
+    </aside>
+
+    <main class="main-wrapper">
+      <header class="top-navbar">
+        <div class="page-title-box">
+          <h1>Fraud & Distribution Anomaly Review Console</h1>
+          <p>Unsupervised Isolation Forest detection, statistical outlier scoring, and human-in-the-loop review</p>
+        </div>
+        <div class="nav-actions">
+          <button class="btn btn-primary btn-sm" onclick="openModal('simulate-anomaly-modal')">
+            <i class="fa-solid fa-vial-virus"></i> Test Transaction Scanner
+          </button>
+        </div>
+      </header>
+
+      <div class="content-body">
+        
+        <!-- Ethical AI & Administrative Notice Banner -->
+        <div class="alert-banner" style="background: linear-gradient(90deg, rgba(59, 130, 246, 0.15), rgba(139, 92, 246, 0.15)); border-color: rgba(59, 130, 246, 0.4);">
+          <div class="alert-banner-left">
+            <i class="fa-solid fa-circle-info alert-icon-large" style="color: #60a5fa;"></i>
+            <div class="alert-text">
+              <h4 style="color: #bfdbfe;">Administrative Audit Principle</h4>
+              <p style="color: #93c5fd;">
+                Statistical anomalies are potential irregularities and must <strong>NOT</strong> automatically be classified as fraud without officer verification. All flagged records remain in review state.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Fraud Alerts Table -->
+        <div class="data-panel">
+          <div class="panel-header">
+            <h3>Flagged Transactions Requiring Review</h3>
+            <span class="badge badge-danger" id="fraud-total-badge">0 Flagged Outliers</span>
+          </div>
+          <div class="table-responsive">
+            <table class="custom-table">
+              <thead>
+                <tr>
+                  <th>Transaction ID</th>
+                  <th>Beneficiary ID</th>
+                  <th>Commodity</th>
+                  <th>Quantity (kg)</th>
+                  <th>Region</th>
+                  <th>Risk Level</th>
+                  <th>Anomaly Score</th>
+                  <th>Explainable Reason</th>
+                  <th>Audit Actions</th>
+                </tr>
+              </thead>
+              <tbody id="fraud-alerts-tbody">
+                <tr><td colspan="9" style="text-align: center; color: var(--text-muted);">Scanning flagged transactions...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- Test Anomaly Scanner Modal -->
+  <div id="simulate-anomaly-modal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-magnifying-glass-chart" style="color: var(--primary);"></i> Live Anomaly Evaluation Simulator</h3>
+        <button class="modal-close" onclick="closeModal('simulate-anomaly-modal')">&times;</button>
+      </div>
+      <form id="simulate-anomaly-form">
+        <div class="modal-body">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="sim-commodity">Commodity</label>
+              <select id="sim-commodity" class="form-control" required>
+                <option value="Rice">Rice (Family cap: ~20kg)</option>
+                <option value="Wheat">Wheat (Family cap: ~8kg)</option>
+                <option value="Sugar">Sugar (Family cap: ~2kg)</option>
+                <option value="Dal">Dal (Family cap: ~2kg)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="sim-qty">Attempted Withdrawal Quantity (kg)</label>
+              <input type="number" step="1" id="sim-qty" class="form-control" value="95" required>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="sim-family-size">Family Size</label>
+              <input type="number" id="sim-family-size" class="form-control" value="4" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="sim-card-type">Card Category</label>
+              <select id="sim-card-type" class="form-control" required>
+                <option value="Priority (PHH)">Priority Household (PHH)</option>
+                <option value="Antyodaya Anna Yojana (AAY)">Antyodaya Anna Yojana (AAY)</option>
+                <option value="Non-Priority (NPHH)">Non-Priority (NPHH)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="sim-prior-days">Days Since Prior Collection</label>
+              <input type="number" step="0.5" id="sim-prior-days" class="form-control" value="1.5" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="sim-monthly-freq">Monthly Draw Frequency</label>
+              <input type="number" id="sim-monthly-freq" class="form-control" value="4" required>
+            </div>
+          </div>
+
+          <!-- Live Result Box -->
+          <div id="sim-result-box" style="display: none; padding: 14px; border-radius: var(--radius-sm); margin-top: 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <strong id="sim-res-status">STATUS</strong>
+              <span id="sim-res-risk" class="badge">RISK</span>
+            </div>
+            <div id="sim-res-reason" style="font-size: 0.82rem; margin-top: 4px;"></div>
+            <div id="sim-res-score" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 6px;"></div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('simulate-anomaly-modal')">Close</button>
+          <button type="submit" class="btn btn-primary"><i class="fa-solid fa-calculator"></i> Run Isolation Forest Evaluation</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="toast-container" class="toast-container"></div>
+
+  <script src="js/api.js"></script>
+  <script src="js/fraud.js"></script>
+</body>
+</html>

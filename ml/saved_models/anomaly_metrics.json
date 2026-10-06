@@ -1,0 +1,14 @@
+{
+    "model_type": "IsolationForest",
+    "contamination": 0.04,
+    "features": [
+        "quantity",
+        "quantity_to_quota_ratio",
+        "days_since_prior_txn",
+        "monthly_frequency",
+        "hour"
+    ],
+    "flagged_count": 100,
+    "total_evaluated": 2500,
+    "score_threshold": 3.598619476409895e-17
+}

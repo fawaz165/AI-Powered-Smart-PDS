@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  # MongoDB Service
+  mongo:
+    image: mongo:6.0
+    container_name: smart_pds_mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    environment:
+      - MONGO_INITDB_DATABASE=smart_pds_db
+    networks:
+      - pds_network
+
+  # Web & AI Application Service
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: smart_pds_app
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=production
+      - DEBUG=False
+      - PORT=5000
+      - MONGO_URI=mongodb://mongo:27017/smart_pds_db
+      - DB_NAME=smart_pds_db
+      - SECRET_KEY=pds_super_secure_production_secret_key_2026
+    depends_on:
+      - mongo
+    networks:
+      - pds_network
+
+networks:
+  pds_network:
+    driver: bridge
+
+volumes:
+  mongo_data:
+    driver: local

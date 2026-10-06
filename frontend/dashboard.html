@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="AI-Powered Smart Public Distribution System - Executive Operational Dashboard">
+  <title>Dashboard | AI-Powered Smart PDS</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="app-container">
+    
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="brand-badge"><i class="fa-solid fa-wheat-awn" style="color: #fff;"></i></div>
+        <div class="brand-text">
+          <h2>Smart PDS</h2>
+          <span>AI Distribution</span>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <a href="dashboard.html" class="nav-link active"><i class="icon fa-solid fa-chart-pie"></i> Dashboard</a>
+        <a href="beneficiaries.html" class="nav-link"><i class="icon fa-solid fa-users"></i> Beneficiaries</a>
+        <a href="commodities.html" class="nav-link"><i class="icon fa-solid fa-boxes-stacked"></i> Commodities</a>
+        <a href="inventory.html" class="nav-link"><i class="icon fa-solid fa-warehouse"></i> Inventory Stock</a>
+        <a href="transactions.html" class="nav-link"><i class="icon fa-solid fa-arrow-right-arrow-left"></i> Transactions</a>
+        <a href="predictions.html" class="nav-link"><i class="icon fa-solid fa-wand-magic-sparkles"></i> Demand Forecast</a>
+        <a href="fraud.html" class="nav-link"><i class="icon fa-solid fa-shield-halved"></i> Anomaly & Fraud <span id="nav-fraud-badge" class="nav-badge" style="display:none;">0</span></a>
+        <a href="reports.html" class="nav-link"><i class="icon fa-solid fa-file-excel"></i> Reports Export</a>
+        <a href="about.html" class="nav-link"><i class="icon fa-solid fa-circle-info"></i> Viva Guide & About</a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="user-snippet">
+          <div class="user-avatar"><i class="fa-solid fa-user-shield"></i></div>
+          <div class="user-details">
+            <h4 id="sidebar-user-name">Administrator</h4>
+            <p id="sidebar-user-role">PDS CHIEF OFFICER</p>
+          </div>
+        </div>
+        <button class="btn-logout" title="Logout" onclick="handleLogout()"><i class="fa-solid fa-arrow-right-from-bracket"></i></button>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-wrapper">
+      <header class="top-navbar">
+        <div class="page-title-box">
+          <h1>PDS Operational Intelligence Center</h1>
+          <p>Real-time grain inventory monitoring, ML demand estimation, and anomaly detection</p>
+        </div>
+        <div class="nav-actions">
+          <div class="status-indicator">
+            <span class="pulse-dot"></span>
+            <span>ML Model Active (Scikit-Learn & XGBoost)</span>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="window.location.href='predictions.html'">
+            <i class="fa-solid fa-bolt"></i> Run Demand Forecast
+          </button>
+        </div>
+      </header>
+
+      <div class="content-body">
+        
+        <!-- Procurement Shortage Warning Banner (Dynamically shown if shortages detected) -->
+        <div id="shortage-banner" class="alert-banner" style="display: none;">
+          <div class="alert-banner-left">
+            <i class="fa-solid fa-triangle-exclamation alert-icon-large"></i>
+            <div class="alert-text">
+              <h4 id="banner-title">Procurement Notice: Critical Stock Levels Detected</h4>
+              <p id="banner-desc">Regional inventory analysis indicates potential shortages across grain depots.</p>
+            </div>
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="window.location.href='inventory.html'">
+            <i class="fa-solid fa-boxes-packing"></i> Review Stock & Procure
+          </button>
+        </div>
+
+        <!-- KPI Cards Grid -->
+        <div class="grid-cards">
+          <!-- Total Beneficiaries -->
+          <div class="stat-card" style="--card-accent: #3b82f6;">
+            <div class="card-top">
+              <span>Cardholders</span>
+              <div class="card-icon" style="color: #60a5fa;"><i class="fa-solid fa-id-card"></i></div>
+            </div>
+            <div class="card-value" id="kpi-beneficiaries">--</div>
+            <div class="card-meta"><span class="meta-up"><i class="fa-solid fa-circle-check"></i> Active</span> Across 5 Districts</div>
+          </div>
+
+          <!-- Total Stock -->
+          <div class="stat-card" style="--card-accent: #10b981;">
+            <div class="card-top">
+              <span>Warehouse Stock</span>
+              <div class="card-icon" style="color: #34d399;"><i class="fa-solid fa-cubes-stacked"></i></div>
+            </div>
+            <div class="card-value" id="kpi-stock">-- <span style="font-size: 1rem; font-weight: 500;">kg</span></div>
+            <div class="card-meta"><span class="meta-up"><i class="fa-solid fa-warehouse"></i></span> 4 Core Commodities</div>
+          </div>
+
+          <!-- Predicted Monthly Demand -->
+          <div class="stat-card" style="--card-accent: #8b5cf6;">
+            <div class="card-top">
+              <span>Predicted Demand</span>
+              <div class="card-icon" style="color: #a78bfa;"><i class="fa-solid fa-chart-line"></i></div>
+            </div>
+            <div class="card-value" id="kpi-demand">-- <span style="font-size: 1rem; font-weight: 500;">kg</span></div>
+            <div class="card-meta"><span class="meta-up"><i class="fa-solid fa-microchip"></i> AI Engine</span> 36-Month Lag Trained</div>
+          </div>
+
+          <!-- Recommended Procurement -->
+          <div class="stat-card" style="--card-accent: #f59e0b;">
+            <div class="card-top">
+              <span>Shortage / Procurement</span>
+              <div class="card-icon" style="color: #fbbf24;"><i class="fa-solid fa-cart-flatbed"></i></div>
+            </div>
+            <div class="card-value" id="kpi-procurement">-- <span style="font-size: 1rem; font-weight: 500;">kg</span></div>
+            <div class="card-meta" id="kpi-shortage-meta"><span class="meta-alert">Calculating...</span></div>
+          </div>
+
+          <!-- Flagged Anomalies -->
+          <div class="stat-card" style="--card-accent: #f43f5e;">
+            <div class="card-top">
+              <span>Suspicious Outliers</span>
+              <div class="card-icon" style="color: #fb7185;"><i class="fa-solid fa-user-secret"></i></div>
+            </div>
+            <div class="card-value" id="kpi-anomalies">--</div>
+            <div class="card-meta"><span class="meta-alert"><i class="fa-solid fa-magnifying-glass-chart"></i></span> Pending Admin Review</div>
+          </div>
+
+          <!-- Total Monthly Distribution -->
+          <div class="stat-card" style="--card-accent: #06b6d4;">
+            <div class="card-top">
+              <span>Total Transactions</span>
+              <div class="card-icon" style="color: #22d3ee;"><i class="fa-solid fa-clock-rotate-left"></i></div>
+            </div>
+            <div class="card-value" id="kpi-txns">--</div>
+            <div class="card-meta"><span class="meta-up"><i class="fa-solid fa-lock"></i> Thread-Safe</span> Atomic Deductions</div>
+          </div>
+        </div>
+
+        <!-- Charts Grid -->
+        <div class="charts-grid">
+          <!-- Inventory vs Buffer Chart -->
+          <div class="chart-card">
+            <div class="chart-header">
+              <h3><i class="fa-solid fa-chart-bar" style="color: var(--primary);"></i> Commodity Stock vs Minimum Buffer Levels (kg)</h3>
+              <span class="badge badge-info">Real-time DB Sync</span>
+            </div>
+            <div class="chart-container">
+              <canvas id="inventoryChart"></canvas>
+            </div>
+          </div>
+
+          <!-- Regional Demand Breakdown -->
+          <div class="chart-card">
+            <div class="chart-header">
+              <h3><i class="fa-solid fa-chart-pie" style="color: var(--accent-purple);"></i> Regional Allocation Distribution</h3>
+              <span class="badge badge-purple">5 Districts</span>
+            </div>
+            <div class="chart-container">
+              <canvas id="regionChart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recent Transactions Panel -->
+        <div class="data-panel">
+          <div class="panel-header">
+            <h3><i class="fa-solid fa-list-check" style="color: var(--accent-cyan);"></i> Recent Distribution Operations</h3>
+            <div class="panel-actions">
+              <button class="btn btn-secondary btn-sm" onclick="window.location.href='transactions.html'">
+                View All Transactions <i class="fa-solid fa-arrow-right"></i>
+              </button>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table class="custom-table">
+              <thead>
+                <tr>
+                  <th>Transaction ID</th>
+                  <th>Beneficiary</th>
+                  <th>Commodity</th>
+                  <th>Quantity</th>
+                  <th>Ration Shop</th>
+                  <th>Region</th>
+                  <th>Status & Risk</th>
+                  <th>Reason</th>
+                </tr>
+              </thead>
+              <tbody id="recent-txns-tbody">
+                <tr><td colspan="8" style="text-align: center; color: var(--text-muted);">Loading transactions...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <div id="toast-container" class="toast-container"></div>
+
+  <script src="js/api.js"></script>
+  <script src="js/dashboard.js"></script>
+</body>
+</html>

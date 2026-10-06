@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>System Architecture & Viva Guide | AI-Powered Smart PDS</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="brand-badge"><i class="fa-solid fa-wheat-awn" style="color: #fff;"></i></div>
+        <div class="brand-text">
+          <h2>Smart PDS</h2>
+          <span>AI Distribution</span>
+        </div>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="dashboard.html" class="nav-link"><i class="icon fa-solid fa-chart-pie"></i> Dashboard</a>
+        <a href="beneficiaries.html" class="nav-link"><i class="icon fa-solid fa-users"></i> Beneficiaries</a>
+        <a href="commodities.html" class="nav-link"><i class="icon fa-solid fa-boxes-stacked"></i> Commodities</a>
+        <a href="inventory.html" class="nav-link"><i class="icon fa-solid fa-warehouse"></i> Inventory Stock</a>
+        <a href="transactions.html" class="nav-link"><i class="icon fa-solid fa-arrow-right-arrow-left"></i> Transactions</a>
+        <a href="predictions.html" class="nav-link"><i class="icon fa-solid fa-wand-magic-sparkles"></i> Demand Forecast</a>
+        <a href="fraud.html" class="nav-link"><i class="icon fa-solid fa-shield-halved"></i> Anomaly & Fraud</a>
+        <a href="reports.html" class="nav-link"><i class="icon fa-solid fa-file-excel"></i> Reports Export</a>
+        <a href="about.html" class="nav-link active"><i class="icon fa-solid fa-circle-info"></i> Viva Guide & About</a>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="user-snippet">
+          <div class="user-avatar"><i class="fa-solid fa-user-shield"></i></div>
+          <div class="user-details">
+            <h4 id="sidebar-user-name">Administrator</h4>
+            <p id="sidebar-user-role">PDS CHIEF OFFICER</p>
+          </div>
+        </div>
+        <button class="btn-logout" title="Logout" onclick="handleLogout()"><i class="fa-solid fa-arrow-right-from-bracket"></i></button>
+      </div>
+    </aside>
+
+    <main class="main-wrapper">
+      <header class="top-navbar">
+        <div class="page-title-box">
+          <h1>System Architecture & College Viva Guide</h1>
+          <p>Technical architecture, mathematical equations, concurrency mechanisms, and examiner viva Q&A</p>
+        </div>
+      </header>
+
+      <div class="content-body">
+        
+        <!-- Architecture Highlights -->
+        <div class="data-panel" style="padding: 24px;">
+          <h2 style="font-size: 1.35rem; margin-bottom: 12px; color: var(--accent-cyan);">
+            <i class="fa-solid fa-network-wired"></i> System Architecture Overview
+          </h2>
+          <p style="color: var(--text-secondary); line-height: 1.7; margin-bottom: 20px;">
+            The <strong>AI-Powered Smart Public Distribution System (PDS)</strong> replaces traditional manual food-grain estimation with data-driven predictive intelligence. The application operates as a three-tier architecture comprising a modern Glassmorphic HTML5/CSS3/JavaScript frontend, a Flask REST API backend integrated with Scikit-Learn/XGBoost ML inference engines, and a high-performance indexed MongoDB database.
+          </p>
+
+          <div class="grid-cards" style="grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));">
+            <div style="background: rgba(255,255,255,0.03); padding: 18px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+              <h4 style="color: #60a5fa; margin-bottom: 8px;"><i class="fa-solid fa-brain"></i> 1. Demand Prediction</h4>
+              <p style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.6;">
+                Predicts monthly demand for Rice, Wheat, Sugar, and Dal across 5 districts using historical lag features ($t-1$), 3-month rolling averages, beneficiary family demographics, and seasonal holiday indices.
+              </p>
+            </div>
+            <div style="background: rgba(255,255,255,0.03); padding: 18px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+              <h4 style="color: #34d399; margin-bottom: 8px;"><i class="fa-solid fa-lock"></i> 2. Thread-Safe Inventory</h4>
+              <p style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.6;">
+                Prevents race conditions when multiple Fair Price Shops execute grain distributions concurrently using Python's <code>threading.Lock</code> to guarantee non-negative atomic deductions.
+              </p>
+            </div>
+            <div style="background: rgba(255,255,255,0.03); padding: 18px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+              <h4 style="color: #fb7185; margin-bottom: 8px;"><i class="fa-solid fa-shield-halved"></i> 3. Anomaly Detection</h4>
+              <p style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.6;">
+                Employs unsupervised Isolation Forest trees to isolate statistical anomalies in distribution quantities and draw frequencies without falsely calling them fraud before officer verification.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mathematical Foundations -->
+        <div class="data-panel" style="padding: 24px;">
+          <h2 style="font-size: 1.35rem; margin-bottom: 12px; color: var(--accent-amber);">
+            <i class="fa-solid fa-square-root-variable"></i> Mathematical Formulations
+          </h2>
+          
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div style="background: rgba(13, 20, 36, 0.7); padding: 20px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+              <h4 style="color: #fde68a; margin-bottom: 10px;">Inventory Shortage & Procurement Formulation</h4>
+              <div style="font-family: monospace; font-size: 1rem; color: #fff; background: rgba(0,0,0,0.3); padding: 12px; border-radius: 6px; margin-bottom: 10px;">
+                Shortage = Predicted Demand - Current Stock
+              </div>
+              <p style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.6;">
+                If Shortage > 0, <code>status = "SHORTAGE"</code> and <code>recommended_procurement = Shortage</code>.<br>
+                If Shortage &le; 0 and Current Stock > 1.5 &times; Predicted Demand, <code>status = "EXCESS"</code>.
+              </p>
+            </div>
+
+            <div style="background: rgba(13, 20, 36, 0.7); padding: 20px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+              <h4 style="color: #fde68a; margin-bottom: 10px;">Isolation Forest Anomaly Scoring Function</h4>
+              <div style="font-family: monospace; font-size: 1rem; color: #fff; background: rgba(0,0,0,0.3); padding: 12px; border-radius: 6px; margin-bottom: 10px;">
+                s(x, n) = 2^(- E(h(x)) / c(n))
+              </div>
+              <p style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.6;">
+                Where $E(h(x))$ is the average path length of point $x$ over an ensemble of isolation trees, and $c(n)$ is the average path length of unsuccessful searches in a Binary Search Tree. Shorter path lengths imply earlier isolation (outliers).
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Viva Questions & Answers -->
+        <div class="data-panel" style="padding: 24px;">
+          <h2 style="font-size: 1.35rem; margin-bottom: 16px; color: var(--accent-purple);">
+            <i class="fa-solid fa-graduation-cap"></i> Examiner Viva Questions & Answers
+          </h2>
+
+          <div style="display: flex; flex-direction: column; gap: 16px;">
+            <div style="background: rgba(255,255,255,0.02); padding: 18px; border-left: 3px solid var(--primary); border-radius: 4px;">
+              <strong style="color: #93c5fd; font-size: 0.95rem;">Q1: Why did you compare multiple ML models rather than picking just one?</strong>
+              <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 6px; line-height: 1.6;">
+                In empirical machine learning, the No Free Lunch theorem dictates that no single algorithm is guaranteed to be optimal for every dataset. We rigorously benchmarked 4 algorithms: Linear Regression, Decision Tree Regressor, Random Forest Regressor, and XGBoost Regressor on an unseen test set using MAE, MSE, RMSE, and $R^2$. We serialized the best model using Joblib so the Flask API loads it at startup without retraining on every request.
+              </p>
+            </div>
+
+            <div style="background: rgba(255,255,255,0.02); padding: 18px; border-left: 3px solid var(--accent-emerald); border-radius: 4px;">
+              <strong style="color: #6ee7b7; font-size: 0.95rem;">Q2: How does the system handle concurrent transactions safely?</strong>
+              <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 6px; line-height: 1.6;">
+                In real PDS depots, multiple Fair Price Shops disburse grain simultaneously. Without concurrency controls, race conditions can produce negative warehouse inventory. We implemented Python's <code>threading.Lock</code> inside <code>InventoryService</code> to serialize inventory verification and deduction atomically, guaranteeing that available stock is never oversold.
+              </p>
+            </div>
+
+            <div style="background: rgba(255,255,255,0.02); padding: 18px; border-left: 3px solid var(--accent-rose); border-radius: 4px;">
+              <strong style="color: #fda4af; font-size: 0.95rem;">Q3: Why must an anomaly not automatically be called fraud?</strong>
+              <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 6px; line-height: 1.6;">
+                Ethical and operational AI principles mandate human-in-the-loop governance. A cardholder withdrawing larger quantities could be collecting legitimate accumulated welfare entitlements or drawing during disaster relief. Labeling an outlier as "fraud" without verification risks wrongfully denying food grain to needy beneficiaries. Hence, the system flags suspicious activity with risk scores and understandable reasons for administrative officer review.
+              </p>
+            </div>
+
+            <div style="background: rgba(255,255,255,0.02); padding: 18px; border-left: 3px solid var(--accent-cyan); border-radius: 4px;">
+              <strong style="color: #67e8f9; font-size: 0.95rem;">Q4: What data preprocessing and feature engineering steps were performed?</strong>
+              <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 6px; line-height: 1.6;">
+                We engineered time-series lag features ($t-1$ previous demand and actual offtake), 3-month rolling averages, and festive holiday indicators (Pongal in January, Diwali in October/November). We employed a Scikit-Learn <code>ColumnTransformer</code> applying <code>OneHotEncoder</code> on categorical attributes (commodity, region) and <code>StandardScaler</code> on continuous features, strictly fitting the pipeline on the training split to prevent data leakage.
+              </p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <div id="toast-container" class="toast-container"></div>
+  <script src="js/api.js"></script>
+</body>
+</html>

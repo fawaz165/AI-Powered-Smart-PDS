@@ -1,0 +1,93 @@
+name: AI-Powered Smart PDS CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  test:
+    name: Build & Run ML/API Test Suite
+    runs-on: ubuntu-latest
+
+    services:
+      mongodb:
+        image: mongo:6.0
+        ports:
+          - 27017:27017
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+
+      - name: Generate Benchmark PDS Datasets
+        run: |
+          python ml/data/generate_pds_data.py
+
+      - name: Train & Validate Demand ML Models
+        run: |
+          python ml/train_demand_model.py
+
+      - name: Train & Validate Anomaly Isolation Forest
+        run: |
+          python ml/train_anomaly_model.py
+
+      - name: Seed MongoDB Database
+        env:
+          MONGO_URI: mongodb://localhost:27017/smart_pds_db
+        run: |
+          python backend/database/seed_db.py
+
+      - name: Execute Full Pytest Suite
+        env:
+          MONGO_URI: mongodb://localhost:27017/smart_pds_db
+          SECRET_KEY: test_pipeline_secret_key_2026
+        run: |
+          pytest tests/ -v
+
+  docker:
+    name: Build & Push Docker Image
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        if: env.DOCKERHUB_USERNAME != ''
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: ${{ env.DOCKERHUB_USERNAME != '' }}
+          tags: ${{ secrets.DOCKERHUB_USERNAME || 'smartpds' }}/ai-smart-pds:latest
+
+      - name: Simulated Production Deployment Step
+        run: |
+          echo "Deployment successful: Image pushed and container ready for production orchestration."

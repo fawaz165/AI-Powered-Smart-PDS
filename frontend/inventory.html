@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inventory & Stock Management | AI-Powered Smart PDS</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="brand-badge"><i class="fa-solid fa-wheat-awn" style="color: #fff;"></i></div>
+        <div class="brand-text">
+          <h2>Smart PDS</h2>
+          <span>AI Distribution</span>
+        </div>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="dashboard.html" class="nav-link"><i class="icon fa-solid fa-chart-pie"></i> Dashboard</a>
+        <a href="beneficiaries.html" class="nav-link"><i class="icon fa-solid fa-users"></i> Beneficiaries</a>
+        <a href="commodities.html" class="nav-link"><i class="icon fa-solid fa-boxes-stacked"></i> Commodities</a>
+        <a href="inventory.html" class="nav-link active"><i class="icon fa-solid fa-warehouse"></i> Inventory Stock</a>
+        <a href="transactions.html" class="nav-link"><i class="icon fa-solid fa-arrow-right-arrow-left"></i> Transactions</a>
+        <a href="predictions.html" class="nav-link"><i class="icon fa-solid fa-wand-magic-sparkles"></i> Demand Forecast</a>
+        <a href="fraud.html" class="nav-link"><i class="icon fa-solid fa-shield-halved"></i> Anomaly & Fraud</a>
+        <a href="reports.html" class="nav-link"><i class="icon fa-solid fa-file-excel"></i> Reports Export</a>
+        <a href="about.html" class="nav-link"><i class="icon fa-solid fa-circle-info"></i> Viva Guide & About</a>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="user-snippet">
+          <div class="user-avatar"><i class="fa-solid fa-user-shield"></i></div>
+          <div class="user-details">
+            <h4 id="sidebar-user-name">Administrator</h4>
+            <p id="sidebar-user-role">PDS CHIEF OFFICER</p>
+          </div>
+        </div>
+        <button class="btn-logout" title="Logout" onclick="handleLogout()"><i class="fa-solid fa-arrow-right-from-bracket"></i></button>
+      </div>
+    </aside>
+
+    <main class="main-wrapper">
+      <header class="top-navbar">
+        <div class="page-title-box">
+          <h1>Regional Grain Inventory & Procurement Intelligence</h1>
+          <p>Real-time stock tracking, buffer thresholds, shortage detection, and replenishment recommendations</p>
+        </div>
+        <div class="nav-actions">
+          <button class="btn btn-primary btn-sm" onclick="openModal('adjust-stock-modal')">
+            <i class="fa-solid fa-plus-minus"></i> Adjust Stock Level
+          </button>
+        </div>
+      </header>
+
+      <div class="content-body">
+        
+        <!-- Summary KPI row for inventory -->
+        <div class="grid-cards">
+          <div class="stat-card" style="--card-accent: #3b82f6;">
+            <div class="card-top"><span>Total Inventory</span><i class="fa-solid fa-warehouse" style="color: #60a5fa;"></i></div>
+            <div class="card-value" id="inv-total-stock">-- <span style="font-size:1rem;">kg</span></div>
+            <div class="card-meta">Aggregated across all 5 districts</div>
+          </div>
+          <div class="stat-card" style="--card-accent: #f59e0b;">
+            <div class="card-top"><span>Shortage Alerts</span><i class="fa-solid fa-triangle-exclamation" style="color: #fbbf24;"></i></div>
+            <div class="card-value" id="inv-shortage-count" style="color: #fbbf24;">--</div>
+            <div class="card-meta">Stock below predicted monthly demand</div>
+          </div>
+          <div class="stat-card" style="--card-accent: #10b981;">
+            <div class="card-top"><span>Recommended Procurement</span><i class="fa-solid fa-truck-ramp-box" style="color: #34d399;"></i></div>
+            <div class="card-value" id="inv-total-procurement" style="color: #34d399;">-- <span style="font-size:1rem;">kg</span></div>
+            <div class="card-meta">Immediate replenishment target</div>
+          </div>
+          <div class="stat-card" style="--card-accent: #8b5cf6;">
+            <div class="card-top"><span>Excess Stock Depots</span><i class="fa-solid fa-boxes-packing" style="color: #a78bfa;"></i></div>
+            <div class="card-value" id="inv-excess-count">--</div>
+            <div class="card-meta">Stock > 1.5x forecasted monthly demand</div>
+          </div>
+        </div>
+
+        <!-- Inventory Analysis Table -->
+        <div class="data-panel">
+          <div class="panel-header">
+            <h3><i class="fa-solid fa-clipboard-check" style="color: var(--accent-cyan);"></i> Intelligent Stock & Procurement Recommendations</h3>
+            <div class="panel-actions">
+              <select id="inv-filter-region" class="form-control" style="width: 170px;" onchange="filterInventory()">
+                <option value="">All Districts</option>
+                <option value="Chennai">Chennai</option>
+                <option value="Coimbatore">Coimbatore</option>
+                <option value="Madurai">Madurai</option>
+                <option value="Salem">Salem</option>
+                <option value="Tiruchirappalli">Tiruchirappalli</option>
+              </select>
+              <select id="inv-filter-commodity" class="form-control" style="width: 150px;" onchange="filterInventory()">
+                <option value="">All Commodities</option>
+                <option value="Rice">Rice</option>
+                <option value="Wheat">Wheat</option>
+                <option value="Sugar">Sugar</option>
+                <option value="Dal">Dal</option>
+              </select>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table class="custom-table">
+              <thead>
+                <tr>
+                  <th>Commodity</th>
+                  <th>Region / Depot</th>
+                  <th>Current Stock</th>
+                  <th>Predicted Demand</th>
+                  <th>Stock vs Demand Delta</th>
+                  <th>Status</th>
+                  <th>Recommended Procurement</th>
+                  <th>Intelligent AI Assessment</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="inventory-tbody">
+                <tr><td colspan="9" style="text-align: center; color: var(--text-muted);">Calculating intelligent stock metrics...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- Adjust Stock Modal -->
+  <div id="adjust-stock-modal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-boxes-stacked" style="color: var(--primary);"></i> Administrative Stock Adjustment</h3>
+        <button class="modal-close" onclick="closeModal('adjust-stock-modal')">&times;</button>
+      </div>
+      <form id="adjust-stock-form">
+        <div class="modal-body">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="adjust-commodity">Commodity</label>
+              <select id="adjust-commodity" class="form-control" required>
+                <option value="Rice">Rice</option>
+                <option value="Wheat">Wheat</option>
+                <option value="Sugar">Sugar</option>
+                <option value="Dal">Dal</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="adjust-region">Region</label>
+              <select id="adjust-region" class="form-control" required>
+                <option value="Chennai">Chennai</option>
+                <option value="Coimbatore">Coimbatore</option>
+                <option value="Madurai">Madurai</option>
+                <option value="Salem">Salem</option>
+                <option value="Tiruchirappalli">Tiruchirappalli</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="adjust-new-stock">New Stock Level (kg)</label>
+            <input type="number" step="10" min="0" id="adjust-new-stock" class="form-control" placeholder="e.g. 4500" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('adjust-stock-modal')">Cancel</button>
+          <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check"></i> Commit Update</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="toast-container" class="toast-container"></div>
+
+  <script src="js/api.js"></script>
+  <script src="js/inventory.js"></script>
+</body>
+</html>

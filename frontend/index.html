@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="AI-Powered Smart Public Distribution System - AI Demand Prediction, Anomaly Detection, and Inventory Optimization">
+  <title>Login | AI-Powered Smart PDS</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="login-body">
+
+  <div class="login-card">
+    <div class="login-logo">
+      <i class="fa-solid fa-wheat-awn" style="color: #ffffff;"></i>
+    </div>
+    <h2>Smart PDS Portal</h2>
+    <p>AI-Powered Public Distribution & Inventory System</p>
+
+    <form id="login-form">
+      <div class="form-group" style="text-align: left;">
+        <label class="form-label" for="username">Username / Officer ID</label>
+        <div style="position: relative;">
+          <input type="text" id="username" class="form-control" placeholder="Enter username" required value="admin">
+          <i class="fa-regular fa-user" style="position: absolute; right: 14px; top: 14px; color: var(--text-muted);"></i>
+        </div>
+      </div>
+
+      <div class="form-group" style="text-align: left;">
+        <label class="form-label" for="password">Password</label>
+        <div style="position: relative;">
+          <input type="password" id="password" class="form-control" placeholder="Enter password" required value="admin123">
+          <i class="fa-solid fa-lock" style="position: absolute; right: 14px; top: 14px; color: var(--text-muted);"></i>
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary" style="width: 100%; padding: 12px; margin-top: 10px;" id="btn-login-submit">
+        <i class="fa-solid fa-right-to-bracket"></i> Authenticate & Enter Dashboard
+      </button>
+    </form>
+
+    <div class="demo-credentials-box">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+        <strong style="color: var(--accent-cyan);"><i class="fa-solid fa-key"></i> Viva Demo Credentials</strong>
+        <span class="badge badge-success" style="font-size: 0.68rem;">Ready</span>
+      </div>
+      <div>Username: <strong>admin</strong> | Password: <strong>admin123</strong></div>
+      <div style="margin-top: 6px; font-size: 0.74rem; color: var(--text-muted);">
+        Connected to MongoDB & Scikit-Learn Model Backend
+      </div>
+    </div>
+
+    <div style="margin-top: 24px; font-size: 0.75rem; color: var(--text-muted);">
+      © 2026 AI-Powered Smart PDS Project | NFSA Intelligent Distribution
+    </div>
+  </div>
+
+  <div id="toast-container" class="toast-container"></div>
+
+  <script src="js/api.js"></script>
+  <script>
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('btn-login-submit');
+      const u = document.getElementById('username').value.trim();
+      const p = document.getElementById('password').value;
+
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Authenticating...';
+
+      try {
+        const res = await API.login(u, p);
+        if (res && res.status === 'success') {
+          API.setAuth(res.data.token, res.data);
+          showToast(`Welcome back, ${res.data.full_name}! Redirecting...`, 'success');
+          setTimeout(() => {
+            window.location.href = 'dashboard.html';
+          }, 600);
+        } else {
+          showToast(res.message || 'Login failed', 'error');
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i> Authenticate & Enter Dashboard';
+        }
+      } catch (err) {
+        showToast(err.message || 'Server connection error', 'error');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i> Authenticate & Enter Dashboard';
+      }
+    });
+  </script>
+</body>
+</html>
