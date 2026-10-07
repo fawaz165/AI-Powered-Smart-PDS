@@ -4,10 +4,13 @@ import sys
 from pathlib import Path
 import numpy as np
 
-# Ensure project root is in sys.path
-BASE_DIR = Path(__file__).resolve().parent.parent
-if str(BASE_DIR) not in sys.path:
-    sys.path.insert(0, str(BASE_DIR))
+# Ensure project root and backend are in sys.path
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+BACKEND_DIR = Path(__file__).resolve().parent.parent
+ML_DIR = Path(__file__).resolve().parent
+for p in [str(PROJECT_ROOT), str(BACKEND_DIR), str(ML_DIR)]:
+    if p not in sys.path:
+        sys.path.insert(0, p)
 
 from sklearn.linear_model import LinearRegression
 from sklearn.tree import DecisionTreeRegressor
@@ -15,7 +18,10 @@ from sklearn.ensemble import RandomForestRegressor
 from xgboost import XGBRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
-from ml.preprocessing import prepare_train_test_data
+try:
+    from backend.ml.preprocessing import prepare_train_test_data
+except ImportError:
+    from ml.preprocessing import prepare_train_test_data
 
 SAVED_MODELS_DIR = Path(__file__).resolve().parent / "saved_models"
 SAVED_MODELS_DIR.mkdir(parents=True, exist_ok=True)

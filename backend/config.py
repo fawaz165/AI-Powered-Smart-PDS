@@ -22,8 +22,24 @@ class Config:
     DB_NAME = os.getenv("DB_NAME", "smart_pds_db")
 
     # Directory Paths
-    MODEL_DIR = BASE_DIR / os.getenv("MODEL_DIR", "ml/saved_models")
-    DATA_DIR = BASE_DIR / "ml" / "data"
+    model_env = os.getenv("MODEL_DIR", "backend/ml/saved_models")
+    cand_model = BASE_DIR / model_env
+    if cand_model.exists():
+        MODEL_DIR = cand_model
+    elif (BASE_DIR / "backend" / "ml" / "saved_models").exists():
+        MODEL_DIR = BASE_DIR / "backend" / "ml" / "saved_models"
+    else:
+        MODEL_DIR = BASE_DIR / "ml" / "saved_models"
+
+    data_env = os.getenv("DATA_DIR", "backend/ml/data")
+    cand_data = BASE_DIR / data_env
+    if cand_data.exists():
+        DATA_DIR = cand_data
+    elif (BASE_DIR / "backend" / "ml" / "data").exists():
+        DATA_DIR = BASE_DIR / "backend" / "ml" / "data"
+    else:
+        DATA_DIR = BASE_DIR / "ml" / "data"
+
     REPORTS_DIR = BASE_DIR / "reports"
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 

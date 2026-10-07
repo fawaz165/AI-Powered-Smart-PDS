@@ -34,15 +34,15 @@ jobs:
 
       - name: Generate Benchmark PDS Datasets
         run: |
-          python ml/data/generate_pds_data.py
+          python backend/ml/data/generate_pds_data.py
 
       - name: Train & Validate Demand ML Models
         run: |
-          python ml/train_demand_model.py
+          python backend/ml/train_demand_model.py
 
       - name: Train & Validate Anomaly Isolation Forest
         run: |
-          python ml/train_anomaly_model.py
+          python backend/ml/train_anomaly_model.py
 
       - name: Seed MongoDB Database
         env:

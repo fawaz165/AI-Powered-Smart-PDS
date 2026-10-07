@@ -26,9 +26,9 @@ RUN pip install --no-cache-dir -r /app/backend/requirements.txt
 COPY . /app/
 
 # Generate dataset, train models, and seed database (if artifacts don't exist)
-RUN python ml/data/generate_pds_data.py && \
-    python ml/train_demand_model.py && \
-    python ml/train_anomaly_model.py
+RUN python backend/ml/data/generate_pds_data.py && \
+    python backend/ml/train_demand_model.py && \
+    python backend/ml/train_anomaly_model.py
 
 # Expose server port
 EXPOSE 5000

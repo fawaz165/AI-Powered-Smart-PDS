@@ -8,10 +8,13 @@ from sklearn.ensemble import IsolationForest
 from sklearn.neighbors import LocalOutlierFactor
 from sklearn.preprocessing import StandardScaler
 
-# Ensure project root in sys.path
-BASE_DIR = Path(__file__).resolve().parent.parent
-if str(BASE_DIR) not in sys.path:
-    sys.path.insert(0, str(BASE_DIR))
+# Ensure project root and backend are in sys.path
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+BACKEND_DIR = Path(__file__).resolve().parent.parent
+ML_DIR = Path(__file__).resolve().parent
+for p in [str(PROJECT_ROOT), str(BACKEND_DIR), str(ML_DIR)]:
+    if p not in sys.path:
+        sys.path.insert(0, p)
 
 SAVED_MODELS_DIR = Path(__file__).resolve().parent / "saved_models"
 SAVED_MODELS_DIR.mkdir(parents=True, exist_ok=True)

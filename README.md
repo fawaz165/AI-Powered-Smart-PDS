@@ -73,21 +73,21 @@ AI-Powered Smart PDS/
 │   ├── models/                     # Schemas (User, Beneficiary, Commodity, Inventory, Txn)
 │   ├── routes/                     # REST blueprints (auth, beneficiaries, commodities, inventory, txns, ml, reports)
 │   ├── services/                   # Business logic (Auth, ML inference, Thread-safe inventory, Reports)
-│   └── utils/                      # Logging & input validators
-├── ml/
-│   ├── data/
-│   │   ├── generate_pds_data.py    # Realistic TPDS/NFSA dataset generator
-│   │   ├── pds_demand_data.csv     # 720 records across 5 districts (2022-2024)
-│   │   └── pds_transactions.csv    # 2,500 transaction distribution logs
-│   ├── preprocessing.py            # ColumnTransformer, OneHotEncoder, StandardScaler
-│   ├── train_demand_model.py       # Trains & benchmarks 4 regression models
-│   ├── train_anomaly_model.py      # Trains Isolation Forest anomaly detector
-│   └── saved_models/
-│       ├── demand_model_best.joblib
-│       ├── demand_preprocessor.joblib
-│       ├── anomaly_model_isolation_forest.joblib
-│       ├── anomaly_scaler.joblib
-│       └── model_metrics.json      # Genuine evaluation metrics
+│   ├── utils/                      # Logging & input validators
+│   └── ml/
+│       ├── data/
+│       │   ├── generate_pds_data.py    # Realistic TPDS/NFSA dataset generator
+│       │   ├── pds_demand_data.csv     # 720 records across 5 districts (2022-2024)
+│       │   └── pds_transactions.csv    # 2,500 transaction distribution logs
+│       ├── preprocessing.py            # ColumnTransformer, OneHotEncoder, StandardScaler
+│       ├── train_demand_model.py       # Trains & benchmarks 4 regression models
+│       ├── train_anomaly_model.py      # Trains Isolation Forest anomaly detector
+│       └── saved_models/
+│           ├── demand_model_best.joblib
+│           ├── demand_preprocessor.joblib
+│           ├── anomaly_model_isolation_forest.joblib
+│           ├── anomaly_scaler.joblib
+│           └── model_metrics.json      # Genuine evaluation metrics
 ├── frontend/
 │   ├── index.html                  # Login & authentication portal
 │   ├── dashboard.html              # Executive operational dashboard with Chart.js
@@ -137,9 +137,9 @@ Models were trained on 80% split and tested on 20% unseen test data:
    ```
 3. **Generate datasets and train ML models**:
    ```bash
-   python ml/data/generate_pds_data.py
-   python ml/train_demand_model.py
-   python ml/train_anomaly_model.py
+   python backend/ml/data/generate_pds_data.py
+   python backend/ml/train_demand_model.py
+   python backend/ml/train_anomaly_model.py
    ```
 4. **Seed database with initial records**:
    ```bash
