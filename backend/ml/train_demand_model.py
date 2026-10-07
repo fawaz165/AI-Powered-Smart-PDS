@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 import numpy as np
 
-# Ensure project root and backend are in sys.path
+# Ensure project root, backend, and ml are in sys.path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 ML_DIR = Path(__file__).resolve().parent
@@ -29,7 +29,7 @@ SAVED_MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
 def train_and_evaluate_all():
     """
-    Trains and compares 4 regression models on actual PDS demand data:
+    Trains and benchmarks 4 regression models on Kaggle Food Demand Forecasting data:
     1. Linear Regression
     2. Decision Tree Regressor
     3. Random Forest Regressor
@@ -38,26 +38,26 @@ def train_and_evaluate_all():
     Evaluates MAE, MSE, RMSE, R² on unseen test set.
     Selects the best model and serializes it using Joblib.
     """
-    print("=" * 60)
-    print("AI-POWERED SMART PDS - DEMAND PREDICTION MODEL BENCHMARK")
-    print("=" * 60)
+    print("=" * 65)
+    print("AI-POWERED SMART PDS - KAGGLE FOOD DEMAND MODEL BENCHMARK")
+    print("=" * 65)
     
-    data = prepare_train_test_data(test_size=0.20, random_state=42)
+    data = prepare_train_test_data(sample_size=60000, test_size=0.20, random_state=42)
     X_train = data["X_train"]
     X_test = data["X_test"]
     y_train = data["y_train"]
     y_test = data["y_test"]
     preprocessor = data["preprocessor"]
     
-    print(f"Training samples: {len(X_train)} | Testing samples: {len(X_test)}")
+    print(f"Training samples: {len(X_train):,} | Testing samples: {len(X_test):,}")
     print(f"Engineered feature vector dimension: {X_train.shape[1]}")
-    print("-" * 60)
+    print("-" * 65)
     
     candidate_models = {
         "Linear Regression": LinearRegression(),
-        "Decision Tree": DecisionTreeRegressor(max_depth=8, random_state=42),
-        "Random Forest": RandomForestRegressor(n_estimators=100, max_depth=10, random_state=42),
-        "XGBoost Regressor": XGBRegressor(n_estimators=120, learning_rate=0.08, max_depth=5, random_state=42)
+        "Decision Tree": DecisionTreeRegressor(max_depth=10, random_state=42),
+        "Random Forest": RandomForestRegressor(n_estimators=50, max_depth=12, n_jobs=-1, random_state=42),
+        "XGBoost Regressor": XGBRegressor(n_estimators=100, learning_rate=0.10, max_depth=6, random_state=42)
     }
     
     results = {}
@@ -83,7 +83,7 @@ def train_and_evaluate_all():
             "R2": round(r2, 4)
         }
         
-        print(f" -> {name} Results: MAE: {mae:.2f} kg | RMSE: {rmse:.2f} kg | R²: {r2:.4f}")
+        print(f" -> {name} Results: MAE: {mae:.2f} | RMSE: {rmse:.2f} | R²: {r2:.4f}")
         
         # Selection criterion: lowest test RMSE (and highest R²)
         if rmse < best_rmse:
@@ -91,33 +91,34 @@ def train_and_evaluate_all():
             best_model_name = name
             best_model_obj = model
 
-    print("-" * 60)
-    print(f"BEST MODEL SELECTED: {best_model_name} (RMSE: {best_rmse:.2f} kg, R²: {results[best_model_name]['R2']})")
-    print("-" * 60)
+    print("-" * 65)
+    print(f"BEST MODEL SELECTED: {best_model_name} (RMSE: {best_rmse:.2f}, R²: {results[best_model_name]['R2']})")
+    print("-" * 65)
     
     # Save best model and preprocessor
     best_model_path = SAVED_MODELS_DIR / "demand_model_best.joblib"
     preprocessor_path = SAVED_MODELS_DIR / "demand_preprocessor.joblib"
-    metrics_path = SAVED_MODELS_DIR / "model_metrics.json"
     
     joblib.dump(best_model_obj, best_model_path)
     joblib.dump(preprocessor, preprocessor_path)
     
-    final_payload = {
+    metrics_payload = {
+        "dataset_source": "Kaggle Food Demand Forecasting",
+        "training_samples": len(X_train),
+        "testing_samples": len(X_test),
         "best_model": best_model_name,
-        "best_model_file": str(best_model_path.name),
-        "preprocessor_file": str(preprocessor_path.name),
+        "best_model_file": "demand_model_best.joblib",
+        "preprocessor_file": "demand_preprocessor.joblib",
         "evaluation_metrics": results
     }
     
-    with open(metrics_path, "w") as f:
-        json.dump(final_payload, f, indent=4)
+    with open(SAVED_MODELS_DIR / "model_metrics.json", "w") as f:
+        json.dump(metrics_payload, f, indent=4)
         
-    print(f"Saved best model artifact to: {best_model_path}")
-    print(f"Saved preprocessor artifact to: {preprocessor_path}")
-    print(f"Saved metrics summary to: {metrics_path}")
-    
-    return final_payload
+    print(f"Saved best model ({best_model_name}) to: {best_model_path}")
+    print(f"Saved preprocessor to: {preprocessor_path}")
+    print(f"Saved metrics benchmark to: {SAVED_MODELS_DIR / 'model_metrics.json'}")
+    return metrics_payload
 
 
 if __name__ == "__main__":

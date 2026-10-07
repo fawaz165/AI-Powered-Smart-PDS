@@ -101,3 +101,16 @@ def get_metrics_endpoint():
         "status": "success",
         "data": metrics
     }), 200
+
+
+@ml_bp.route("/anomaly-metrics", methods=["GET"])
+def get_anomaly_metrics_endpoint():
+    """Returns Anomaly Detection benchmark and dataset evaluation metrics."""
+    import json
+    from backend.config import Config
+    metrics_path = Config.MODEL_DIR / "anomaly_metrics.json"
+    if metrics_path.exists():
+        with open(metrics_path, "r") as f:
+            data = json.load(f)
+        return jsonify({"status": "success", "data": data}), 200
+    return jsonify({"status": "error", "message": "Anomaly metrics not found"}), 404

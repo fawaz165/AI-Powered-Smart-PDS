@@ -159,6 +159,10 @@ const API = {
 
   getModelMetrics() {
     return this.request('/model-metrics');
+  },
+
+  getAnomalyMetrics() {
+    return this.request('/anomaly-metrics');
   }
 };
 

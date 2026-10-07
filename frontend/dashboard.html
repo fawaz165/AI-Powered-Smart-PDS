@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,9 +10,10 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
+
 <body>
   <div class="app-container">
-    
+
     <!-- Sidebar Navigation -->
     <aside class="sidebar">
       <div class="sidebar-header">
@@ -27,9 +29,12 @@
         <a href="beneficiaries.html" class="nav-link"><i class="icon fa-solid fa-users"></i> Beneficiaries</a>
         <a href="commodities.html" class="nav-link"><i class="icon fa-solid fa-boxes-stacked"></i> Commodities</a>
         <a href="inventory.html" class="nav-link"><i class="icon fa-solid fa-warehouse"></i> Inventory Stock</a>
-        <a href="transactions.html" class="nav-link"><i class="icon fa-solid fa-arrow-right-arrow-left"></i> Transactions</a>
-        <a href="predictions.html" class="nav-link"><i class="icon fa-solid fa-wand-magic-sparkles"></i> Demand Forecast</a>
-        <a href="fraud.html" class="nav-link"><i class="icon fa-solid fa-shield-halved"></i> Anomaly & Fraud <span id="nav-fraud-badge" class="nav-badge" style="display:none;">0</span></a>
+        <a href="transactions.html" class="nav-link"><i class="icon fa-solid fa-arrow-right-arrow-left"></i>
+          Transactions</a>
+        <a href="predictions.html" class="nav-link"><i class="icon fa-solid fa-wand-magic-sparkles"></i> Demand
+          Forecast</a>
+        <a href="fraud.html" class="nav-link"><i class="icon fa-solid fa-shield-halved"></i> Anomaly & Fraud <span
+            id="nav-fraud-badge" class="nav-badge" style="display:none;">0</span></a>
         <a href="reports.html" class="nav-link"><i class="icon fa-solid fa-file-excel"></i> Reports Export</a>
         <a href="about.html" class="nav-link"><i class="icon fa-solid fa-circle-info"></i> Viva Guide & About</a>
       </nav>
@@ -42,7 +47,8 @@
             <p id="sidebar-user-role">PDS CHIEF OFFICER</p>
           </div>
         </div>
-        <button class="btn-logout" title="Logout" onclick="handleLogout()"><i class="fa-solid fa-arrow-right-from-bracket"></i></button>
+        <button class="btn-logout" title="Logout" onclick="handleLogout()"><i
+            class="fa-solid fa-arrow-right-from-bracket"></i></button>
       </div>
     </aside>
 
@@ -65,7 +71,7 @@
       </header>
 
       <div class="content-body">
-        
+
         <!-- Procurement Shortage Warning Banner (Dynamically shown if shortages detected) -->
         <div id="shortage-banner" class="alert-banner" style="display: none;">
           <div class="alert-banner-left">
@@ -89,7 +95,8 @@
               <div class="card-icon" style="color: #60a5fa;"><i class="fa-solid fa-id-card"></i></div>
             </div>
             <div class="card-value" id="kpi-beneficiaries">--</div>
-            <div class="card-meta"><span class="meta-up"><i class="fa-solid fa-circle-check"></i> Active</span> Across 5 Districts</div>
+            <div class="card-meta"><span class="meta-up"><i class="fa-solid fa-circle-check"></i> Active</span> Across 5
+              Districts</div>
           </div>
 
           <!-- Total Stock -->
@@ -99,7 +106,8 @@
               <div class="card-icon" style="color: #34d399;"><i class="fa-solid fa-cubes-stacked"></i></div>
             </div>
             <div class="card-value" id="kpi-stock">-- <span style="font-size: 1rem; font-weight: 500;">kg</span></div>
-            <div class="card-meta"><span class="meta-up"><i class="fa-solid fa-warehouse"></i></span> 4 Core Commodities</div>
+            <div class="card-meta"><span class="meta-up"><i class="fa-solid fa-warehouse"></i></span> 4 Core Commodities
+            </div>
           </div>
 
           <!-- Predicted Monthly Demand -->
@@ -109,7 +117,8 @@
               <div class="card-icon" style="color: #a78bfa;"><i class="fa-solid fa-chart-line"></i></div>
             </div>
             <div class="card-value" id="kpi-demand">-- <span style="font-size: 1rem; font-weight: 500;">kg</span></div>
-            <div class="card-meta"><span class="meta-up"><i class="fa-solid fa-microchip"></i> AI Engine</span> 36-Month Lag Trained</div>
+            <div class="card-meta"><span class="meta-up"><i class="fa-solid fa-microchip"></i> </span> Trained
+              on historical food-demand data</div>
           </div>
 
           <!-- Recommended Procurement -->
@@ -118,7 +127,8 @@
               <span>Shortage / Procurement</span>
               <div class="card-icon" style="color: #fbbf24;"><i class="fa-solid fa-cart-flatbed"></i></div>
             </div>
-            <div class="card-value" id="kpi-procurement">-- <span style="font-size: 1rem; font-weight: 500;">kg</span></div>
+            <div class="card-value" id="kpi-procurement">-- <span style="font-size: 1rem; font-weight: 500;">kg</span>
+            </div>
             <div class="card-meta" id="kpi-shortage-meta"><span class="meta-alert">Calculating...</span></div>
           </div>
 
@@ -129,7 +139,8 @@
               <div class="card-icon" style="color: #fb7185;"><i class="fa-solid fa-user-secret"></i></div>
             </div>
             <div class="card-value" id="kpi-anomalies">--</div>
-            <div class="card-meta"><span class="meta-alert"><i class="fa-solid fa-magnifying-glass-chart"></i></span> Pending Admin Review</div>
+            <div class="card-meta"><span class="meta-alert"><i class="fa-solid fa-magnifying-glass-chart"></i></span>
+              Pending Admin Review</div>
           </div>
 
           <!-- Total Monthly Distribution -->
@@ -139,7 +150,8 @@
               <div class="card-icon" style="color: #22d3ee;"><i class="fa-solid fa-clock-rotate-left"></i></div>
             </div>
             <div class="card-value" id="kpi-txns">--</div>
-            <div class="card-meta"><span class="meta-up"><i class="fa-solid fa-lock"></i> Thread-Safe</span> Atomic Deductions</div>
+            <div class="card-meta"><span class="meta-up"><i class="fa-solid fa-lock"></i> Thread-Safe</span> Atomic
+              Deductions</div>
           </div>
         </div>
 
@@ -148,7 +160,8 @@
           <!-- Inventory vs Buffer Chart -->
           <div class="chart-card">
             <div class="chart-header">
-              <h3><i class="fa-solid fa-chart-bar" style="color: var(--primary);"></i> Commodity Stock vs Minimum Buffer Levels (kg)</h3>
+              <h3><i class="fa-solid fa-chart-bar" style="color: var(--primary);"></i> Commodity Stock vs Minimum Buffer
+                Levels (kg)</h3>
               <span class="badge badge-info">Real-time DB Sync</span>
             </div>
             <div class="chart-container">
@@ -159,7 +172,8 @@
           <!-- Regional Demand Breakdown -->
           <div class="chart-card">
             <div class="chart-header">
-              <h3><i class="fa-solid fa-chart-pie" style="color: var(--accent-purple);"></i> Regional Allocation Distribution</h3>
+              <h3><i class="fa-solid fa-chart-pie" style="color: var(--accent-purple);"></i> Regional Allocation
+                Distribution</h3>
               <span class="badge badge-purple">5 Districts</span>
             </div>
             <div class="chart-container">
@@ -171,7 +185,8 @@
         <!-- Recent Transactions Panel -->
         <div class="data-panel">
           <div class="panel-header">
-            <h3><i class="fa-solid fa-list-check" style="color: var(--accent-cyan);"></i> Recent Distribution Operations</h3>
+            <h3><i class="fa-solid fa-list-check" style="color: var(--accent-cyan);"></i> Recent Distribution Operations
+            </h3>
             <div class="panel-actions">
               <button class="btn btn-secondary btn-sm" onclick="window.location.href='transactions.html'">
                 View All Transactions <i class="fa-solid fa-arrow-right"></i>
@@ -193,7 +208,9 @@
                 </tr>
               </thead>
               <tbody id="recent-txns-tbody">
-                <tr><td colspan="8" style="text-align: center; color: var(--text-muted);">Loading transactions...</td></tr>
+                <tr>
+                  <td colspan="8" style="text-align: center; color: var(--text-muted);">Loading transactions...</td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -208,4 +225,5 @@
   <script src="js/api.js"></script>
   <script src="js/dashboard.js"></script>
 </body>
+
 </html>
