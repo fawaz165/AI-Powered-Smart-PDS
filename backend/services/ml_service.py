@@ -19,7 +19,9 @@ class MLService:
 
     @classmethod
     def load_models(cls):
-        """Loads persistent model artifacts from disk into RAM."""
+        """Loads persistent model artifacts from disk into RAM if not already loaded."""
+        if cls._demand_model is not None and cls._anomaly_model is not None:
+            return
         model_dir = Config.MODEL_DIR
         try:
             demand_model_path = model_dir / "demand_model_best.joblib"

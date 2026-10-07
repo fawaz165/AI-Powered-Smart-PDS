@@ -105,4 +105,4 @@ app = create_app()
 
 if __name__ == "__main__":
     logger.info(f"Starting Smart PDS Server on http://localhost:{Config.PORT}")
-    app.run(host="0.0.0.0", port=Config.PORT, debug=Config.DEBUG)
+    app.run(host="0.0.0.0", port=Config.PORT, debug=Config.DEBUG, use_reloader=False)
