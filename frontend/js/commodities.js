@@ -153,11 +153,6 @@ document.addEventListener('DOMContentLoaded', async () => {
  * Loads commodity records from backend database.
  */
 async function loadCommodities() {
-  const refreshBtn = document.getElementById('btn-refresh-commodities');
-  if (refreshBtn) {
-    refreshBtn.classList.add('fa-spin');
-  }
-
   try {
     const res = await API.getCommodities();
     if (res && res.status === 'success') {
@@ -167,10 +162,25 @@ async function loadCommodities() {
     }
   } catch (err) {
     showToast('Failed to load commodities catalog from database', 'error');
+  }
+}
+
+/**
+ * User-triggered catalog refresh.
+ * Spins only the inner icon while the network request is active.
+ */
+async function refreshCommodities() {
+  const btn = document.getElementById('btn-refresh-commodities');
+  const icon = btn ? btn.querySelector('i') : null;
+  if (btn) btn.disabled = true;
+  if (icon) icon.classList.add('fa-spin');
+
+  try {
+    await loadCommodities();
+    showToast('Commodity catalog refreshed from live database', 'info');
   } finally {
-    if (refreshBtn) {
-      setTimeout(() => refreshBtn.classList.remove('fa-spin'), 300);
-    }
+    if (icon) icon.classList.remove('fa-spin');
+    if (btn) btn.disabled = false;
   }
 }
 
