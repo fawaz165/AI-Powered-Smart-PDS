@@ -119,8 +119,32 @@ def list_fraud_alerts():
     """Returns all flagged suspicious transactions requiring administrative review."""
     db = get_db()
     alerts = list(db.fraud_alerts.find({}, {"_id": 0}).sort("created_at", -1))
+    pending_alerts = [a for a in alerts if a.get("status", "PENDING_REVIEW") == "PENDING_REVIEW"]
     return jsonify({
         "status": "success",
-        "count": len(alerts),
+        "total": len(alerts),
+        "count": len(pending_alerts),
+        "pending_count": len(pending_alerts),
         "data": alerts
     }), 200
+
+
+@transaction_bp.route("/fraud-alerts/<transaction_id>/resolve", methods=["POST", "PUT"])
+def resolve_fraud_alert(transaction_id):
+    """Marks a flagged suspicious alert as reviewed/resolved by the officer."""
+    db = get_db()
+    tid = transaction_id.strip().upper()
+    res = db.fraud_alerts.update_one(
+        {"transaction_id": tid},
+        {"$set": {
+            "status": "RESOLVED",
+            "resolved_at": datetime.utcnow()
+        }}
+    )
+    if res.matched_count == 0:
+        return jsonify({"status": "error", "message": f"Alert for '{tid}' not found"}), 404
+    return jsonify({
+        "status": "success",
+        "message": f"Alert '{tid}' resolved and recorded in audit log"
+    }), 200
+

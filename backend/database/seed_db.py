@@ -152,6 +152,25 @@ def seed_database():
         db.transactions.insert_many(txns)
         logger.info(f"Seeded {len(txns)} initial sample transactions (including 1 flagged anomaly)")
 
+        # Also register the anomalous transaction in fraud_alerts collection
+        db.fraud_alerts.update_one(
+            {"transaction_id": "TXN-1006"},
+            {"$set": {
+                "transaction_id": "TXN-1006",
+                "beneficiary_id": "BEN004",
+                "ration_shop_id": "FPS-CHN-001",
+                "commodity": "Rice",
+                "quantity": 95.0,
+                "region": "Chennai",
+                "risk_level": "HIGH",
+                "anomaly_score": -0.38,
+                "status": "PENDING_REVIEW",
+                "reason": "Single withdrawal 95 kg exceeds allowed family entitlement of 6 kg by 15.8x",
+                "created_at": datetime.utcnow()
+            }},
+            upsert=True
+        )
+
     logger.info("Database seeding completed successfully.")
 
 

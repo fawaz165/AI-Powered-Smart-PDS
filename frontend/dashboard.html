@@ -60,9 +60,9 @@
           <p>Real-time grain inventory monitoring, ML demand estimation, and anomaly detection</p>
         </div>
         <div class="nav-actions">
-          <div class="status-indicator">
-            <span class="pulse-dot"></span>
-            <span>ML Model Active (Scikit-Learn & XGBoost)</span>
+          <div class="status-indicator" id="ml-status-indicator">
+            <span class="pulse-dot" id="ml-pulse-dot"></span>
+            <span id="ml-status-text">Checking ML Status...</span>
           </div>
           <button class="btn btn-primary btn-sm" onclick="window.location.href='predictions.html'">
             <i class="fa-solid fa-bolt"></i> Run Demand Forecast
@@ -95,7 +95,7 @@
               <div class="card-icon" style="color: #60a5fa;"><i class="fa-solid fa-id-card"></i></div>
             </div>
             <div class="card-value" id="kpi-beneficiaries">--</div>
-            <div class="card-meta"><span class="meta-up"><i class="fa-solid fa-circle-check"></i> Active</span> Across 5
+            <div class="card-meta"><span class="meta-up"><i class="fa-solid fa-circle-check"></i> Active</span> Across <span id="kpi-districts-count">5</span>
               Districts</div>
           </div>
 
@@ -139,7 +139,7 @@
               <div class="card-icon" style="color: #fb7185;"><i class="fa-solid fa-user-secret"></i></div>
             </div>
             <div class="card-value" id="kpi-anomalies">--</div>
-            <div class="card-meta"><span class="meta-alert"><i class="fa-solid fa-magnifying-glass-chart"></i></span>
+            <div class="card-meta" id="kpi-anomalies-meta"><span class="meta-alert"><i class="fa-solid fa-magnifying-glass-chart"></i></span>
               Pending Admin Review</div>
           </div>
 
@@ -174,7 +174,7 @@
             <div class="chart-header">
               <h3><i class="fa-solid fa-chart-pie" style="color: var(--accent-purple);"></i> Regional Allocation
                 Distribution</h3>
-              <span class="badge badge-purple">5 Districts</span>
+              <span id="chart-regions-badge" class="badge badge-purple">Districts</span>
             </div>
             <div class="chart-container">
               <canvas id="regionChart"></canvas>

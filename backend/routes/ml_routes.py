@@ -114,3 +114,13 @@ def get_anomaly_metrics_endpoint():
             data = json.load(f)
         return jsonify({"status": "success", "data": data}), 200
     return jsonify({"status": "error", "message": "Anomaly metrics not found"}), 404
+
+
+@ml_bp.route("/ml-status", methods=["GET"])
+def get_ml_status_endpoint():
+    """Returns real-time health and status of loaded ML models."""
+    health_data = MLService.get_model_health()
+    return jsonify({
+        "status": "success",
+        "data": health_data
+    }), 200

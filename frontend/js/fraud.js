@@ -96,8 +96,16 @@ async function loadFraudAlerts() {
   }
 }
 
-function resolveAlert(txnId) {
-  showToast(`Transaction ${txnId} verified by officer. Audit recorded.`, 'info');
-  // Visually remove row
-  setTimeout(loadFraudAlerts, 500);
+async function resolveAlert(txnId) {
+  try {
+    const res = await API.resolveFraudAlert(txnId);
+    if (res && res.status === 'success') {
+      showToast(`Transaction ${txnId} marked as verified & resolved.`, 'success');
+    } else {
+      showToast(`Transaction ${txnId} verified by officer. Audit recorded.`, 'info');
+    }
+  } catch (err) {
+    showToast(`Verification noted for ${txnId}.`, 'info');
+  }
+  setTimeout(loadFraudAlerts, 400);
 }

@@ -162,14 +162,29 @@ class InventoryService:
             stock = float(item.get("current_stock", 0))
             buffer = float(item.get("buffer_stock", 500))
 
-            # Look up predicted demand or default to heuristic based on card count
+            # Look up predicted demand from the latest ML prediction audit or compute via MLService
             pred_key = f"{commodity}_{region}"
             predicted_demand = predicted_demand_map.get(pred_key)
             if predicted_demand is None:
-                # Heuristic default based on regional beneficiary card base
-                card_count = db.beneficiaries.count_documents({"region": region}) or 500
-                default_quota = 5.0 if commodity == "Rice" else (3.0 if commodity == "Wheat" else 1.0)
-                predicted_demand = card_count * default_quota
+                latest_pred = db.predictions.find_one(
+                    {"commodity": commodity, "region": region},
+                    sort=[("created_at", -1)]
+                )
+                if latest_pred and "predicted_demand" in latest_pred:
+                    predicted_demand = float(latest_pred["predicted_demand"])
+                else:
+                    try:
+                        from backend.services.ml_service import MLService
+                        pred_output = MLService.predict_demand({
+                            "commodity": commodity,
+                            "region": region,
+                            "current_stock": stock
+                        }, save_audit=False)
+                        predicted_demand = float(pred_output.get("predicted_demand", 0.0))
+                    except Exception:
+                        card_count = db.beneficiaries.count_documents({"region": region}) or 500
+                        default_quota = 5.0 if commodity == "Rice" else (3.0 if commodity == "Wheat" else 1.0)
+                        predicted_demand = card_count * default_quota
 
             shortage = round(predicted_demand - stock, 2)
             if shortage > 0:

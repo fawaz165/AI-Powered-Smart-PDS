@@ -62,7 +62,39 @@ class MLService:
         return cls._metrics or {}
 
     @classmethod
-    def predict_demand(cls, data: dict) -> dict:
+    def get_model_health(cls):
+        """Returns dynamic health status of demand and anomaly ML models."""
+        cls.load_models()
+        demand_ok = cls._demand_model is not None and cls._demand_preprocessor is not None
+        anomaly_ok = cls._anomaly_model is not None and cls._anomaly_scaler is not None
+
+        metrics = cls.get_model_metrics()
+        best_name = metrics.get("best_model", "Linear Regression")
+
+        if demand_ok and anomaly_ok:
+            status_text = f"ML Model Active ({best_name} & Isolation Forest)"
+            health = "HEALTHY"
+        elif demand_ok:
+            status_text = f"Demand Model Active ({best_name}) - Anomaly Offline"
+            health = "DEGRADED"
+        elif anomaly_ok:
+            status_text = "Anomaly Isolation Forest Active - Demand Offline"
+            health = "DEGRADED"
+        else:
+            status_text = "ML Models Offline"
+            health = "OFFLINE"
+
+        return {
+            "health": health,
+            "status_text": status_text,
+            "demand_model_active": demand_ok,
+            "anomaly_model_active": anomaly_ok,
+            "best_demand_model": best_name if demand_ok else None,
+            "anomaly_algorithm": "Isolation Forest" if anomaly_ok else None
+        }
+
+    @classmethod
+    def predict_demand(cls, data: dict, save_audit: bool = True) -> dict:
         """
         Executes ML demand inference and applies inventory logic:
         Predicted Demand - Current Stock = Shortage.
@@ -140,12 +172,13 @@ class MLService:
         }
 
         # Store prediction audit in MongoDB
-        try:
-            db = get_db()
-            db.predictions.insert_one(result.copy())
-            result.pop("_id", None)
-        except Exception as e:
-            logger.warning(f"Could not persist prediction audit: {e}")
+        if save_audit:
+            try:
+                db = get_db()
+                db.predictions.insert_one(result.copy())
+                result.pop("_id", None)
+            except Exception as e:
+                logger.warning(f"Could not persist prediction audit: {e}")
 
         return result
 

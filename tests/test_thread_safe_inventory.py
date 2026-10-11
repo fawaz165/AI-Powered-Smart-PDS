@@ -74,3 +74,7 @@ def test_thread_safe_negative_stock_rejection():
     # Stock must remain safely unchanged at 30 kg
     stock_doc = InventoryService.get_stock(commodity, region)
     assert stock_doc["current_stock"] == 30.0
+
+    # Clean up test region from DB so it does not pollute production inventory
+    from backend.database.mongo import get_db
+    get_db().inventory.delete_many({"region": "ConcurrentTestRegion"})

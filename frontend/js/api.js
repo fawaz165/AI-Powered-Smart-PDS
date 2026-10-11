@@ -163,6 +163,16 @@ const API = {
 
   getAnomalyMetrics() {
     return this.request('/anomaly-metrics');
+  },
+
+  getMLStatus() {
+    return this.request('/ml-status');
+  },
+
+  resolveFraudAlert(transactionId) {
+    return this.request(`/transactions/fraud-alerts/${encodeURIComponent(transactionId)}/resolve`, {
+      method: 'POST'
+    });
   }
 };
 

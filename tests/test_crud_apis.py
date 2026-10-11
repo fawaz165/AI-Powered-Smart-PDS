@@ -70,3 +70,26 @@ def test_inventory_alerts_endpoint(client):
     assert "predicted_demand" in sample
     assert "shortage" in sample
     assert "recommended_procurement" in sample
+
+
+def test_ml_status_endpoint(client):
+    """Verifies /api/ml-status returns dynamic model health telemetry."""
+    res = client.get("/api/ml-status")
+    assert res.status_code == 200
+    data = res.get_json()
+    assert data["status"] == "success"
+    assert "health" in data["data"]
+    assert "status_text" in data["data"]
+    assert data["data"]["health"] in ["HEALTHY", "DEGRADED", "OFFLINE"]
+
+
+def test_fraud_alerts_endpoint(client):
+    """Verifies /api/transactions/fraud-alerts returns pending count and alerts."""
+    res = client.get("/api/transactions/fraud-alerts")
+    assert res.status_code == 200
+    data = res.get_json()
+    assert data["status"] == "success"
+    assert "count" in data
+    assert "pending_count" in data
+    assert isinstance(data["data"], list)
+
