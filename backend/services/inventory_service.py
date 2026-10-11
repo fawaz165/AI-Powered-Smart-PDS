@@ -162,37 +162,40 @@ class InventoryService:
             stock = float(item.get("current_stock", 0))
             buffer = float(item.get("buffer_stock", 500))
 
-            # Look up predicted demand from the latest ML prediction audit or compute via MLService
+            # Look up predicted demand from explicit map or compute via MLService
             pred_key = f"{commodity}_{region}"
             predicted_demand = predicted_demand_map.get(pred_key)
             if predicted_demand is None:
-                latest_pred = db.predictions.find_one(
-                    {"commodity": commodity, "region": region},
-                    sort=[("created_at", -1)]
-                )
-                if latest_pred and "predicted_demand" in latest_pred:
-                    predicted_demand = float(latest_pred["predicted_demand"])
-                else:
-                    try:
-                        from backend.services.ml_service import MLService
-                        pred_output = MLService.predict_demand({
-                            "commodity": commodity,
-                            "region": region,
-                            "current_stock": stock
-                        }, save_audit=False)
-                        predicted_demand = float(pred_output.get("predicted_demand", 0.0))
-                    except Exception:
-                        card_count = db.beneficiaries.count_documents({"region": region}) or 500
-                        default_quota = 5.0 if commodity == "Rice" else (3.0 if commodity == "Wheat" else 1.0)
-                        predicted_demand = card_count * default_quota
+                try:
+                    from backend.services.ml_service import MLService
+                    commodity_defaults = {
+                        "Rice": 3500.0,
+                        "Wheat": 1800.0,
+                        "Sugar": 900.0,
+                        "Dal": 650.0
+                    }
+                    prev_target = commodity_defaults.get(commodity, stock if stock > 0 else 1000.0)
+                    pred_output = MLService.predict_demand({
+                        "commodity": commodity,
+                        "region": region,
+                        "current_stock": stock,
+                        "previous_demand": prev_target
+                    }, save_audit=False)
+                    predicted_demand = float(pred_output.get("predicted_demand", 0.0))
+                except Exception:
+                    card_count = db.beneficiaries.count_documents({"region": region}) or 500
+                    default_quota = 5.0 if commodity == "Rice" else (3.0 if commodity == "Wheat" else 1.0)
+                    predicted_demand = card_count * default_quota
 
-            shortage = round(predicted_demand - stock, 2)
-            if shortage > 0:
+            raw_shortage = round(predicted_demand - stock, 2)
+            if raw_shortage > 0:
+                shortage = raw_shortage
                 status = "SHORTAGE"
                 recommended_procurement = shortage
                 alert_level = "CRITICAL" if stock <= buffer else "WARNING"
                 msg = f"Potential shortage of {shortage} kg detected. Recommended procurement: {recommended_procurement} kg."
             else:
+                shortage = 0.0
                 recommended_procurement = 0.0
                 if stock > (predicted_demand * 1.5):
                     status = "EXCESS"
@@ -207,10 +210,10 @@ class InventoryService:
             alerts.append({
                 "commodity": commodity,
                 "region": region,
-                "current_stock": stock,
+                "current_stock": round(stock, 2),
                 "predicted_demand": round(predicted_demand, 2),
-                "buffer_stock": buffer,
-                "shortage": max(0.0, shortage),
+                "buffer_stock": round(buffer, 2),
+                "shortage": shortage,
                 "recommended_procurement": recommended_procurement,
                 "status": status,
                 "alert_level": alert_level,

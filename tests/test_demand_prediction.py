@@ -58,3 +58,58 @@ def test_predict_demand_api_sufficient_stock(client):
     assert data["shortage"] == 0.0
     assert data["recommended_procurement"] == 0.0
     assert data["status"] in ["SUFFICIENT", "EXCESS"]
+
+
+def test_predict_demand_all_commodities_consistency(client):
+    """Verifies consistent demand forecasting across all 4 PDS commodities."""
+    commodities = ["Rice", "Wheat", "Sugar", "Dal"]
+    for commodity in commodities:
+        payload = {
+            "commodity": commodity,
+            "region": "Coimbatore",
+            "beneficiary_count": 8000,
+            "previous_demand": 2500,
+            "current_stock": 2000,
+            "month": 10
+        }
+        res = client.post("/api/predict-demand", json=payload)
+        assert res.status_code == 200
+        data = res.get_json()["data"]
+        assert data["commodity"] == commodity
+        assert data["predicted_demand"] > 0
+        assert data["shortage"] >= 0.0
+        if data["predicted_demand"] > 2000:
+            assert data["status"] == "SHORTAGE"
+            assert data["recommended_procurement"] == data["shortage"]
+        else:
+            assert data["shortage"] == 0.0
+            assert data["recommended_procurement"] == 0.0
+
+
+def test_inventory_alerts_aggregation_consistency(client):
+    """Verifies that inventory alerts return consistent non-negative shortages and valid aggregations."""
+    res = client.get("/api/inventory/alerts")
+    assert res.status_code == 200
+    alerts = res.get_json()["data"]
+    assert len(alerts) > 0
+
+    total_stock = sum(a["current_stock"] for a in alerts)
+    total_demand = sum(a["predicted_demand"] for a in alerts)
+    total_shortage = sum(a["shortage"] for a in alerts)
+    total_procurement = sum(a["recommended_procurement"] for a in alerts)
+
+    assert total_stock > 0
+    assert total_demand > 0
+    assert total_shortage >= 0
+    assert total_procurement == total_shortage
+
+    for alert in alerts:
+        assert alert["shortage"] >= 0.0
+        assert alert["current_stock"] >= 0.0
+        assert alert["buffer_stock"] >= 0.0
+        assert alert["status"] in ["SHORTAGE", "SUFFICIENT", "EXCESS"]
+        if alert["status"] == "SHORTAGE":
+            assert alert["recommended_procurement"] == alert["shortage"]
+        else:
+            assert alert["recommended_procurement"] == 0.0
+
