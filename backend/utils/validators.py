@@ -86,9 +86,11 @@ def validate_commodity_payload(data):
     elif not re.match(r"^[A-Za-z][A-Za-z0-9\s\-_()]{1,49}$", name):
         errors.append("Commodity name must start with a letter and contain only alphanumeric characters, spaces, hyphens, and parentheses")
 
-    if "unit" in data and data["unit"]:
+    if "unit" in data:
         unit = str(data["unit"]).strip().lower()
-        if len(unit) > 15:
+        if not unit:
+            errors.append("Measurement unit cannot be empty")
+        elif len(unit) > 15:
             errors.append("Measurement unit must be under 15 characters")
 
     parsed_sub_price = None

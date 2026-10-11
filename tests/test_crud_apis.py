@@ -164,14 +164,35 @@ def test_commodity_validation_and_duplicate_prevention(client):
     })
     assert res_bad_code.status_code == 400
 
-    # 6. Short name
+    # 6. Short name or invalid name pattern
     res_short_name = client.post("/api/commodities", json={
         "commodity_code": "COM-VAL-SHORT",
         "name": "X"
     })
     assert res_short_name.status_code == 400
 
-    # 7. Duplicate code rejection (COM-RIC already exists)
+    res_bad_name = client.post("/api/commodities", json={
+        "commodity_code": "COM-VAL-BADNAME",
+        "name": "123##Invalid"
+    })
+    assert res_bad_name.status_code == 400
+
+    # 7. Invalid measurement unit (empty or too long)
+    res_empty_unit = client.post("/api/commodities", json={
+        "commodity_code": "COM-VAL-UNIT",
+        "name": "Validation Unit Grain",
+        "unit": ""
+    })
+    assert res_empty_unit.status_code == 400
+
+    res_long_unit = client.post("/api/commodities", json={
+        "commodity_code": "COM-VAL-UNIT2",
+        "name": "Validation Unit Grain 2",
+        "unit": "excessively_long_unit_name"
+    })
+    assert res_long_unit.status_code == 400
+
+    # 8. Duplicate code rejection (COM-RIC already exists)
     res_dup_code = client.post("/api/commodities", json={
         "commodity_code": "COM-RIC",
         "name": "Duplicate Code Grain",
@@ -180,7 +201,7 @@ def test_commodity_validation_and_duplicate_prevention(client):
     assert res_dup_code.status_code == 409
     assert "already exists" in res_dup_code.get_json()["message"]
 
-    # 8. Duplicate name rejection ('Rice' already exists)
+    # 9. Duplicate name rejection ('Rice' already exists)
     res_dup_name = client.post("/api/commodities", json={
         "commodity_code": "COM-NEW-RIC",
         "name": "Rice",

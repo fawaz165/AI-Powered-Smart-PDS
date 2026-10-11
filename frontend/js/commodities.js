@@ -235,8 +235,9 @@ function updateCommodityKPIs(commodities) {
     }
 
     if (c.market_price && c.market_price > 0) {
-      const subPrice = Math.max(0, c.subsidized_price || 0);
-      const discountPct = Math.max(0, Math.min(100, ((c.market_price - subPrice) / c.market_price) * 100));
+      const discountPct = (c.subsidy_percentage !== undefined && c.subsidy_percentage !== null)
+        ? Number(c.subsidy_percentage)
+        : Math.max(0, Math.min(100, ((c.market_price - Math.max(0, c.subsidized_price || 0)) / c.market_price) * 100));
       totalSubsidyDiscount += discountPct;
       benchmarkedCount++;
     }
@@ -323,8 +324,12 @@ function renderCommoditiesTable(items) {
     let marketHtml = '<span style="color: var(--text-muted);">-</span>';
     if (c.market_price && c.market_price > 0) {
       const mktPriceVal = Number(c.market_price);
-      const diffAmount = Math.max(0, mktPriceVal - subPriceVal);
-      const discountPct = Math.round((diffAmount / mktPriceVal) * 100);
+      const diffAmount = (c.subsidy_amount !== undefined && c.subsidy_amount !== null)
+        ? Number(c.subsidy_amount)
+        : Math.max(0, mktPriceVal - subPriceVal);
+      const discountPct = (c.subsidy_percentage !== undefined && c.subsidy_percentage !== null)
+        ? Math.round(Number(c.subsidy_percentage))
+        : Math.round((diffAmount / mktPriceVal) * 100);
       const savingsBadge = discountPct >= 100 
         ? '<span class="badge badge-success" style="font-size:0.7rem; padding: 2px 6px;">100% Free</span>'
         : `<span class="badge badge-info" style="font-size:0.7rem; padding: 2px 6px;">Save ₹${diffAmount.toFixed(2)} (-${discountPct}%)</span>`;
