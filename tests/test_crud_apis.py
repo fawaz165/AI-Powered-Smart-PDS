@@ -124,3 +124,86 @@ def test_transactions_ledger_data_integrity(client):
         assert not t["beneficiary_id"].startswith("BEN-CONCUR")
         assert not t["beneficiary_id"].startswith("TEST-")
 
+
+def test_beneficiary_delete_protection_with_transactions(client):
+    """
+    Verifies that attempting to delete a cardholder with linked transaction history
+    is blocked with 409 Conflict to protect audit integrity.
+    """
+    # BEN001 has active distribution transactions (TXN-1001, etc.)
+    del_res = client.delete("/api/beneficiaries/BEN001")
+    assert del_res.status_code == 409
+    data = del_res.get_json()
+    assert data["status"] == "error"
+    assert "distribution transaction" in data["message"].lower()
+
+    # Verify BEN001 is NOT deleted
+    get_res = client.get("/api/beneficiaries/BEN001")
+    assert get_res.status_code == 200
+    assert get_res.get_json()["data"]["beneficiary_id"] == "BEN001"
+
+
+def test_beneficiary_input_validation(client):
+    """Verifies input validation rules for beneficiary creation."""
+    # Invalid family size
+    invalid_size_res = client.post("/api/beneficiaries", json={
+        "beneficiary_id": "TEST-VAL-01",
+        "name": "Test Cardholder",
+        "region": "Chennai",
+        "family_size": 0,
+        "ration_card_type": "Priority (PHH)"
+    })
+    assert invalid_size_res.status_code == 400
+
+    # Missing name
+    missing_name_res = client.post("/api/beneficiaries", json={
+        "beneficiary_id": "TEST-VAL-02",
+        "region": "Chennai",
+        "family_size": 4,
+        "ration_card_type": "Priority (PHH)"
+    })
+    assert missing_name_res.status_code == 400
+
+    # Invalid card type
+    invalid_type_res = client.post("/api/beneficiaries", json={
+        "beneficiary_id": "TEST-VAL-03",
+        "name": "Test Cardholder",
+        "region": "Chennai",
+        "family_size": 4,
+        "ration_card_type": "InvalidCardType"
+    })
+    assert invalid_type_res.status_code == 400
+
+
+def test_beneficiary_search_and_region_filtering(client):
+    """Verifies search by name, ID, and card number, as well as region filtering."""
+    # Search by name substring
+    search_name_res = client.get("/api/beneficiaries?search=Aarav")
+    assert search_name_res.status_code == 200
+    bens = search_name_res.get_json()["data"]
+    assert any(b["beneficiary_id"] == "BEN001" for b in bens)
+
+    # Search by Ration Card Number
+    search_rc_res = client.get("/api/beneficiaries?search=RC-BEN001")
+    assert search_rc_res.status_code == 200
+    bens_rc = search_rc_res.get_json()["data"]
+    assert any(b["beneficiary_id"] == "BEN001" for b in bens_rc)
+
+    # Filter by Region
+    region_res = client.get("/api/beneficiaries?region=Coimbatore")
+    assert region_res.status_code == 200
+    cbe_bens = region_res.get_json()["data"]
+    assert len(cbe_bens) > 0
+    assert all(b["region"] == "Coimbatore" for b in cbe_bens)
+
+
+def test_beneficiary_authorization_rejection(client):
+    """Verifies that mutation endpoints reject invalid tokens with 401 Unauthorized."""
+    res = client.post(
+        "/api/beneficiaries",
+        json={"beneficiary_id": "TEST-AUTH-01", "name": "Test", "region": "Chennai", "family_size": 4, "ration_card_type": "Priority (PHH)"},
+        headers={"Authorization": "Bearer invalid_tampered_token_xyz"}
+    )
+    assert res.status_code == 401
+    assert res.get_json()["status"] == "error"
+
