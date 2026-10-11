@@ -92,4 +92,35 @@ def test_fraud_alerts_endpoint(client):
     assert "count" in data
     assert "pending_count" in data
     assert isinstance(data["data"], list)
+    pending_items = [a for a in data["data"] if a.get("status") == "PENDING_REVIEW"]
+    assert data["pending_count"] == len(pending_items)
+
+
+def test_transactions_ledger_data_integrity(client):
+    """
+    Data-Integrity Audit:
+    Verifies that distribution transactions retrieved from /api/transactions
+    represent genuine demonstration records without any test remnants.
+    """
+    res = client.get("/api/transactions?limit=50")
+    assert res.status_code == 200
+    data = res.get_json()
+    assert data["status"] == "success"
+    assert data["total"] > 0
+    txns = data["data"]
+    assert len(txns) > 0
+
+    for t in txns:
+        assert "transaction_id" in t
+        assert "beneficiary_id" in t
+        assert "commodity" in t
+        assert "quantity" in t
+        assert "region" in t
+        assert "status" in t
+        assert "ration_shop_id" in t
+        # Ensure zero test contaminants
+        assert t["region"] != "ConcurrentTestRegion"
+        assert t["ration_shop_id"] != "FPS-TEST-001"
+        assert not t["beneficiary_id"].startswith("BEN-CONCUR")
+        assert not t["beneficiary_id"].startswith("TEST-")
 

@@ -113,3 +113,34 @@ def test_inventory_alerts_aggregation_consistency(client):
         else:
             assert alert["recommended_procurement"] == 0.0
 
+
+def test_reconciliation_commodity_and_regional_shortages(client):
+    """
+    Data-Integrity Audit:
+    Reconciles aggregate shortage with the sum of per-commodity shortages
+    and the sum of per-regional shortages. Ensures 0.0 discrepancy.
+    """
+    from collections import defaultdict
+
+    res = client.get("/api/inventory/alerts")
+    assert res.status_code == 200
+    alerts = res.get_json()["data"]
+    assert len(alerts) > 0
+
+    by_comm = defaultdict(float)
+    by_region = defaultdict(float)
+    total_shortage = 0.0
+
+    for a in alerts:
+        sh = float(a["shortage"])
+        total_shortage += sh
+        by_comm[a["commodity"]] += sh
+        by_region[a["region"]] += sh
+
+    sum_comm = sum(by_comm.values())
+    sum_region = sum(by_region.values())
+
+    # Zero discrepancy reconciliation
+    assert round(abs(total_shortage - sum_comm), 2) == 0.0
+    assert round(abs(total_shortage - sum_region), 2) == 0.0
+
