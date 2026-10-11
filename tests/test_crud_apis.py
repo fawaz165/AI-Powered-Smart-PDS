@@ -106,6 +106,16 @@ def test_commodity_catalog_retrieval_and_rate_distinction(client):
     assert dal["subsidy_amount"] == 100.0
     assert dal["subsidy_percentage"] == 76.92
 
+    # Verify summary statistics and clearly defined averaging method
+    assert "summary" in data
+    summary = data["summary"]
+    assert summary["total_count"] == 4
+    assert summary["official_count"] == 3
+    assert summary["demo_count"] == 1
+    assert summary["benchmarked_count"] == 4
+    assert summary["average_subsidy_discount"] == 85.3
+    assert summary["averaging_method"] == "arithmetic_mean_of_valid_benchmark_discounts"
+
 
 def test_commodity_validation_and_duplicate_prevention(client):
     """

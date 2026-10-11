@@ -187,7 +187,7 @@ async function loadCommodities() {
     const res = await API.getCommodities();
     if (res && res.status === 'success') {
       allCommodities = res.data || [];
-      updateCommodityKPIs(allCommodities);
+      updateCommodityKPIs(allCommodities, res.summary);
       filterCommodities();
     }
   } catch (err) {
@@ -216,10 +216,11 @@ async function refreshCommodities() {
 
 /**
  * Computes and renders top KPI metrics cards dynamically from database records.
- * No hardcoded replacement statistics.
+ * Uses a clearly defined unweighted arithmetic mean across valid benchmarked commodities.
+ * Excludes invalid or negative records. No hardcoded replacement statistics.
  */
-function updateCommodityKPIs(commodities) {
-  const totalCount = commodities.length;
+function updateCommodityKPIs(commodities, summary) {
+  let totalCount = commodities.length;
   let officialCount = 0;
   let demoCount = 0;
   let totalSubsidyDiscount = 0;
@@ -227,33 +228,38 @@ function updateCommodityKPIs(commodities) {
 
   commodities.forEach(c => {
     // Only verified official NFSA rates within statutory limits are counted as official
-    const isOfficialVerified = (c.rate_type === 'OFFICIAL_NFSA' && c.is_verified && !c.is_demonstration);
+    const isOfficialVerified = Boolean(c.rate_type === 'OFFICIAL_NFSA' && c.is_verified && !c.is_demonstration);
     if (isOfficialVerified) {
       officialCount++;
     } else {
       demoCount++;
     }
 
-    if (c.market_price && c.market_price > 0) {
+    const mkt = Number(c.market_price);
+    const sub = Number(c.subsidized_price);
+    // Strictly validate: positive market price, non-negative subsidized price, and market >= subsidized
+    if (!isNaN(mkt) && mkt > 0 && !isNaN(sub) && sub >= 0 && mkt >= sub) {
       const discountPct = (c.subsidy_percentage !== undefined && c.subsidy_percentage !== null)
         ? Number(c.subsidy_percentage)
-        : Math.max(0, Math.min(100, ((c.market_price - Math.max(0, c.subsidized_price || 0)) / c.market_price) * 100));
+        : Math.max(0, Math.min(100, ((mkt - sub) / mkt) * 100));
       totalSubsidyDiscount += discountPct;
       benchmarkedCount++;
     }
   });
 
-  // Calculate actual dynamic average without hardcoding fallbacks
-  const avgSubsidyPct = benchmarkedCount > 0 ? (totalSubsidyDiscount / benchmarkedCount).toFixed(1) : '0.0';
+  // Calculate dynamic arithmetic mean across valid benchmarked commodities
+  const avgSubsidyPct = (summary && summary.average_subsidy_discount !== undefined)
+    ? Number(summary.average_subsidy_discount).toFixed(1)
+    : (benchmarkedCount > 0 ? (totalSubsidyDiscount / benchmarkedCount).toFixed(1) : '0.0');
 
   const elTotal = document.getElementById('com-kpi-total');
   const elOfficial = document.getElementById('com-kpi-official');
   const elDemo = document.getElementById('com-kpi-demo');
   const elDiscount = document.getElementById('com-kpi-discount');
 
-  if (elTotal) elTotal.textContent = totalCount;
-  if (elOfficial) elOfficial.textContent = officialCount;
-  if (elDemo) elDemo.textContent = demoCount;
+  if (elTotal) elTotal.textContent = (summary && summary.total_count !== undefined) ? summary.total_count : totalCount;
+  if (elOfficial) elOfficial.textContent = (summary && summary.official_count !== undefined) ? summary.official_count : officialCount;
+  if (elDemo) elDemo.textContent = (summary && summary.demo_count !== undefined) ? summary.demo_count : demoCount;
   if (elDiscount) elDiscount.innerHTML = `${avgSubsidyPct}<span style="font-size:1.1rem; font-weight:600;">%</span>`;
 }
 

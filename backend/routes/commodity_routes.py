@@ -52,10 +52,35 @@ def list_commodities():
         c["is_verified"] = bool(is_official and (ccode in ["COM-RIC", "COM-WHT", "COM-SUG"] or sub_price <= 13.5) and not c.get("is_demonstration", False))
         c["is_demonstration"] = bool(c.get("is_demonstration", False) or c["rate_type"] == "DEMONSTRATION")
 
+    # Dynamic summary statistics across valid catalog records
+    valid_benchmark_discounts = []
+    official_count = 0
+    demo_count = 0
+    for c in commodities:
+        if c.get("is_verified") and not c.get("is_demonstration"):
+            official_count += 1
+        else:
+            demo_count += 1
+
+        mkt = c.get("market_price")
+        sub = c.get("subsidized_price", 0.0)
+        if mkt is not None and mkt > 0 and mkt >= sub:
+            valid_benchmark_discounts.append(c["subsidy_percentage"])
+
+    avg_subsidy = round(sum(valid_benchmark_discounts) / len(valid_benchmark_discounts), 1) if valid_benchmark_discounts else 0.0
+
     return jsonify({
         "status": "success",
         "count": len(commodities),
-        "data": commodities
+        "data": commodities,
+        "summary": {
+            "total_count": len(commodities),
+            "official_count": official_count,
+            "demo_count": demo_count,
+            "benchmarked_count": len(valid_benchmark_discounts),
+            "average_subsidy_discount": avg_subsidy,
+            "averaging_method": "arithmetic_mean_of_valid_benchmark_discounts"
+        }
     }), 200
 
 
