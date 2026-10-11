@@ -5,6 +5,7 @@
 let allTransactions = [];
 
 document.addEventListener('DOMContentLoaded', async () => {
+  await populateTransactionCommodityDropdowns();
   await loadTransactions();
 
   document.getElementById('new-txn-form').addEventListener('submit', async (e) => {
@@ -107,4 +108,24 @@ function filterTransactions() {
   });
 
   renderTransactionsTable(filtered);
+}
+
+async function populateTransactionCommodityDropdowns() {
+  const select = document.getElementById('txn-commodity');
+  const filterSelect = document.getElementById('txn-filter-commodity');
+  try {
+    const res = await API.getCommodities();
+    if (res && res.status === 'success' && res.data && res.data.length > 0) {
+      if (select) {
+        select.innerHTML = res.data.map(c => `<option value="${c.name}">${c.name} (${c.commodity_code})</option>`).join('');
+      }
+      if (filterSelect) {
+        const cur = filterSelect.value;
+        filterSelect.innerHTML = '<option value="">All Commodities</option>' + res.data.map(c => `<option value="${c.name}">${c.name} (${c.commodity_code})</option>`).join('');
+        filterSelect.value = cur;
+      }
+    }
+  } catch (e) {
+    console.warn('Could not populate transaction commodity dropdowns:', e);
+  }
 }

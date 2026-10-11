@@ -30,9 +30,9 @@ def predict_demand_endpoint():
     """
     data = request.get_json(silent=True) or {}
     
-    # Input validation
-    if not data.get("commodity"):
-        return jsonify({"status": "error", "message": "commodity is required"}), 400
+    # Input validation: accept commodity name or commodity_code
+    if not data.get("commodity") and not data.get("commodity_code"):
+        return jsonify({"status": "error", "message": "commodity or commodity_code is required"}), 400
     if not data.get("region"):
         return jsonify({"status": "error", "message": "region is required"}), 400
 

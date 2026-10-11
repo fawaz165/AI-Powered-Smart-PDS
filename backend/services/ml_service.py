@@ -104,7 +104,39 @@ class MLService:
             if cls._demand_model is None:
                 raise RuntimeError("Demand ML model is not available.")
 
-        commodity = data.get("commodity", "Rice").strip()
+        raw_commodity = str(data.get("commodity") or data.get("commodity_code") or "Rice").strip()
+        commodity_name = raw_commodity
+        commodity_code = None
+
+        # Resolve commodity_code and canonical name against database catalog
+        try:
+            from backend.database.mongo import get_db
+            import re
+            db = get_db()
+            com_doc = db.commodities.find_one({
+                "$or": [
+                    {"commodity_code": raw_commodity.upper()},
+                    {"name": {"$regex": f"^{re.escape(raw_commodity)}$", "$options": "i"}}
+                ]
+            })
+            if com_doc:
+                commodity_name = com_doc["name"]
+                commodity_code = com_doc["commodity_code"]
+        except Exception:
+            pass
+
+        if not commodity_code:
+            commodity_code = (
+                "COM-RIC" if commodity_name.lower() == "rice" else (
+                    "COM-WHT" if commodity_name.lower() == "wheat" else (
+                        "COM-SUG" if commodity_name.lower() == "sugar" else (
+                            "COM-DAL" if commodity_name.lower() == "dal" else f"COM-{commodity_name[:3].upper()}"
+                        )
+                    )
+                )
+            )
+
+        commodity = commodity_name
         region = data.get("region", "Chennai").strip()
         month = int(data.get("month", datetime.utcnow().month))
         beneficiary_count = int(data.get("beneficiary_count", 12500))
@@ -159,6 +191,7 @@ class MLService:
 
         result = {
             "commodity": commodity,
+            "commodity_code": commodity_code,
             "region": region,
             "month": month,
             "beneficiary_count": beneficiary_count,

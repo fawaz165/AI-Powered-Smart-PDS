@@ -48,13 +48,227 @@ def test_beneficiary_crud(client):
     assert verify_res.status_code == 404
 
 
-def test_commodity_crud(client):
-    """Verifies commodity listing and creation."""
+def test_commodity_catalog_retrieval_and_rate_distinction(client):
+    """
+    Verifies that commodity records are retrieved from the database,
+    enriched with operational linkages, and that verified official NFSA rates
+    are clearly distinguished from synthetic demonstration welfare values.
+    """
     res = client.get("/api/commodities")
     assert res.status_code == 200
     data = res.get_json()
     assert data["status"] == "success"
-    assert data["count"] >= 4  # Rice, Wheat, Sugar, Dal
+    assert data["count"] >= 4
+
+    comms = {c["commodity_code"]: c for c in data["data"]}
+    assert "COM-RIC" in comms
+    assert "COM-WHT" in comms
+    assert "COM-SUG" in comms
+    assert "COM-DAL" in comms
+
+    # Official NFSA rates
+    rice = comms["COM-RIC"]
+    assert rice["rate_type"] == "OFFICIAL_NFSA"
+    assert rice["is_demonstration"] is False
+    assert rice["subsidized_price"] == 0.0
+    assert rice["market_price"] == 42.0
+    assert rice["linked_inventory_count"] >= 5
+    assert rice["linked_transactions_count"] > 0
+
+    wheat = comms["COM-WHT"]
+    assert wheat["rate_type"] == "OFFICIAL_NFSA"
+    assert wheat["is_demonstration"] is False
+    assert wheat["subsidized_price"] == 2.0
+    assert wheat["market_price"] == 34.0
+
+    sugar = comms["COM-SUG"]
+    assert sugar["rate_type"] == "OFFICIAL_NFSA"
+    assert sugar["is_demonstration"] is False
+    assert sugar["subsidized_price"] == 13.5
+
+    # Demonstration rate
+    dal = comms["COM-DAL"]
+    assert dal["rate_type"] == "DEMONSTRATION"
+    assert dal["is_demonstration"] is True
+    assert dal["subsidized_price"] == 30.0
+    assert dal["market_price"] == 130.0
+
+
+def test_commodity_validation_and_duplicate_prevention(client):
+    """
+    Verifies payload validation and duplicate prevention:
+    - Code format and length validation
+    - Name length validation
+    - Non-negative subsidized and market prices
+    - 409 Conflict rejection for duplicate code or duplicate name
+    """
+    # 1. Negative subsidized price
+    res_neg_sub = client.post("/api/commodities", json={
+        "commodity_code": "COM-VAL1",
+        "name": "Validation Test Grain",
+        "subsidized_price": -5.0
+    })
+    assert res_neg_sub.status_code == 400
+    assert "subsidized_price" in str(res_neg_sub.get_json()).lower()
+
+    # 2. Negative market price
+    res_neg_mkt = client.post("/api/commodities", json={
+        "commodity_code": "COM-VAL2",
+        "name": "Validation Test Grain 2",
+        "subsidized_price": 10.0,
+        "market_price": -20.0
+    })
+    assert res_neg_mkt.status_code == 400
+    assert "market_price" in str(res_neg_mkt.get_json()).lower()
+
+    # 3. Invalid commodity code pattern
+    res_bad_code = client.post("/api/commodities", json={
+        "commodity_code": "AB",
+        "name": "Validation Test Grain 3"
+    })
+    assert res_bad_code.status_code == 400
+
+    # 4. Short name
+    res_short_name = client.post("/api/commodities", json={
+        "commodity_code": "COM-VAL4",
+        "name": "X"
+    })
+    assert res_short_name.status_code == 400
+
+    # 5. Duplicate code rejection (COM-RIC already exists)
+    res_dup_code = client.post("/api/commodities", json={
+        "commodity_code": "COM-RIC",
+        "name": "Duplicate Code Grain",
+        "subsidized_price": 5.0
+    })
+    assert res_dup_code.status_code == 409
+    assert "already exists" in res_dup_code.get_json()["message"]
+
+    # 6. Duplicate name rejection ('Rice' already exists)
+    res_dup_name = client.post("/api/commodities", json={
+        "commodity_code": "COM-NEW-RIC",
+        "name": "Rice",
+        "subsidized_price": 5.0
+    })
+    assert res_dup_name.status_code == 409
+    assert "already exists" in res_dup_name.get_json()["message"]
+
+
+def test_commodity_crud_lifecycle_and_configurable_pricing(client):
+    """
+    Verifies full lifecycle of Add Commodity:
+    - Creation and persistent storage in database
+    - Configurable subsidized pricing and market benchmark update (PUT)
+    - Rejection of invalid price updates
+    - Operational deletion protection when linked, and clean deletion when unlinked
+    """
+    from backend.database.mongo import get_db
+    test_code = f"COM-MIL-{uuid.uuid4().hex[:6].upper()}"
+    test_name = f"Millet-{uuid.uuid4().hex[:4].upper()}"
+
+    # 1. Create new commodity
+    create_payload = {
+        "commodity_code": test_code,
+        "name": test_name,
+        "unit": "kg",
+        "subsidized_price": 1.5,
+        "market_price": 35.0,
+        "rate_type": "OFFICIAL_NFSA",
+        "description": "Nutritious coarse grain millet"
+    }
+    create_res = client.post("/api/commodities", json=create_payload)
+    assert create_res.status_code == 201
+    created_data = create_res.get_json()["data"]
+    assert created_data["commodity_code"] == test_code
+    assert created_data["subsidized_price"] == 1.5
+    assert created_data["is_demonstration"] is False
+
+    # 2. Verify database persistence in MongoDB
+    db = get_db()
+    db_doc = db.commodities.find_one({"commodity_code": test_code}, {"_id": 0})
+    assert db_doc is not None
+    assert db_doc["name"] == test_name
+    assert db_doc["subsidized_price"] == 1.5
+    assert db_doc["market_price"] == 35.0
+
+    # 3. Read single commodity via API
+    get_res = client.get(f"/api/commodities/{test_code}")
+    assert get_res.status_code == 200
+    assert get_res.get_json()["data"]["name"] == test_name
+
+    # 4. Make subsidized price and classification configurable via PUT
+    update_res = client.put(f"/api/commodities/{test_code}", json={
+        "subsidized_price": 2.25,
+        "market_price": 38.0,
+        "rate_type": "STATE_SUBSIDY",
+        "description": "Updated state subsidy policy rate"
+    })
+    assert update_res.status_code == 200
+    updated_data = update_res.get_json()["data"]
+    assert updated_data["subsidized_price"] == 2.25
+    assert updated_data["market_price"] == 38.0
+    assert updated_data["rate_type"] == "STATE_SUBSIDY"
+    assert updated_data["is_demonstration"] is False
+
+    # 5. Reject negative price update
+    bad_update = client.put(f"/api/commodities/{test_code}", json={"subsidized_price": -10.0})
+    assert bad_update.status_code == 400
+
+    # 6. Verify operational deletion restriction for linked commodity (COM-RIC)
+    rice_del_res = client.delete("/api/commodities/COM-RIC")
+    assert rice_del_res.status_code == 409
+    assert "operational integrity" in rice_del_res.get_json()["message"].lower()
+
+    # 7. Cleanly delete unlinked test commodity
+    del_res = client.delete(f"/api/commodities/{test_code}")
+    assert del_res.status_code == 200
+
+    # 8. Verify deleted from DB
+    assert db.commodities.find_one({"commodity_code": test_code}) is None
+
+
+def test_commodity_ids_linked_with_inventory_and_forecasting(client):
+    """
+    Verifies that commodity IDs / codes are consistently linked with:
+    1. Demand forecasting (/api/predict-demand)
+    2. Regional inventory alerts (/api/inventory/alerts)
+    """
+    # 1. Forecasting with commodity_code COM-RIC
+    pred_res_code = client.post("/api/predict-demand", json={
+        "commodity_code": "COM-RIC",
+        "region": "Chennai",
+        "month": 1,
+        "current_stock": 3800.0,
+        "previous_demand": 4200.0
+    })
+    assert pred_res_code.status_code == 200
+    pred_data = pred_res_code.get_json()["data"]
+    assert pred_data["commodity"] == "Rice"
+    assert pred_data["commodity_code"] == "COM-RIC"
+    assert "predicted_demand" in pred_data
+    assert "shortage" in pred_data
+
+    # 2. Forecasting with commodity name 'Wheat' resolves COM-WHT
+    pred_res_name = client.post("/api/predict-demand", json={
+        "commodity": "Wheat",
+        "region": "Chennai",
+        "month": 2,
+        "current_stock": 2500.0,
+        "previous_demand": 2600.0
+    })
+    assert pred_res_name.status_code == 200
+    pred_data_wheat = pred_res_name.get_json()["data"]
+    assert pred_data_wheat["commodity"] == "Wheat"
+    assert pred_data_wheat["commodity_code"] == "COM-WHT"
+
+    # 3. Inventory alerts endpoint contains commodity_code
+    inv_alerts_res = client.get("/api/inventory/alerts")
+    assert inv_alerts_res.status_code == 200
+    inv_alerts = inv_alerts_res.get_json()["data"]
+    assert len(inv_alerts) > 0
+    for alert in inv_alerts:
+        assert "commodity_code" in alert
+        assert alert["commodity_code"] in ["COM-RIC", "COM-WHT", "COM-SUG", "COM-DAL"]
 
 
 def test_inventory_alerts_endpoint(client):

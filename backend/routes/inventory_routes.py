@@ -51,36 +51,39 @@ def add_inventory():
     if errors:
         return jsonify({"status": "error", "errors": errors}), 400
 
-    commodity = data["commodity"].strip()
+    commodity = (data.get("commodity") or data.get("commodity_code", "")).strip()
     region = data["region"].strip()
     stock = float(data["current_stock"])
     buffer_stock = float(data.get("buffer_stock", 500.0))
     unit = data.get("unit", "kg")
+    commodity_code = data.get("commodity_code")
+
+    doc = InventoryModel.create_doc(
+        commodity=commodity,
+        region=region,
+        current_stock=stock,
+        unit=unit,
+        buffer_stock=buffer_stock,
+        commodity_code=commodity_code
+    )
 
     db = get_db()
     db.inventory.update_one(
-        {"commodity": commodity, "region": region},
-        {"$set": {
-            "commodity": commodity,
-            "region": region,
-            "current_stock": stock,
-            "buffer_stock": buffer_stock,
-            "unit": unit,
-            "last_updated": datetime.utcnow()
-        }},
+        {
+            "$or": [
+                {"commodity": doc["commodity"]},
+                {"commodity_code": doc["commodity_code"]}
+            ],
+            "region": region
+        },
+        {"$set": doc},
         upsert=True
     )
-    logger.info(f"Inventory set: {commodity} ({region}) = {stock} {unit}")
+    logger.info(f"Inventory set: {doc['commodity']} ({doc['commodity_code']} in {region}) = {stock} {unit}")
     return jsonify({
         "status": "success",
-        "message": f"Inventory updated for {commodity} in {region}",
-        "data": {
-            "commodity": commodity,
-            "region": region,
-            "current_stock": stock,
-            "buffer_stock": buffer_stock,
-            "unit": unit
-        }
+        "message": f"Inventory updated for {doc['commodity']} in {region}",
+        "data": doc
     }), 201
 
 
@@ -88,12 +91,12 @@ def add_inventory():
 def update_stock_level():
     """Updates stock count via thread-safe InventoryService."""
     data = request.get_json(silent=True) or {}
-    commodity = data.get("commodity")
-    region = data.get("region")
+    commodity = (data.get("commodity") or data.get("commodity_code", "")).strip()
+    region = (data.get("region") or "").strip()
     stock = data.get("current_stock")
 
     if not commodity or not region or stock is None:
-        return jsonify({"status": "error", "message": "commodity, region, and current_stock are required"}), 400
+        return jsonify({"status": "error", "message": "commodity (or commodity_code), region, and current_stock are required"}), 400
 
     try:
         stock = float(stock)

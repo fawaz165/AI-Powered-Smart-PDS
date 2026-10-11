@@ -35,22 +35,28 @@ def seed_database():
     else:
         logger.info("Admin user already exists.")
 
-    # 2. Seed Commodities
+    # 2. Seed Commodities with Configured Subsidized Prices & Official vs Demo Rates
     commodities = [
-        {"commodity_code": "COM-RIC", "name": "Rice", "unit": "kg", "subsidized_price": 0.0, "description": "Fortified raw & boiled rice under NFSA entitlement"},
-        {"commodity_code": "COM-WHT", "name": "Wheat", "unit": "kg", "subsidized_price": 2.0, "description": "Whole grain milled wheat flour"},
-        {"commodity_code": "COM-SUG", "name": "Sugar", "unit": "kg", "subsidized_price": 13.5, "description": "Refined crystal sugar"},
-        {"commodity_code": "COM-DAL", "name": "Dal", "unit": "kg", "subsidized_price": 30.0, "description": "Toor / Chana pulses under state welfare distribution"}
+        {"commodity_code": "COM-RIC", "name": "Rice", "unit": "kg", "subsidized_price": 0.0, "market_price": 42.0, "rate_type": "OFFICIAL_NFSA", "description": "Fortified raw & boiled rice under NFSA entitlement"},
+        {"commodity_code": "COM-WHT", "name": "Wheat", "unit": "kg", "subsidized_price": 2.0, "market_price": 34.0, "rate_type": "OFFICIAL_NFSA", "description": "Whole grain milled wheat flour"},
+        {"commodity_code": "COM-SUG", "name": "Sugar", "unit": "kg", "subsidized_price": 13.5, "market_price": 45.0, "rate_type": "OFFICIAL_NFSA", "description": "Refined crystal sugar under AAY distribution"},
+        {"commodity_code": "COM-DAL", "name": "Dal", "unit": "kg", "subsidized_price": 30.0, "market_price": 130.0, "rate_type": "DEMONSTRATION", "description": "Toor / Chana pulses under state welfare distribution"}
     ]
     for c in commodities:
         db.commodities.update_one(
             {"name": c["name"]},
-            {"$setOnInsert": CommodityModel.create_doc(
-                c["commodity_code"], c["name"], c["unit"], c["subsidized_price"], c["description"]
+            {"$set": CommodityModel.create_doc(
+                commodity_code=c["commodity_code"],
+                name=c["name"],
+                unit=c["unit"],
+                subsidized_price=c["subsidized_price"],
+                description=c["description"],
+                rate_type=c["rate_type"],
+                market_price=c["market_price"]
             )},
             upsert=True
         )
-    logger.info("Seeded 4 core commodities: Rice, Wheat, Sugar, Dal")
+    logger.info("Seeded 4 core commodities with verified official and demonstration rates")
 
     # 3. Seed Ration Shops
     ration_shops = [

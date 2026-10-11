@@ -1,6 +1,8 @@
 import threading
+import re
 from datetime import datetime
 from backend.database.mongo import get_db
+from backend.models.inventory import InventoryModel
 from backend.utils.logger import logger
 
 
@@ -12,18 +14,34 @@ class InventoryService:
     def get_stock(cls, commodity: str, region: str) -> dict:
         """Retrieves stock document for a given commodity and region."""
         db = get_db()
-        return db.inventory.find_one({"commodity": commodity, "region": region})
+        return db.inventory.find_one({
+            "$or": [
+                {"commodity": {"$regex": f"^{re.escape(commodity)}$", "$options": "i"}},
+                {"commodity_code": commodity.strip().upper()}
+            ],
+            "region": {"$regex": f"^{re.escape(region)}$", "$options": "i"}
+        })
 
     @classmethod
     def update_stock(cls, commodity: str, region: str, new_stock: float):
         """Direct administrative update of stock level."""
         with cls._lock:
             db = get_db()
-            db.inventory.update_one(
-                {"commodity": commodity, "region": region},
-                {"$set": {"current_stock": float(new_stock), "last_updated": datetime.utcnow()}},
-                upsert=True
-            )
+            inv = db.inventory.find_one({
+                "$or": [
+                    {"commodity": {"$regex": f"^{re.escape(commodity)}$", "$options": "i"}},
+                    {"commodity_code": commodity.strip().upper()}
+                ],
+                "region": {"$regex": f"^{re.escape(region)}$", "$options": "i"}
+            })
+            if inv:
+                db.inventory.update_one(
+                    {"_id": inv["_id"]},
+                    {"$set": {"current_stock": float(new_stock), "last_updated": datetime.utcnow()}}
+                )
+            else:
+                doc = InventoryModel.create_doc(commodity=commodity, region=region, current_stock=new_stock)
+                db.inventory.insert_one(doc)
             return True
 
     @classmethod
@@ -43,13 +61,22 @@ class InventoryService:
 
         with cls._lock:
             db = get_db()
-            # 1. Fetch current stock within lock
-            inv = db.inventory.find_one({"commodity": commodity, "region": region})
+            # 1. Fetch current stock within lock supporting commodity name or code
+            inv = db.inventory.find_one({
+                "$or": [
+                    {"commodity": {"$regex": f"^{re.escape(commodity)}$", "$options": "i"}},
+                    {"commodity_code": commodity.strip().upper()}
+                ],
+                "region": {"$regex": f"^{re.escape(region)}$", "$options": "i"}
+            })
             if not inv:
                 return {
                     "success": False,
                     "message": f"Inventory record not found for {commodity} in region '{region}'."
                 }
+
+            resolved_commodity = inv.get("commodity", commodity)
+            commodity_code = inv.get("commodity_code")
 
             current_stock = float(inv.get("current_stock", 0.0))
             if current_stock < quantity:
@@ -66,9 +93,9 @@ class InventoryService:
             # 2. Compute new stock safely
             new_stock = round(current_stock - quantity, 2)
 
-            # 3. Update database inventory
+            # 3. Update database inventory by exact ID
             db.inventory.update_one(
-                {"commodity": commodity, "region": region},
+                {"_id": inv["_id"]},
                 {"$set": {"current_stock": new_stock, "last_updated": datetime.utcnow()}}
             )
 
@@ -92,7 +119,8 @@ class InventoryService:
                 transaction_id=txn_id,
                 beneficiary_id=beneficiary_id,
                 ration_shop_id=ration_shop_id,
-                commodity=commodity,
+                commodity=resolved_commodity,
+                commodity_code=commodity_code,
                 quantity=quantity,
                 region=region,
                 timestamp=datetime.utcnow(),
@@ -111,7 +139,8 @@ class InventoryService:
                         "transaction_id": txn_id,
                         "beneficiary_id": beneficiary_id,
                         "ration_shop_id": ration_shop_id,
-                        "commodity": commodity,
+                        "commodity": resolved_commodity,
+                        "commodity_code": commodity_code,
                         "quantity": quantity,
                         "region": region,
                         "risk_level": risk_level,
@@ -124,14 +153,15 @@ class InventoryService:
                 )
 
             logger.info(
-                f"[Thread-Safe Inventory] Deducted {quantity} kg {commodity} in {region}. "
+                f"[Thread-Safe Inventory] Deducted {quantity} kg {resolved_commodity} ({commodity_code}) in {region}. "
                 f"Previous: {current_stock} kg, New: {new_stock} kg. Txn: {txn_id}"
             )
 
             return {
                 "success": True,
                 "transaction_id": txn_id,
-                "commodity": commodity,
+                "commodity": resolved_commodity,
+                "commodity_code": commodity_code,
                 "region": region,
                 "quantity_distributed": quantity,
                 "previous_stock": current_stock,
@@ -158,6 +188,10 @@ class InventoryService:
 
         for item in items:
             commodity = item.get("commodity")
+            commodity_code = item.get("commodity_code")
+            if not commodity_code:
+                code_map = {"Rice": "COM-RIC", "Wheat": "COM-WHT", "Sugar": "COM-SUG", "Dal": "COM-DAL"}
+                commodity_code = code_map.get(commodity, f"COM-{commodity[:3].upper()}")
             region = item.get("region")
             stock = float(item.get("current_stock", 0))
             buffer = float(item.get("buffer_stock", 500))
@@ -177,6 +211,7 @@ class InventoryService:
                     prev_target = commodity_defaults.get(commodity, stock if stock > 0 else 1000.0)
                     pred_output = MLService.predict_demand({
                         "commodity": commodity,
+                        "commodity_code": commodity_code,
                         "region": region,
                         "current_stock": stock,
                         "previous_demand": prev_target
@@ -209,6 +244,7 @@ class InventoryService:
 
             alerts.append({
                 "commodity": commodity,
+                "commodity_code": commodity_code,
                 "region": region,
                 "current_stock": round(stock, 2),
                 "predicted_demand": round(predicted_demand, 2),

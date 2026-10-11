@@ -3,6 +3,7 @@
  */
 
 document.addEventListener('DOMContentLoaded', async () => {
+  await populateCommoditiesDropdown();
   await loadModelMetrics();
   // Trigger initial demo forecast
   executeDemandForecast();
@@ -12,6 +13,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     executeDemandForecast();
   });
 });
+
+async function populateCommoditiesDropdown() {
+  const select = document.getElementById('pred-commodity');
+  if (!select) return;
+  try {
+    const res = await API.getCommodities();
+    if (res && res.status === 'success' && res.data && res.data.length > 0) {
+      const cur = select.value;
+      select.innerHTML = res.data.map(c => `<option value="${c.name}">${c.name} (${c.commodity_code})</option>`).join('');
+      if (cur && res.data.some(c => c.name === cur)) {
+        select.value = cur;
+      }
+    }
+  } catch (err) {
+    console.warn('Could not populate commodities dynamically, using static defaults:', err);
+  }
+}
 
 async function loadModelMetrics() {
   try {

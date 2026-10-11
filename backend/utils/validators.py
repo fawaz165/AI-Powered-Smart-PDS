@@ -65,14 +65,51 @@ def validate_beneficiary_payload(data):
 
 
 def validate_commodity_payload(data):
-    """Validates commodity payload."""
+    """Validates incoming commodity registration and update payload."""
     errors = []
     if not data or not isinstance(data, dict):
         return ["Request body must be a valid JSON object"]
-    if not data.get("name") or not str(data["name"]).strip():
-        errors.append("Commodity name is required")
-    if not data.get("commodity_code") or not str(data["commodity_code"]).strip():
+
+    code = str(data.get("commodity_code", "")).strip().upper()
+    if not code:
         errors.append("commodity_code is required")
+    elif len(code) < 3 or len(code) > 20:
+        errors.append("commodity_code must be between 3 and 20 characters")
+    elif not re.match(r"^[A-Za-z0-9\-_]+$", code):
+        errors.append("commodity_code may only contain alphanumeric characters, hyphens, and underscores")
+
+    name = str(data.get("name", "")).strip()
+    if not name:
+        errors.append("Commodity name is required")
+    elif len(name) < 2 or len(name) > 50:
+        errors.append("Commodity name must be between 2 and 50 characters")
+
+    if "unit" in data and data["unit"]:
+        unit = str(data["unit"]).strip().lower()
+        if len(unit) > 15:
+            errors.append("Measurement unit must be under 15 characters")
+
+    if "subsidized_price" in data:
+        try:
+            price = float(data["subsidized_price"])
+            if price < 0:
+                errors.append("subsidized_price cannot be negative")
+        except (ValueError, TypeError):
+            errors.append("subsidized_price must be a valid numeric value")
+
+    if "market_price" in data and data["market_price"] is not None:
+        try:
+            mprice = float(data["market_price"])
+            if mprice < 0:
+                errors.append("market_price cannot be negative")
+        except (ValueError, TypeError):
+            errors.append("market_price must be a valid numeric value")
+
+    if "rate_type" in data and data["rate_type"]:
+        rate_type = str(data["rate_type"]).strip().upper()
+        if rate_type not in ["OFFICIAL_NFSA", "DEMONSTRATION", "STATE_SUBSIDY"]:
+            errors.append("rate_type must be one of: OFFICIAL_NFSA, DEMONSTRATION, STATE_SUBSIDY")
+
     return errors
 
 
@@ -81,8 +118,8 @@ def validate_inventory_payload(data):
     errors = []
     if not data or not isinstance(data, dict):
         return ["Request body must be a valid JSON object"]
-    if not data.get("commodity"):
-        errors.append("commodity is required")
+    if not data.get("commodity") and not data.get("commodity_code"):
+        errors.append("commodity or commodity_code is required")
     if not data.get("region"):
         errors.append("region is required")
     try:
@@ -101,8 +138,8 @@ def validate_transaction_payload(data):
         return ["Request body must be a valid JSON object"]
     if not data.get("beneficiary_id"):
         errors.append("beneficiary_id is required")
-    if not data.get("commodity"):
-        errors.append("commodity is required")
+    if not data.get("commodity") and not data.get("commodity_code"):
+        errors.append("commodity or commodity_code is required")
     try:
         qty = float(data.get("quantity", 0))
         if qty <= 0:

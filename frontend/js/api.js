@@ -108,6 +108,19 @@ const API = {
     });
   },
 
+  updateCommodity(code, payload) {
+    return this.request(`/commodities/${encodeURIComponent(code)}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  deleteCommodity(code) {
+    return this.request(`/commodities/${encodeURIComponent(code)}`, {
+      method: 'DELETE'
+    });
+  },
+
   // Inventory
   getInventory(params = {}) {
     const query = new URLSearchParams(params).toString();

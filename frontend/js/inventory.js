@@ -5,6 +5,7 @@
 let inventoryAlertsData = [];
 
 document.addEventListener('DOMContentLoaded', async () => {
+  await populateInventoryCommodityDropdowns();
   await loadInventoryData();
 
   document.getElementById('adjust-stock-form').addEventListener('submit', async (e) => {
@@ -122,4 +123,24 @@ function openQuickAdjust(commodity, region, currentStock) {
   document.getElementById('adjust-region').value = region;
   document.getElementById('adjust-new-stock').value = currentStock;
   openModal('adjust-stock-modal');
+}
+
+async function populateInventoryCommodityDropdowns() {
+  const filterSelect = document.getElementById('inv-filter-commodity');
+  const adjustSelect = document.getElementById('adjust-commodity');
+  try {
+    const res = await API.getCommodities();
+    if (res && res.status === 'success' && res.data && res.data.length > 0) {
+      if (filterSelect) {
+        const cur = filterSelect.value;
+        filterSelect.innerHTML = '<option value="">All Commodities</option>' + res.data.map(c => `<option value="${c.name}">${c.name} (${c.commodity_code})</option>`).join('');
+        filterSelect.value = cur;
+      }
+      if (adjustSelect) {
+        adjustSelect.innerHTML = res.data.map(c => `<option value="${c.name}">${c.name} (${c.commodity_code})</option>`).join('');
+      }
+    }
+  } catch (e) {
+    console.warn('Could not populate inventory commodity dropdowns:', e);
+  }
 }

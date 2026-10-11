@@ -44,7 +44,7 @@
       <header class="top-navbar">
         <div class="page-title-box">
           <h1>Essential Food-Grain Master Catalog</h1>
-          <p>National subsidized commodities, pricing structure, and measurement units</p>
+          <p>National subsidized commodities, configurable issue pricing, and official NFSA rates</p>
         </div>
         <div class="nav-actions">
           <button class="btn btn-primary btn-sm" onclick="openModal('add-commodity-modal')">
@@ -54,10 +54,50 @@
       </header>
 
       <div class="content-body">
+        <!-- Top Metrics Cards -->
+        <div class="grid-cards" style="margin-bottom: 1.5rem;">
+          <div class="stat-card" style="--card-accent: #3b82f6;">
+            <div class="card-top"><span>Total Commodities</span><i class="fa-solid fa-boxes-stacked" style="color: #60a5fa;"></i></div>
+            <div class="card-value" id="com-kpi-total">--</div>
+            <div class="card-meta"><span class="meta-up"><i class="fa-solid fa-database"></i> Database Catalog</span> Linked to Inventory</div>
+          </div>
+          <div class="stat-card" style="--card-accent: #10b981;">
+            <div class="card-top"><span>Official NFSA Rates</span><i class="fa-solid fa-certificate" style="color: #34d399;"></i></div>
+            <div class="card-value" id="com-kpi-official" style="color: #34d399;">--</div>
+            <div class="card-meta">Statutory Central Subsidies</div>
+          </div>
+          <div class="stat-card" style="--card-accent: #f59e0b;">
+            <div class="card-top"><span>Demonstration Rates</span><i class="fa-solid fa-flask" style="color: #fbbf24;"></i></div>
+            <div class="card-value" id="com-kpi-demo" style="color: #fbbf24;">--</div>
+            <div class="card-meta">State Welfare Simulation</div>
+          </div>
+          <div class="stat-card" style="--card-accent: #8b5cf6;">
+            <div class="card-top"><span>Avg Subsidy Discount</span><i class="fa-solid fa-percent" style="color: #a78bfa;"></i></div>
+            <div class="card-value" id="com-kpi-discount" style="color: #a78bfa;">--%</div>
+            <div class="card-meta">Vs. Open Market Benchmark</div>
+          </div>
+        </div>
+
         <div class="data-panel">
           <div class="panel-header">
-            <h3>Registered Commodities</h3>
-            <span class="badge badge-info">Subsidized TPDS Catalog</span>
+            <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+              <h3>Registered Food-Grain Catalog</h3>
+              <span class="badge badge-info" style="font-size: 0.72rem; padding: 0.2rem 0.5rem;">
+                <i class="fa-solid fa-server"></i> DB-Backed Master Records
+              </span>
+            </div>
+            <div class="panel-actions">
+              <input type="text" id="com-search" class="form-control" placeholder="Search by code, name, or desc..." style="width: 250px;" oninput="filterCommodities()">
+              <select id="com-filter-rate" class="form-control" style="width: 200px;" onchange="filterCommodities()">
+                <option value="">All Classifications</option>
+                <option value="OFFICIAL_NFSA">Official NFSA Rates</option>
+                <option value="DEMONSTRATION">Demonstration Values</option>
+                <option value="STATE_SUBSIDY">State Welfare Subsidies</option>
+              </select>
+              <button class="btn btn-secondary btn-sm" id="btn-refresh-commodities" onclick="loadCommodities()" title="Refresh Catalog">
+                <i class="fa-solid fa-arrows-rotate"></i> Refresh
+              </button>
+            </div>
           </div>
           <div class="table-responsive">
             <table class="custom-table">
@@ -65,13 +105,16 @@
                 <tr>
                   <th>Code</th>
                   <th>Commodity Name</th>
-                  <th>Measurement Unit</th>
+                  <th>Unit</th>
                   <th>Subsidized Price (₹)</th>
-                  <th>Description</th>
+                  <th>Market Benchmark</th>
+                  <th>Rate Classification</th>
+                  <th>Operational Linkage</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody id="commodities-tbody">
-                <tr><td colspan="5" style="text-align: center; color: var(--text-muted);">Loading commodities...</td></tr>
+                <tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2rem;">Loading commodities from database...</td></tr>
               </tbody>
             </table>
           </div>
@@ -84,7 +127,7 @@
   <div id="add-commodity-modal" class="modal-overlay">
     <div class="modal-card">
       <div class="modal-header">
-        <h3><i class="fa-solid fa-plus" style="color: var(--primary);"></i> Add Commodity</h3>
+        <h3><i class="fa-solid fa-plus" style="color: var(--primary);"></i> Add New Commodity</h3>
         <button class="modal-close" onclick="closeModal('add-commodity-modal')">&times;</button>
       </div>
       <form id="add-commodity-form">
@@ -92,90 +135,133 @@
           <div class="form-row">
             <div class="form-group">
               <label class="form-label" for="new-com-code">Commodity Code</label>
-              <input type="text" id="new-com-code" class="form-control" placeholder="e.g. COM-OIL" required>
+              <input type="text" id="new-com-code" class="form-control" placeholder="e.g. COM-OIL" required pattern="^[A-Za-z0-9\-_]{3,20}$" title="3-20 alphanumeric characters, hyphens or underscores">
+              <small style="color: var(--text-muted); font-size: 0.75rem;">Must be unique across the system (e.g. COM-OIL)</small>
             </div>
             <div class="form-group">
               <label class="form-label" for="new-com-name">Commodity Name</label>
-              <input type="text" id="new-com-name" class="form-control" placeholder="e.g. Palm Oil" required>
+              <input type="text" id="new-com-name" class="form-control" placeholder="e.g. Mustard Oil" required minlength="2" maxlength="50">
             </div>
           </div>
           <div class="form-row">
             <div class="form-group">
-              <label class="form-label" for="new-com-unit">Unit</label>
-              <input type="text" id="new-com-unit" class="form-control" value="kg" required>
+              <label class="form-label" for="new-com-unit">Measurement Unit</label>
+              <input type="text" id="new-com-unit" class="form-control" value="kg" required placeholder="e.g. kg, litre">
             </div>
             <div class="form-group">
-              <label class="form-label" for="new-com-price">Subsidized Price (₹)</label>
-              <input type="number" step="0.5" id="new-com-price" class="form-control" value="25.0" required>
+              <label class="form-label" for="new-com-price">Subsidized Issue Price (₹)</label>
+              <input type="number" step="0.25" min="0" id="new-com-price" class="form-control" value="25.0" required>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="new-com-market-price">Open Market Benchmark (₹)</label>
+              <input type="number" step="0.5" min="0" id="new-com-market-price" class="form-control" placeholder="e.g. 110.0">
+              <small style="color: var(--text-muted); font-size: 0.75rem;">Reference open-market retail price for subsidy analysis</small>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="new-com-rate-type">Rate Classification</label>
+              <select id="new-com-rate-type" class="form-control" required>
+                <option value="OFFICIAL_NFSA">Verified Official NFSA Rate</option>
+                <option value="DEMONSTRATION" selected>Demonstration Value (Simulation)</option>
+                <option value="STATE_SUBSIDY">State Welfare Subsidy</option>
+              </select>
+              <small style="color: var(--text-muted); font-size: 0.75rem;">Distinguishes statutory NFSA from synthetic demo rates</small>
             </div>
           </div>
           <div class="form-group">
-            <label class="form-label" for="new-com-desc">Description</label>
-            <input type="text" id="new-com-desc" class="form-control" placeholder="Essential ration commodity">
+            <label class="form-label" for="new-com-desc">Description & Nutritional Note</label>
+            <input type="text" id="new-com-desc" class="form-control" placeholder="e.g. Essential ration commodity distributed via Fair Price Shops">
           </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" onclick="closeModal('add-commodity-modal')">Cancel</button>
-          <button type="submit" class="btn btn-primary"><i class="fa-solid fa-save"></i> Save</button>
+          <button type="submit" class="btn btn-primary"><i class="fa-solid fa-save"></i> Register Commodity</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- Edit / Configure Commodity Modal -->
+  <div id="edit-commodity-modal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-pen-to-square" style="color: var(--primary);"></i> Configure Commodity Pricing</h3>
+        <button class="modal-close" onclick="closeModal('edit-commodity-modal')">&times;</button>
+      </div>
+      <form id="edit-commodity-form">
+        <div class="modal-body">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="edit-com-code">Commodity Code</label>
+              <input type="text" id="edit-com-code" class="form-control" readonly style="opacity: 0.8; background: rgba(255,255,255,0.03);">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="edit-com-name">Commodity Name</label>
+              <input type="text" id="edit-com-name" class="form-control" required minlength="2" maxlength="50">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="edit-com-price">Subsidized Issue Price (₹)</label>
+              <input type="number" step="0.25" min="0" id="edit-com-price" class="form-control" required>
+              <small style="color: var(--text-muted); font-size: 0.75rem;">Set to 0.0 for completely free NFSA grains (e.g. Rice)</small>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="edit-com-market-price">Open Market Benchmark (₹)</label>
+              <input type="number" step="0.5" min="0" id="edit-com-market-price" class="form-control">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="edit-com-unit">Measurement Unit</label>
+              <input type="text" id="edit-com-unit" class="form-control" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="edit-com-rate-type">Rate Classification</label>
+              <select id="edit-com-rate-type" class="form-control" required>
+                <option value="OFFICIAL_NFSA">Verified Official NFSA Rate</option>
+                <option value="DEMONSTRATION">Demonstration Value (Simulation)</option>
+                <option value="STATE_SUBSIDY">State Welfare Subsidy</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="edit-com-desc">Description</label>
+            <input type="text" id="edit-com-desc" class="form-control">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('edit-commodity-modal')">Cancel</button>
+          <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check"></i> Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Delete Confirmation Modal -->
+  <div id="delete-commodity-modal" class="modal-overlay">
+    <div class="modal-card" style="max-width: 480px;">
+      <div class="modal-header">
+        <h3 style="color: var(--accent-rose);"><i class="fa-solid fa-triangle-exclamation"></i> Delete Commodity</h3>
+        <button class="modal-close" onclick="closeModal('delete-commodity-modal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>Are you sure you want to delete commodity <strong id="delete-com-target-name">--</strong>?</p>
+        <div id="delete-com-linkage-warning" style="display: none;"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('delete-commodity-modal')">Cancel</button>
+        <button type="button" class="btn btn-primary" id="btn-confirm-delete-commodity" style="background: var(--accent-rose);">
+          <i class="fa-solid fa-trash-can"></i> Confirm Deletion
+        </button>
+      </div>
     </div>
   </div>
 
   <div id="toast-container" class="toast-container"></div>
 
   <script src="js/api.js"></script>
-  <script>
-    document.addEventListener('DOMContentLoaded', async () => {
-      await loadCommodities();
-
-      document.getElementById('add-commodity-form').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const code = document.getElementById('new-com-code').value.trim();
-        const name = document.getElementById('new-com-name').value.trim();
-        const unit = document.getElementById('new-com-unit').value.trim();
-        const price = parseFloat(document.getElementById('new-com-price').value);
-        const desc = document.getElementById('new-com-desc').value.trim();
-
-        try {
-          const res = await API.createCommodity({
-            commodity_code: code,
-            name: name,
-            unit: unit,
-            subsidized_price: price,
-            description: desc
-          });
-          if (res && res.status === 'success') {
-            showToast(`Commodity ${name} created!`, 'success');
-            closeModal('add-commodity-modal');
-            document.getElementById('add-commodity-form').reset();
-            await loadCommodities();
-          }
-        } catch (err) {
-          showToast(err.message || 'Error creating commodity', 'error');
-        }
-      });
-    });
-
-    async function loadCommodities() {
-      try {
-        const res = await API.getCommodities();
-        const tbody = document.getElementById('commodities-tbody');
-        if (res && res.status === 'success') {
-          tbody.innerHTML = res.data.map(c => `
-            <tr>
-              <td><strong>${c.commodity_code}</strong></td>
-              <td><span class="badge badge-info">${c.name}</span></td>
-              <td>${c.unit}</td>
-              <td>₹ ${c.subsidized_price.toFixed(2)}</td>
-              <td style="color:var(--text-secondary);">${c.description || '-'}</td>
-            </tr>
-          `).join('');
-        }
-      } catch (err) {
-        showToast('Error loading commodities', 'error');
-      }
-    }
-  </script>
+  <script src="js/commodities.js"></script>
 </body>
 </html>

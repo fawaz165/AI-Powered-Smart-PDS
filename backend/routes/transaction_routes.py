@@ -67,7 +67,7 @@ def create_transaction():
         return jsonify({"status": "error", "errors": errors}), 400
 
     beneficiary_id = data["beneficiary_id"].strip().upper()
-    commodity = data["commodity"].strip()
+    commodity = (data.get("commodity") or data.get("commodity_code", "")).strip()
     quantity = float(data["quantity"])
     ration_shop_id = data.get("ration_shop_id", "FPS-CHN-001").strip()
     region = data.get("region", "Chennai").strip()
