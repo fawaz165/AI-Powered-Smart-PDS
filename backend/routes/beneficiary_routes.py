@@ -45,6 +45,15 @@ def list_beneficiaries():
     }), 200
 
 
+@beneficiary_bp.route("/rules", methods=["GET"])
+def get_entitlement_rules():
+    """Returns configured ration-card entitlement rules."""
+    return jsonify({
+        "status": "success",
+        "data": BeneficiaryModel.RATION_CARD_RULES
+    }), 200
+
+
 @beneficiary_bp.route("/<beneficiary_id>", methods=["GET"])
 def get_beneficiary(beneficiary_id):
     """Fetches a specific beneficiary by ID."""
@@ -62,7 +71,7 @@ def get_beneficiary(beneficiary_id):
 @beneficiary_bp.route("", methods=["POST"])
 @token_required
 def create_beneficiary():
-    """Creates a new beneficiary record with input validation and authorization."""
+    """Creates a new beneficiary record with input validation, duplicate rejection, and unique card number generation."""
     data = request.get_json(silent=True) or {}
     errors = validate_beneficiary_payload(data)
     if errors:
@@ -73,9 +82,20 @@ def create_beneficiary():
     if db.beneficiaries.find_one({"beneficiary_id": bid}):
         return jsonify({"status": "error", "message": f"Beneficiary ID '{bid}' already exists"}), 409
 
-    rc_number = (data.get("ration_card_number") or f"RC-{bid}").strip().upper()
-    if db.beneficiaries.find_one({"ration_card_number": rc_number}):
-        return jsonify({"status": "error", "message": f"Ration Card Number '{rc_number}' is already registered to another cardholder"}), 409
+    # Reject duplicate card numbers if provided, or generate unique card number if omitted
+    raw_rc = data.get("ration_card_number")
+    if raw_rc and str(raw_rc).strip():
+        rc_number = str(raw_rc).strip().upper()
+        if db.beneficiaries.find_one({"ration_card_number": rc_number}):
+            return jsonify({"status": "error", "message": f"Ration Card Number '{rc_number}' is already registered to another cardholder"}), 409
+    else:
+        # Generate guaranteed unique card number
+        base_rc = f"RC-{bid}"
+        rc_number = base_rc
+        counter = 1
+        while db.beneficiaries.find_one({"ration_card_number": rc_number}):
+            rc_number = f"{base_rc}-{counter}"
+            counter += 1
 
     doc = BeneficiaryModel.create_doc(
         beneficiary_id=bid,

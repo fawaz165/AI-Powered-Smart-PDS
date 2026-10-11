@@ -56,6 +56,30 @@
       </header>
 
       <div class="content-body">
+        <!-- Beneficiary Registry Metrics Grid -->
+        <div class="grid-cards" style="margin-bottom: 1.5rem;">
+          <div class="stat-card" style="--card-accent: #3b82f6;">
+            <div class="card-top"><span>Total Cardholders</span><i class="fa-solid fa-id-card" style="color: #60a5fa;"></i></div>
+            <div class="card-value" id="ben-kpi-total">--</div>
+            <div class="card-meta"><span class="meta-up"><i class="fa-solid fa-circle-check"></i> Active</span> Across 5 Districts</div>
+          </div>
+          <div class="stat-card" style="--card-accent: #f59e0b;">
+            <div class="card-top"><span>Priority Households (PHH)</span><i class="fa-solid fa-people-roof" style="color: #fbbf24;"></i></div>
+            <div class="card-value" id="ben-kpi-phh" style="color: #fbbf24;">--</div>
+            <div class="card-meta">Subsidized per-member quotas</div>
+          </div>
+          <div class="stat-card" style="--card-accent: #8b5cf6;">
+            <div class="card-top"><span>Antyodaya Anna Yojana (AAY)</span><i class="fa-solid fa-hand-holding-heart" style="color: #a78bfa;"></i></div>
+            <div class="card-value" id="ben-kpi-aay" style="color: #a78bfa;">--</div>
+            <div class="card-meta">Heavily subsidized family quotas</div>
+          </div>
+          <div class="stat-card" style="--card-accent: #10b981;">
+            <div class="card-top"><span>Non-Priority (NPHH)</span><i class="fa-solid fa-users" style="color: #34d399;"></i></div>
+            <div class="card-value" id="ben-kpi-nphh" style="color: #34d399;">--</div>
+            <div class="card-meta">Standard state welfare allocation</div>
+          </div>
+        </div>
+
         <div class="data-panel">
           <div class="panel-header">
             <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
@@ -133,13 +157,13 @@
             </div>
             <div class="form-group">
               <label class="form-label" for="new-ben-size">Family Size</label>
-              <input type="number" id="new-ben-size" class="form-control" min="1" max="25" value="4" required>
+              <input type="number" id="new-ben-size" class="form-control" min="1" max="25" value="4" required oninput="updateEntitlementPreview()">
             </div>
           </div>
           <div class="form-row">
             <div class="form-group">
               <label class="form-label" for="new-ben-type">Ration Card Type</label>
-              <select id="new-ben-type" class="form-control" required>
+              <select id="new-ben-type" class="form-control" required onchange="updateEntitlementPreview()">
                 <option value="Priority (PHH)">Priority Household (PHH)</option>
                 <option value="Antyodaya Anna Yojana (AAY)">Antyodaya Anna Yojana (AAY)</option>
                 <option value="Non-Priority (NPHH)">Non-Priority (NPHH)</option>
@@ -148,6 +172,15 @@
             <div class="form-group">
               <label class="form-label" for="new-ben-card-num">Ration Card Number (Optional)</label>
               <input type="text" id="new-ben-card-num" class="form-control" placeholder="Auto-generated e.g. RC-BEN011">
+            </div>
+          </div>
+
+          <div class="form-group" style="background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.75rem 1rem; margin-top: 0.5rem;">
+            <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.25rem;">
+              <i class="fa-solid fa-calculator" style="color: var(--accent-cyan);"></i> Configured Monthly Entitlement Preview:
+            </div>
+            <div id="entitlement-preview" style="font-size: 0.85rem; color: var(--text-primary); font-weight: 500;">
+              Rice: 20kg &bull; Wheat: 8kg &bull; Sugar: 1kg &bull; Dal: 1kg
             </div>
           </div>
         </div>

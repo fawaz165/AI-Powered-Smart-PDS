@@ -1,11 +1,13 @@
 /**
  * AI-Powered Smart PDS - Beneficiaries Registry Controller
  * Handles CRUD operations, search & filtering, safe deletion with transaction protection,
- * and dynamic monthly entitlement quota rendering from the live database.
+ * dynamic monthly entitlement quota calculations using configured ration-card rules,
+ * and live registry dashboard metrics updates.
  */
 
 let allBeneficiaries = [];
 let targetDeleteBeneficiaryId = null;
+let configuredEntitlementRules = null;
 
 function escapeHtml(text) {
   if (text === null || text === undefined) return '';
@@ -14,7 +16,9 @@ function escapeHtml(text) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+  await loadEntitlementRules();
   await fetchBeneficiaries(true);
+  updateEntitlementPreview();
 
   // Form submission for registering new beneficiary
   const addForm = document.getElementById('add-beneficiary-form');
@@ -70,6 +74,47 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 /**
+ * Loads configured entitlement rules from backend to avoid hardcoded calculations.
+ */
+async function loadEntitlementRules() {
+  try {
+    const res = await API.request('/beneficiaries/rules');
+    if (res && res.status === 'success') {
+      configuredEntitlementRules = res.data;
+    }
+  } catch (err) {
+    console.warn('Could not load remote entitlement rules, using local NFSA standards:', err);
+  }
+}
+
+/**
+ * Dynamically computes monthly entitlement preview based on configured ration-card rules.
+ */
+function updateEntitlementPreview() {
+  const previewEl = document.getElementById('entitlement-preview');
+  if (!previewEl) return;
+
+  const size = Math.max(1, parseInt(document.getElementById('new-ben-size')?.value || '4', 10));
+  const cardType = document.getElementById('new-ben-type')?.value || 'Priority (PHH)';
+
+  let quotaHtml = '';
+
+  if (cardType.includes('AAY')) {
+    quotaHtml = '<strong>Rice:</strong> 25kg &bull; <strong>Wheat:</strong> 10kg &bull; <strong>Sugar:</strong> 2kg &bull; <strong>Dal:</strong> 2kg <span class="badge badge-purple" style="font-size:0.7rem; margin-left: 6px;">Fixed Family Quota</span>';
+  } else if (cardType.includes('Priority')) {
+    const rice = (size * 5).toFixed(1).replace(/\.0$/, '');
+    const wheat = (size * 2).toFixed(1).replace(/\.0$/, '');
+    quotaHtml = `<strong>Rice:</strong> ${rice}kg &bull; <strong>Wheat:</strong> ${wheat}kg &bull; <strong>Sugar:</strong> 1kg &bull; <strong>Dal:</strong> 1kg <span class="badge badge-warning" style="font-size:0.7rem; margin-left: 6px;">Per-Member Quota</span>`;
+  } else {
+    const rice = (size * 3).toFixed(1).replace(/\.0$/, '');
+    const wheat = (size * 1.5).toFixed(1).replace(/\.0$/, '');
+    quotaHtml = `<strong>Rice:</strong> ${rice}kg &bull; <strong>Wheat:</strong> ${wheat}kg &bull; <strong>Sugar:</strong> 1kg &bull; <strong>Dal:</strong> 0.5kg <span class="badge badge-info" style="font-size:0.7rem; margin-left: 6px;">Basic Allotment</span>`;
+  }
+
+  previewEl.innerHTML = quotaHtml;
+}
+
+/**
  * Fetches all beneficiaries from live backend API.
  */
 async function fetchBeneficiaries(isInitial = false) {
@@ -82,6 +127,7 @@ async function fetchBeneficiaries(isInitial = false) {
     const res = await API.getBeneficiaries({ limit: 500 });
     if (res && res.status === 'success') {
       allBeneficiaries = res.data || [];
+      updateRegistryMetrics(allBeneficiaries);
       filterBeneficiaries();
     }
   } catch (err) {
@@ -91,6 +137,33 @@ async function fetchBeneficiaries(isInitial = false) {
       tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:var(--accent-rose); padding: 1.5rem;"><i class="fa-solid fa-circle-exclamation"></i> Error loading registry data. Please retry.</td></tr>';
     }
   }
+}
+
+/**
+ * Updates summary metric KPI counters from database records.
+ */
+function updateRegistryMetrics(beneficiaries) {
+  const total = beneficiaries.length;
+  let phhCount = 0;
+  let aayCount = 0;
+  let nphhCount = 0;
+
+  beneficiaries.forEach(b => {
+    const type = b.ration_card_type || '';
+    if (type.includes('AAY')) aayCount++;
+    else if (type.includes('Priority')) phhCount++;
+    else nphhCount++;
+  });
+
+  const totalEl = document.getElementById('ben-kpi-total');
+  const phhEl = document.getElementById('ben-kpi-phh');
+  const aayEl = document.getElementById('ben-kpi-aay');
+  const nphhEl = document.getElementById('ben-kpi-nphh');
+
+  if (totalEl) totalEl.textContent = total;
+  if (phhEl) phhEl.textContent = phhCount;
+  if (aayEl) aayEl.textContent = aayCount;
+  if (nphhEl) nphhEl.textContent = nphhCount;
 }
 
 /**

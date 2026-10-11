@@ -207,3 +207,103 @@ def test_beneficiary_authorization_rejection(client):
     assert res.status_code == 401
     assert res.get_json()["status"] == "error"
 
+
+def test_beneficiary_duplicate_prevention(client):
+    """
+    Verifies that duplicate beneficiary IDs and duplicate ration card numbers
+    are rejected with 409 Conflict.
+    """
+    unique_id = f"TEST-DUP-{uuid.uuid4().hex[:6].upper()}"
+    card_no = f"RC-DUP-{uuid.uuid4().hex[:6].upper()}"
+
+    # 1. Create initial beneficiary
+    create_res = client.post("/api/beneficiaries", json={
+        "beneficiary_id": unique_id,
+        "name": "Duplicate Test Cardholder",
+        "region": "Salem",
+        "family_size": 3,
+        "ration_card_type": "Priority (PHH)",
+        "ration_card_number": card_no
+    })
+    assert create_res.status_code == 201
+
+    try:
+        # 2. Attempt duplicate beneficiary_id
+        dup_id_res = client.post("/api/beneficiaries", json={
+            "beneficiary_id": unique_id,
+            "name": "Another Name",
+            "region": "Chennai",
+            "family_size": 4,
+            "ration_card_type": "Priority (PHH)"
+        })
+        assert dup_id_res.status_code == 409
+        assert "already exists" in dup_id_res.get_json()["message"]
+
+        # 3. Attempt duplicate ration_card_number with different beneficiary_id
+        other_id = f"TEST-DUP2-{uuid.uuid4().hex[:6].upper()}"
+        dup_card_res = client.post("/api/beneficiaries", json={
+            "beneficiary_id": other_id,
+            "name": "Third Name",
+            "region": "Madurai",
+            "family_size": 2,
+            "ration_card_type": "Priority (PHH)",
+            "ration_card_number": card_no
+        })
+        assert dup_card_res.status_code == 409
+        assert "already registered" in dup_card_res.get_json()["message"] or "already in use" in dup_card_res.get_json()["message"]
+    finally:
+        client.delete(f"/api/beneficiaries/{unique_id}")
+
+
+def test_beneficiary_auto_generate_card_number_and_persistence(client):
+    """
+    Verifies that omitting ration_card_number generates a guaranteed unique card number,
+    persists in MongoDB with computed monthly quotas, and matches configured rules.
+    """
+    from backend.database.mongo import get_db
+    unique_id = f"TEST-GEN-{uuid.uuid4().hex[:6].upper()}"
+
+    res = client.post("/api/beneficiaries", json={
+        "beneficiary_id": unique_id,
+        "name": "Auto Generation Cardholder",
+        "region": "Tiruchirappalli",
+        "family_size": 4,
+        "ration_card_type": "Priority (PHH)"
+        # ration_card_number omitted
+    })
+    assert res.status_code == 201
+    data = res.get_json()["data"]
+
+    # Verify generated card number
+    assert "ration_card_number" in data
+    assert data["ration_card_number"].startswith(f"RC-{unique_id}")
+
+    # Verify database persistence in MongoDB
+    db = get_db()
+    db_doc = db.beneficiaries.find_one({"beneficiary_id": unique_id}, {"_id": 0})
+    assert db_doc is not None
+    assert db_doc["name"] == "Auto Generation Cardholder"
+    assert db_doc["region"] == "Tiruchirappalli"
+    assert db_doc["family_size"] == 4
+    # Configured PHH rule: Rice = 4 * 5 = 20kg, Wheat = 4 * 2 = 8kg, Sugar = 1kg, Dal = 1kg
+    assert db_doc["monthly_quota"]["Rice"] == 20.0
+    assert db_doc["monthly_quota"]["Wheat"] == 8.0
+    assert db_doc["monthly_quota"]["Sugar"] == 1.0
+    assert db_doc["monthly_quota"]["Dal"] == 1.0
+
+    # Clean up
+    del_res = client.delete(f"/api/beneficiaries/{unique_id}")
+    assert del_res.status_code == 200
+
+
+def test_beneficiary_deletion_restriction_with_anomaly_alert(client):
+    """
+    Verifies that cardholders linked to active fraud/anomaly alerts
+    (such as BEN004 with TXN-1006) cannot be deleted.
+    """
+    del_res = client.delete("/api/beneficiaries/BEN004")
+    assert del_res.status_code == 409
+    data = del_res.get_json()
+    assert data["status"] == "error"
+    assert "deletion blocked" in data["message"].lower() or "transaction" in data["message"].lower() or "anomaly" in data["message"].lower()
+
