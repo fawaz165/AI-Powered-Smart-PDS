@@ -58,7 +58,10 @@ def test_thread_safe_negative_stock_rejection():
     commodity = "Rice"
     region = "ConcurrentTestRegion"
 
-    # Current stock is 30 kg from previous test
+    # Ensure stock is exactly 30 kg for isolated test execution
+    InventoryService.update_stock(commodity, region, 30.0)
+    assert InventoryService.get_stock(commodity, region)["current_stock"] == 30.0
+
     # Attempting to withdraw 50 kg should be rejected
     rejected_res = InventoryService.process_transaction_distribution(
         commodity=commodity,
@@ -68,13 +71,22 @@ def test_thread_safe_negative_stock_rejection():
         ration_shop_id="FPS-TEST-001"
     )
 
-    assert rejected_res["success"] is False
-    assert "Insufficient stock" in rejected_res["message"]
+    try:
+        assert rejected_res["success"] is False
+        assert "Insufficient stock" in rejected_res["message"]
 
-    # Stock must remain safely unchanged at 30 kg
-    stock_doc = InventoryService.get_stock(commodity, region)
-    assert stock_doc["current_stock"] == 30.0
-
-    # Clean up test region from DB so it does not pollute production inventory
-    from backend.database.mongo import get_db
-    get_db().inventory.delete_many({"region": "ConcurrentTestRegion"})
+        # Stock must remain safely unchanged at 30 kg
+        stock_doc = InventoryService.get_stock(commodity, region)
+        assert stock_doc["current_stock"] == 30.0
+    finally:
+        # Clean up test region and test transactions from DB so they never leak into dashboard
+        from backend.database.mongo import get_db
+        db = get_db()
+        db.inventory.delete_many({"region": "ConcurrentTestRegion"})
+        db.transactions.delete_many({
+            "$or": [
+                {"region": "ConcurrentTestRegion"},
+                {"ration_shop_id": "FPS-TEST-001"},
+                {"beneficiary_id": {"$in": ["BEN-CONCUR-A", "BEN-CONCUR-B", "BEN-EXCESS"]}}
+            ]
+        })

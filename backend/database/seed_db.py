@@ -136,40 +136,80 @@ def seed_database():
         )
     logger.info(f"Seeded {len(sample_beneficiaries)} sample cardholder beneficiaries")
 
-    # 6. Seed Sample Transactions
-    if db.transactions.count_documents({}) == 0:
-        txns = [
-            TransactionModel.create_doc("TXN-1001", "BEN001", "FPS-CHN-001", "Rice", 20.0, "Chennai", datetime.utcnow() - timedelta(days=2)),
-            TransactionModel.create_doc("TXN-1002", "BEN001", "FPS-CHN-001", "Wheat", 8.0, "Chennai", datetime.utcnow() - timedelta(days=2)),
-            TransactionModel.create_doc("TXN-1003", "BEN002", "FPS-CHN-001", "Rice", 25.0, "Chennai", datetime.utcnow() - timedelta(days=1)),
-            TransactionModel.create_doc("TXN-1004", "BEN003", "FPS-CHN-002", "Rice", 25.0, "Chennai", datetime.utcnow() - timedelta(hours=14)),
-            TransactionModel.create_doc("TXN-1005", "BEN005", "FPS-CBE-001", "Rice", 20.0, "Coimbatore", datetime.utcnow() - timedelta(hours=6)),
-            # Sample Suspicious Anomaly for demonstration
-            TransactionModel.create_doc("TXN-1006", "BEN004", "FPS-CHN-001", "Rice", 95.0, "Chennai", datetime.utcnow() - timedelta(hours=2),
-                                       status="SUSPICIOUS", risk_level="HIGH", anomaly_score=-0.38,
-                                       reason="Single withdrawal 95 kg exceeds allowed family entitlement of 6 kg by 15.8x")
+    # 6. Seed Realistic Demonstration Transactions (All 5 Districts, Multi-Commodity)
+    # Safely purge any test artifacts if present
+    db.transactions.delete_many({
+        "$or": [
+            {"region": "ConcurrentTestRegion"},
+            {"ration_shop_id": "FPS-TEST-001"},
+            {"ration_shop_id": {"$regex": "^FPS-TEST"}},
+            {"beneficiary_id": {"$in": ["BEN-CONCUR-A", "BEN-CONCUR-B", "BEN-EXCESS"]}},
+            {"beneficiary_id": {"$regex": "^TEST-"}}
         ]
-        db.transactions.insert_many(txns)
-        logger.info(f"Seeded {len(txns)} initial sample transactions (including 1 flagged anomaly)")
+    })
+    db.inventory.delete_many({"region": "ConcurrentTestRegion"})
 
-        # Also register the anomalous transaction in fraud_alerts collection
-        db.fraud_alerts.update_one(
-            {"transaction_id": "TXN-1006"},
-            {"$set": {
-                "transaction_id": "TXN-1006",
-                "beneficiary_id": "BEN004",
-                "ration_shop_id": "FPS-CHN-001",
-                "commodity": "Rice",
-                "quantity": 95.0,
-                "region": "Chennai",
-                "risk_level": "HIGH",
-                "anomaly_score": -0.38,
-                "status": "PENDING_REVIEW",
-                "reason": "Single withdrawal 95 kg exceeds allowed family entitlement of 6 kg by 15.8x",
-                "created_at": datetime.utcnow()
-            }},
+    now = datetime.utcnow()
+    txns = [
+        TransactionModel.create_doc("TXN-1001", "BEN001", "FPS-CHN-001", "Rice", 20.0, "Chennai", now - timedelta(days=2),
+                                   reason="Regular monthly quota distribution"),
+        TransactionModel.create_doc("TXN-1002", "BEN001", "FPS-CHN-001", "Wheat", 8.0, "Chennai", now - timedelta(days=2),
+                                   reason="Priority household subsidized wheat allotment"),
+        TransactionModel.create_doc("TXN-1003", "BEN002", "FPS-CHN-001", "Rice", 25.0, "Chennai", now - timedelta(days=1),
+                                   reason="Antyodaya Anna Yojana monthly grain quota"),
+        TransactionModel.create_doc("TXN-1004", "BEN003", "FPS-CHN-002", "Rice", 25.0, "Chennai", now - timedelta(hours=18),
+                                   reason="Priority household monthly grain distribution"),
+        TransactionModel.create_doc("TXN-1005", "BEN005", "FPS-CBE-001", "Rice", 20.0, "Coimbatore", now - timedelta(hours=14),
+                                   reason="Priority household monthly distribution"),
+        # Sample Flagged Anomaly for Demonstration
+        TransactionModel.create_doc("TXN-1006", "BEN004", "FPS-CHN-001", "Rice", 95.0, "Chennai", now - timedelta(hours=8),
+                                   status="SUSPICIOUS", risk_level="HIGH", anomaly_score=-0.38,
+                                   reason="Single withdrawal 95 kg exceeds allowed family entitlement of 6 kg by 15.8x"),
+        TransactionModel.create_doc("TXN-1007", "BEN006", "FPS-CBE-001", "Wheat", 10.0, "Coimbatore", now - timedelta(hours=6),
+                                   reason="AAY family monthly wheat distribution"),
+        TransactionModel.create_doc("TXN-1008", "BEN006", "FPS-CBE-001", "Sugar", 2.0, "Coimbatore", now - timedelta(hours=5),
+                                   reason="Subsidized household sugar entitlement"),
+        TransactionModel.create_doc("TXN-1009", "BEN007", "FPS-MDU-001", "Rice", 20.0, "Madurai", now - timedelta(hours=4),
+                                   reason="Priority household monthly grain distribution"),
+        TransactionModel.create_doc("TXN-1010", "BEN007", "FPS-MDU-001", "Dal", 2.0, "Madurai", now - timedelta(hours=3),
+                                   reason="State welfare subsidized pulse quota"),
+        TransactionModel.create_doc("TXN-1011", "BEN008", "FPS-SLM-001", "Rice", 15.0, "Salem", now - timedelta(hours=2, minutes=30),
+                                   reason="Priority household monthly grain distribution"),
+        TransactionModel.create_doc("TXN-1012", "BEN008", "FPS-SLM-001", "Wheat", 5.0, "Salem", now - timedelta(hours=2),
+                                   reason="Subsidized whole grain wheat quota"),
+        TransactionModel.create_doc("TXN-1013", "BEN009", "FPS-TRY-001", "Rice", 25.0, "Tiruchirappalli", now - timedelta(hours=1, minutes=15),
+                                   reason="Antyodaya Anna Yojana monthly grain quota"),
+        TransactionModel.create_doc("TXN-1014", "BEN009", "FPS-TRY-001", "Sugar", 2.0, "Tiruchirappalli", now - timedelta(minutes=45),
+                                   reason="Subsidized household crystal sugar quota"),
+        TransactionModel.create_doc("TXN-1015", "BEN010", "FPS-CHN-002", "Rice", 20.0, "Chennai", now - timedelta(minutes=15),
+                                   reason="Priority household monthly grain distribution")
+    ]
+    for txn in txns:
+        db.transactions.update_one(
+            {"transaction_id": txn["transaction_id"]},
+            {"$set": txn},
             upsert=True
         )
+    logger.info(f"Seeded {len(txns)} realistic demonstration transactions across all 5 districts")
+
+    # Also register the anomalous transaction in fraud_alerts collection
+    db.fraud_alerts.update_one(
+        {"transaction_id": "TXN-1006"},
+        {"$set": {
+            "transaction_id": "TXN-1006",
+            "beneficiary_id": "BEN004",
+            "ration_shop_id": "FPS-CHN-001",
+            "commodity": "Rice",
+            "quantity": 95.0,
+            "region": "Chennai",
+            "risk_level": "HIGH",
+            "anomaly_score": -0.38,
+            "status": "PENDING_REVIEW",
+            "reason": "Single withdrawal 95 kg exceeds allowed family entitlement of 6 kg by 15.8x",
+            "created_at": now - timedelta(hours=8)
+        }},
+        upsert=True
+    )
 
     logger.info("Database seeding completed successfully.")
 
