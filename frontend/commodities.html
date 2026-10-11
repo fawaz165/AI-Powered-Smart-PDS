@@ -62,12 +62,12 @@
             <div class="card-meta"><span class="meta-up"><i class="fa-solid fa-database"></i> Database Catalog</span> Linked to Inventory</div>
           </div>
           <div class="stat-card" style="--card-accent: #10b981;">
-            <div class="card-top"><span>Official NFSA Rates</span><i class="fa-solid fa-certificate" style="color: #34d399;"></i></div>
+            <div class="card-top"><span>Verified Official NFSA</span><i class="fa-solid fa-certificate" style="color: #34d399;"></i></div>
             <div class="card-value" id="com-kpi-official" style="color: #34d399;">--</div>
             <div class="card-meta">Statutory Central Subsidies</div>
           </div>
           <div class="stat-card" style="--card-accent: #f59e0b;">
-            <div class="card-top"><span>Demonstration Rates</span><i class="fa-solid fa-flask" style="color: #fbbf24;"></i></div>
+            <div class="card-top"><span>Synthetic Demo Rates</span><i class="fa-solid fa-flask" style="color: #fbbf24;"></i></div>
             <div class="card-value" id="com-kpi-demo" style="color: #fbbf24;">--</div>
             <div class="card-meta">State Welfare Simulation</div>
           </div>
@@ -88,10 +88,10 @@
             </div>
             <div class="panel-actions">
               <input type="text" id="com-search" class="form-control" placeholder="Search by code, name, or desc..." style="width: 250px;" oninput="filterCommodities()">
-              <select id="com-filter-rate" class="form-control" style="width: 200px;" onchange="filterCommodities()">
+              <select id="com-filter-rate" class="form-control" style="width: 220px;" onchange="filterCommodities()">
                 <option value="">All Classifications</option>
-                <option value="OFFICIAL_NFSA">Official NFSA Rates</option>
-                <option value="DEMONSTRATION">Demonstration Values</option>
+                <option value="OFFICIAL_NFSA">Verified Official NFSA Rates</option>
+                <option value="DEMONSTRATION">Synthetic Demo Rates</option>
                 <option value="STATE_SUBSIDY">State Welfare Subsidies</option>
               </select>
               <button class="btn btn-secondary btn-sm" id="btn-refresh-commodities" onclick="refreshCommodities()" title="Refresh Catalog">
@@ -163,7 +163,7 @@
               <label class="form-label" for="new-com-rate-type">Rate Classification</label>
               <select id="new-com-rate-type" class="form-control" required>
                 <option value="OFFICIAL_NFSA">Verified Official NFSA Rate</option>
-                <option value="DEMONSTRATION" selected>Demonstration Value (Simulation)</option>
+                <option value="DEMONSTRATION" selected>Synthetic Demo Rate (Simulation)</option>
                 <option value="STATE_SUBSIDY">State Welfare Subsidy</option>
               </select>
               <small style="color: var(--text-muted); font-size: 0.75rem;">Distinguishes statutory NFSA from synthetic demo rates</small>
@@ -221,7 +221,7 @@
               <label class="form-label" for="edit-com-rate-type">Rate Classification</label>
               <select id="edit-com-rate-type" class="form-control" required>
                 <option value="OFFICIAL_NFSA">Verified Official NFSA Rate</option>
-                <option value="DEMONSTRATION">Demonstration Value (Simulation)</option>
+                <option value="DEMONSTRATION">Synthetic Demo Rate (Simulation)</option>
                 <option value="STATE_SUBSIDY">State Welfare Subsidy</option>
               </select>
             </div>

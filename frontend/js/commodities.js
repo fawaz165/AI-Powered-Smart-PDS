@@ -1,7 +1,7 @@
 /**
  * AI-Powered Smart PDS - Commodity Catalog Controller
  * Handles database fetching, strict validation, unique commodity code enforcement,
- * configurable subsidized pricing, verified official NFSA vs demonstration distinctions,
+ * configurable subsidized pricing, verified official NFSA vs synthetic demonstration distinctions,
  * operational linkage tracking, and safe deletion protections.
  */
 
@@ -31,14 +31,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       const rateType = document.getElementById('new-com-rate-type').value;
       const desc = document.getElementById('new-com-desc').value.trim();
 
-      // Client-side Validation
+      // Client-side Strict Validation
       const codeRegex = /^[A-Za-z0-9\-_]{3,20}$/;
       if (!codeRegex.test(code)) {
         showToast('Commodity Code must be 3-20 alphanumeric characters (hyphens and underscores allowed).', 'error');
         return;
       }
-      if (!name || name.length < 2 || name.length > 50) {
-        showToast('Commodity Name must be between 2 and 50 characters.', 'error');
+      const nameRegex = /^[A-Za-z][A-Za-z0-9\s\-_()]{1,49}$/;
+      if (!nameRegex.test(name)) {
+        showToast('Commodity Name must start with a letter and be 2-50 characters long.', 'error');
         return;
       }
       if (!unit) {
@@ -49,8 +50,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         showToast('Subsidized price must be a non-negative number.', 'error');
         return;
       }
-      if (marketPrice !== null && (isNaN(marketPrice) || marketPrice < 0)) {
-        showToast('Market benchmark price must be a non-negative number.', 'error');
+      if (marketPrice !== null) {
+        if (isNaN(marketPrice) || marketPrice < 0) {
+          showToast('Market benchmark price must be a non-negative number.', 'error');
+          return;
+        }
+        if (marketPrice < price) {
+          showToast(`Market benchmark price (₹${marketPrice.toFixed(2)}) cannot be lower than subsidized price (₹${price.toFixed(2)}).`, 'error');
+          return;
+        }
+      }
+
+      // Legal statutory check: Never label unverified rates (> ₹15.0/kg) as Official NFSA
+      if (rateType === 'OFFICIAL_NFSA' && price > 15.0) {
+        showToast("Unverified price (> ₹15.00/kg) cannot be labeled as Official NFSA. Statutory NFSA cap is ₹13.50/kg for sugar and ₹3.00/kg for grains. Choose 'Synthetic Demo Rate' or 'State Welfare Subsidy'.", 'error');
         return;
       }
 
@@ -92,12 +105,29 @@ document.addEventListener('DOMContentLoaded', async () => {
       const rateType = document.getElementById('edit-com-rate-type').value;
       const desc = document.getElementById('edit-com-desc').value.trim();
 
+      const nameRegex = /^[A-Za-z][A-Za-z0-9\s\-_()]{1,49}$/;
+      if (!nameRegex.test(name)) {
+        showToast('Commodity Name must start with a letter and be 2-50 characters long.', 'error');
+        return;
+      }
       if (isNaN(price) || price < 0) {
         showToast('Subsidized price must be non-negative.', 'error');
         return;
       }
-      if (marketPrice !== null && (isNaN(marketPrice) || marketPrice < 0)) {
-        showToast('Market benchmark price must be non-negative.', 'error');
+      if (marketPrice !== null) {
+        if (isNaN(marketPrice) || marketPrice < 0) {
+          showToast('Market benchmark price must be non-negative.', 'error');
+          return;
+        }
+        if (marketPrice < price) {
+          showToast(`Market benchmark price (₹${marketPrice.toFixed(2)}) cannot be lower than subsidized price (₹${price.toFixed(2)}).`, 'error');
+          return;
+        }
+      }
+
+      // Legal statutory check: Never label unverified rates (> ₹15.0/kg) as Official NFSA
+      if (rateType === 'OFFICIAL_NFSA' && price > 15.0) {
+        showToast("Unverified price (> ₹15.00/kg) cannot be labeled as Official NFSA. Statutory NFSA cap is ₹13.50/kg for sugar and ₹3.00/kg for grains. Choose 'Synthetic Demo Rate' or 'State Welfare Subsidy'.", 'error');
         return;
       }
 
@@ -185,7 +215,8 @@ async function refreshCommodities() {
 }
 
 /**
- * Computes and renders top KPI metrics cards.
+ * Computes and renders top KPI metrics cards dynamically from database records.
+ * No hardcoded replacement statistics.
  */
 function updateCommodityKPIs(commodities) {
   const totalCount = commodities.length;
@@ -195,20 +226,24 @@ function updateCommodityKPIs(commodities) {
   let benchmarkedCount = 0;
 
   commodities.forEach(c => {
-    if (c.rate_type === 'OFFICIAL_NFSA') {
+    // Only verified official NFSA rates within statutory limits are counted as official
+    const isOfficialVerified = (c.rate_type === 'OFFICIAL_NFSA' && c.is_verified && !c.is_demonstration);
+    if (isOfficialVerified) {
       officialCount++;
-    } else if (c.rate_type === 'DEMONSTRATION') {
+    } else {
       demoCount++;
     }
 
     if (c.market_price && c.market_price > 0) {
-      const discountPct = Math.max(0, ((c.market_price - (c.subsidized_price || 0)) / c.market_price) * 100);
+      const subPrice = Math.max(0, c.subsidized_price || 0);
+      const discountPct = Math.max(0, Math.min(100, ((c.market_price - subPrice) / c.market_price) * 100));
       totalSubsidyDiscount += discountPct;
       benchmarkedCount++;
     }
   });
 
-  const avgSubsidyPct = benchmarkedCount > 0 ? (totalSubsidyDiscount / benchmarkedCount).toFixed(1) : '85.0';
+  // Calculate actual dynamic average without hardcoding fallbacks
+  const avgSubsidyPct = benchmarkedCount > 0 ? (totalSubsidyDiscount / benchmarkedCount).toFixed(1) : '0.0';
 
   const elTotal = document.getElementById('com-kpi-total');
   const elOfficial = document.getElementById('com-kpi-official');
@@ -236,7 +271,15 @@ function filterCommodities() {
       (c.name && c.name.toLowerCase().includes(term)) ||
       (c.description && c.description.toLowerCase().includes(term));
 
-    const matchType = !selectedType || c.rate_type === selectedType;
+    let matchType = true;
+    if (selectedType === 'OFFICIAL_NFSA') {
+      matchType = Boolean(c.rate_type === 'OFFICIAL_NFSA' && c.is_verified && !c.is_demonstration);
+    } else if (selectedType === 'DEMONSTRATION') {
+      matchType = Boolean(c.rate_type === 'DEMONSTRATION' || c.is_demonstration || !c.is_verified);
+    } else if (selectedType === 'STATE_SUBSIDY') {
+      matchType = Boolean(c.rate_type === 'STATE_SUBSIDY');
+    }
+
     return matchSearch && matchType;
   });
 
@@ -256,32 +299,44 @@ function renderCommoditiesTable(items) {
   }
 
   tbody.innerHTML = items.map(c => {
-    const isOfficial = c.rate_type === 'OFFICIAL_NFSA';
-    const isDemo = c.rate_type === 'DEMONSTRATION';
+    const isOfficial = Boolean(c.rate_type === 'OFFICIAL_NFSA' && c.is_verified && !c.is_demonstration);
+    const isStateSubsidy = Boolean(c.rate_type === 'STATE_SUBSIDY');
 
     let rateBadgeHtml = '';
     if (isOfficial) {
-      rateBadgeHtml = '<span class="badge badge-success"><i class="fa-solid fa-certificate"></i> Verified Official NFSA</span>';
-    } else if (isDemo) {
-      rateBadgeHtml = '<span class="badge badge-warning"><i class="fa-solid fa-flask"></i> Demonstration Value</span>';
+      rateBadgeHtml = '<span class="badge badge-success" title="Verified statutory NFSA rate within central legal caps"><i class="fa-solid fa-certificate"></i> Verified Official NFSA</span>';
+    } else if (isStateSubsidy) {
+      rateBadgeHtml = '<span class="badge badge-purple" title="State welfare special initiative rate"><i class="fa-solid fa-landmark"></i> State Welfare Subsidy</span>';
     } else {
-      rateBadgeHtml = '<span class="badge badge-purple"><i class="fa-solid fa-landmark"></i> State Subsidy</span>';
+      rateBadgeHtml = '<span class="badge badge-warning" title="Synthetic simulation value - Not statutory official rate"><i class="fa-solid fa-flask"></i> Synthetic Demo Rate</span>';
     }
 
-    // Market Benchmark & Discount Calculation
-    let marketHtml = '-';
+    const unitStr = escapeHtml(c.unit || 'kg');
+    const subPriceVal = Number(c.subsidized_price || 0);
+
+    // Subsidized Price Display
+    const subPriceDisplay = subPriceVal === 0 
+      ? `<strong style="color: var(--accent-emerald);">₹ 0.00 / ${unitStr}</strong> <span class="badge badge-success" style="font-size:0.7rem; padding: 1px 5px;">Free Entitlement</span>` 
+      : `<strong style="color: var(--accent-emerald);">₹ ${subPriceVal.toFixed(2)} / ${unitStr}</strong>`;
+
+    // Market Benchmark & Subsidy Calculation Display
+    let marketHtml = '<span style="color: var(--text-muted);">-</span>';
     if (c.market_price && c.market_price > 0) {
-      const discountPct = Math.round(((c.market_price - (c.subsidized_price || 0)) / c.market_price) * 100);
-      const discountBadge = discountPct >= 100 
+      const mktPriceVal = Number(c.market_price);
+      const diffAmount = Math.max(0, mktPriceVal - subPriceVal);
+      const discountPct = Math.round((diffAmount / mktPriceVal) * 100);
+      const savingsBadge = discountPct >= 100 
         ? '<span class="badge badge-success" style="font-size:0.7rem; padding: 2px 6px;">100% Free</span>'
-        : `<span class="badge badge-info" style="font-size:0.7rem; padding: 2px 6px;">-${discountPct}%</span>`;
-      marketHtml = `<div style="display:flex; align-items:center; gap:6px;">
-        <span>₹ ${c.market_price.toFixed(2)}</span>
-        ${discountBadge}
-      </div>`;
+        : `<span class="badge badge-info" style="font-size:0.7rem; padding: 2px 6px;">Save ₹${diffAmount.toFixed(2)} (-${discountPct}%)</span>`;
+      marketHtml = `
+        <div style="display:flex; flex-direction:column; gap:2px;">
+          <span style="font-weight: 500;">₹ ${mktPriceVal.toFixed(2)} / ${unitStr}</span>
+          <div>${savingsBadge}</div>
+        </div>
+      `;
     }
 
-    // Operational Linkages Badge
+    // Operational Linkages Badges
     const invCount = c.linked_inventory_count || 0;
     const txnCount = c.linked_transactions_count || 0;
     const linkageHtml = `<div style="display:flex; gap:6px; flex-wrap:wrap;">
@@ -293,15 +348,11 @@ function renderCommoditiesTable(items) {
       </span>
     </div>`;
 
-    const subPriceDisplay = c.subsidized_price === 0 
-      ? '<strong style="color: var(--accent-emerald);">₹ 0.00 (Free)</strong>' 
-      : `<strong style="color: var(--accent-emerald);">₹ ${c.subsidized_price.toFixed(2)}</strong>`;
-
     return `
       <tr>
         <td><strong class="badge badge-info" style="font-family: monospace; font-size: 0.85rem; letter-spacing: 0.04em;">${escapeHtml(c.commodity_code)}</strong></td>
         <td><strong>${escapeHtml(c.name)}</strong></td>
-        <td><span style="color: var(--text-secondary);">${escapeHtml(c.unit)}</span></td>
+        <td><span style="color: var(--text-secondary);">${unitStr}</span></td>
         <td>${subPriceDisplay}</td>
         <td>${marketHtml}</td>
         <td>${rateBadgeHtml}</td>
@@ -352,7 +403,6 @@ function confirmDeleteCommodity(code) {
   targetDeleteCommodityCode = code;
   const nameElem = document.getElementById('delete-com-target-name');
   const detailsElem = document.getElementById('delete-com-linkage-warning');
-  const confirmBtn = document.getElementById('btn-confirm-delete-commodity');
 
   if (nameElem) {
     nameElem.textContent = `${commodity.commodity_code} (${commodity.name})`;

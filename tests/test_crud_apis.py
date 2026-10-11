@@ -66,40 +66,55 @@ def test_commodity_catalog_retrieval_and_rate_distinction(client):
     assert "COM-SUG" in comms
     assert "COM-DAL" in comms
 
-    # Official NFSA rates
+    # Official statutory NFSA rates
     rice = comms["COM-RIC"]
     assert rice["rate_type"] == "OFFICIAL_NFSA"
+    assert rice["is_verified"] is True
     assert rice["is_demonstration"] is False
     assert rice["subsidized_price"] == 0.0
     assert rice["market_price"] == 42.0
+    assert rice["subsidy_amount"] == 42.0
+    assert rice["subsidy_percentage"] == 100.0
     assert rice["linked_inventory_count"] >= 5
     assert rice["linked_transactions_count"] > 0
 
     wheat = comms["COM-WHT"]
     assert wheat["rate_type"] == "OFFICIAL_NFSA"
+    assert wheat["is_verified"] is True
     assert wheat["is_demonstration"] is False
     assert wheat["subsidized_price"] == 2.0
     assert wheat["market_price"] == 34.0
+    assert wheat["subsidy_amount"] == 32.0
+    assert wheat["subsidy_percentage"] == 94.12
 
     sugar = comms["COM-SUG"]
     assert sugar["rate_type"] == "OFFICIAL_NFSA"
+    assert sugar["is_verified"] is True
     assert sugar["is_demonstration"] is False
     assert sugar["subsidized_price"] == 13.5
+    assert sugar["market_price"] == 45.0
+    assert sugar["subsidy_amount"] == 31.5
+    assert sugar["subsidy_percentage"] == 70.0
 
-    # Demonstration rate
+    # Synthetic demonstration rate (never labeled official)
     dal = comms["COM-DAL"]
     assert dal["rate_type"] == "DEMONSTRATION"
+    assert dal["is_verified"] is False
     assert dal["is_demonstration"] is True
     assert dal["subsidized_price"] == 30.0
     assert dal["market_price"] == 130.0
+    assert dal["subsidy_amount"] == 100.0
+    assert dal["subsidy_percentage"] == 76.92
 
 
 def test_commodity_validation_and_duplicate_prevention(client):
     """
-    Verifies payload validation and duplicate prevention:
+    Verifies payload validation, subsidy calculations, and duplicate prevention:
     - Code format and length validation
-    - Name length validation
+    - Name length and regex validation
     - Non-negative subsidized and market prices
+    - Market price cannot be less than subsidized price
+    - Unverified price (> 15.0) cannot be labeled as OFFICIAL_NFSA
     - 409 Conflict rejection for duplicate code or duplicate name
     """
     # 1. Negative subsidized price
@@ -121,21 +136,42 @@ def test_commodity_validation_and_duplicate_prevention(client):
     assert res_neg_mkt.status_code == 400
     assert "market_price" in str(res_neg_mkt.get_json()).lower()
 
-    # 3. Invalid commodity code pattern
+    # 3. Market price lower than subsidized price
+    res_mkt_low = client.post("/api/commodities", json={
+        "commodity_code": "COM-VAL3",
+        "name": "Validation Low Benchmark",
+        "subsidized_price": 50.0,
+        "market_price": 30.0
+    })
+    assert res_mkt_low.status_code == 400
+    assert "market_price cannot be less than subsidized_price" in str(res_mkt_low.get_json()).lower()
+
+    # 4. Unverified price cannot be labeled as OFFICIAL_NFSA
+    res_unverified_nfsa = client.post("/api/commodities", json={
+        "commodity_code": "COM-VAL4",
+        "name": "Unverified Expensive Grain",
+        "subsidized_price": 40.0,
+        "market_price": 80.0,
+        "rate_type": "OFFICIAL_NFSA"
+    })
+    assert res_unverified_nfsa.status_code == 400
+    assert "unverified price cannot be labeled as official_nfsa" in str(res_unverified_nfsa.get_json()).lower()
+
+    # 5. Invalid commodity code pattern
     res_bad_code = client.post("/api/commodities", json={
         "commodity_code": "AB",
-        "name": "Validation Test Grain 3"
+        "name": "Validation Test Grain Bad Code"
     })
     assert res_bad_code.status_code == 400
 
-    # 4. Short name
+    # 6. Short name
     res_short_name = client.post("/api/commodities", json={
-        "commodity_code": "COM-VAL4",
+        "commodity_code": "COM-VAL-SHORT",
         "name": "X"
     })
     assert res_short_name.status_code == 400
 
-    # 5. Duplicate code rejection (COM-RIC already exists)
+    # 7. Duplicate code rejection (COM-RIC already exists)
     res_dup_code = client.post("/api/commodities", json={
         "commodity_code": "COM-RIC",
         "name": "Duplicate Code Grain",
@@ -144,7 +180,7 @@ def test_commodity_validation_and_duplicate_prevention(client):
     assert res_dup_code.status_code == 409
     assert "already exists" in res_dup_code.get_json()["message"]
 
-    # 6. Duplicate name rejection ('Rice' already exists)
+    # 8. Duplicate name rejection ('Rice' already exists)
     res_dup_name = client.post("/api/commodities", json={
         "commodity_code": "COM-NEW-RIC",
         "name": "Rice",
@@ -159,72 +195,90 @@ def test_commodity_crud_lifecycle_and_configurable_pricing(client):
     Verifies full lifecycle of Add Commodity:
     - Creation and persistent storage in database
     - Configurable subsidized pricing and market benchmark update (PUT)
-    - Rejection of invalid price updates
+    - Rejection of invalid price updates and invalid benchmark relationships
     - Operational deletion protection when linked, and clean deletion when unlinked
+    - Guaranteed cleanup in finally block for complete test isolation
     """
     from backend.database.mongo import get_db
     test_code = f"COM-MIL-{uuid.uuid4().hex[:6].upper()}"
     test_name = f"Millet-{uuid.uuid4().hex[:4].upper()}"
-
-    # 1. Create new commodity
-    create_payload = {
-        "commodity_code": test_code,
-        "name": test_name,
-        "unit": "kg",
-        "subsidized_price": 1.5,
-        "market_price": 35.0,
-        "rate_type": "OFFICIAL_NFSA",
-        "description": "Nutritious coarse grain millet"
-    }
-    create_res = client.post("/api/commodities", json=create_payload)
-    assert create_res.status_code == 201
-    created_data = create_res.get_json()["data"]
-    assert created_data["commodity_code"] == test_code
-    assert created_data["subsidized_price"] == 1.5
-    assert created_data["is_demonstration"] is False
-
-    # 2. Verify database persistence in MongoDB
     db = get_db()
-    db_doc = db.commodities.find_one({"commodity_code": test_code}, {"_id": 0})
-    assert db_doc is not None
-    assert db_doc["name"] == test_name
-    assert db_doc["subsidized_price"] == 1.5
-    assert db_doc["market_price"] == 35.0
 
-    # 3. Read single commodity via API
-    get_res = client.get(f"/api/commodities/{test_code}")
-    assert get_res.status_code == 200
-    assert get_res.get_json()["data"]["name"] == test_name
+    try:
+        # 1. Create new commodity with valid official coarse grain pricing (<= ₹13.50)
+        create_payload = {
+            "commodity_code": test_code,
+            "name": test_name,
+            "unit": "kg",
+            "subsidized_price": 1.5,
+            "market_price": 35.0,
+            "rate_type": "OFFICIAL_NFSA",
+            "description": "Nutritious coarse grain millet"
+        }
+        create_res = client.post("/api/commodities", json=create_payload)
+        assert create_res.status_code == 201
+        created_data = create_res.get_json()["data"]
+        assert created_data["commodity_code"] == test_code
+        assert created_data["subsidized_price"] == 1.5
+        assert created_data["market_price"] == 35.0
+        assert created_data["subsidy_amount"] == 33.5
+        assert created_data["is_verified"] is True
+        assert created_data["is_demonstration"] is False
 
-    # 4. Make subsidized price and classification configurable via PUT
-    update_res = client.put(f"/api/commodities/{test_code}", json={
-        "subsidized_price": 2.25,
-        "market_price": 38.0,
-        "rate_type": "STATE_SUBSIDY",
-        "description": "Updated state subsidy policy rate"
-    })
-    assert update_res.status_code == 200
-    updated_data = update_res.get_json()["data"]
-    assert updated_data["subsidized_price"] == 2.25
-    assert updated_data["market_price"] == 38.0
-    assert updated_data["rate_type"] == "STATE_SUBSIDY"
-    assert updated_data["is_demonstration"] is False
+        # 2. Verify database persistence in MongoDB
+        db_doc = db.commodities.find_one({"commodity_code": test_code}, {"_id": 0})
+        assert db_doc is not None
+        assert db_doc["name"] == test_name
+        assert db_doc["subsidized_price"] == 1.5
+        assert db_doc["market_price"] == 35.0
 
-    # 5. Reject negative price update
-    bad_update = client.put(f"/api/commodities/{test_code}", json={"subsidized_price": -10.0})
-    assert bad_update.status_code == 400
+        # 3. Read single commodity via API
+        get_res = client.get(f"/api/commodities/{test_code}")
+        assert get_res.status_code == 200
+        assert get_res.get_json()["data"]["name"] == test_name
 
-    # 6. Verify operational deletion restriction for linked commodity (COM-RIC)
-    rice_del_res = client.delete("/api/commodities/COM-RIC")
-    assert rice_del_res.status_code == 409
-    assert "operational integrity" in rice_del_res.get_json()["message"].lower()
+        # 4. Make subsidized price and classification configurable via PUT
+        update_res = client.put(f"/api/commodities/{test_code}", json={
+            "subsidized_price": 2.25,
+            "market_price": 38.0,
+            "rate_type": "STATE_SUBSIDY",
+            "description": "Updated state subsidy policy rate"
+        })
+        assert update_res.status_code == 200
+        updated_data = update_res.get_json()["data"]
+        assert updated_data["subsidized_price"] == 2.25
+        assert updated_data["market_price"] == 38.0
+        assert updated_data["rate_type"] == "STATE_SUBSIDY"
+        assert updated_data["subsidy_amount"] == 35.75
+        assert updated_data["is_demonstration"] is False
 
-    # 7. Cleanly delete unlinked test commodity
-    del_res = client.delete(f"/api/commodities/{test_code}")
-    assert del_res.status_code == 200
+        # 5. Reject negative price update
+        bad_update = client.put(f"/api/commodities/{test_code}", json={"subsidized_price": -10.0})
+        assert bad_update.status_code == 400
 
-    # 8. Verify deleted from DB
-    assert db.commodities.find_one({"commodity_code": test_code}) is None
+        # 6. Reject market price less than subsidized price on PUT
+        bad_benchmark = client.put(f"/api/commodities/{test_code}", json={"subsidized_price": 30.0, "market_price": 20.0})
+        assert bad_benchmark.status_code == 400
+
+        # 7. Reject labeling unverified rate (> 15.0) as OFFICIAL_NFSA on PUT
+        bad_official = client.put(f"/api/commodities/{test_code}", json={"subsidized_price": 25.0, "rate_type": "OFFICIAL_NFSA"})
+        assert bad_official.status_code == 400
+
+        # 8. Verify operational deletion restriction for linked commodity (COM-RIC)
+        rice_del_res = client.delete("/api/commodities/COM-RIC")
+        assert rice_del_res.status_code == 409
+        assert "operational integrity" in rice_del_res.get_json()["message"].lower()
+
+        # 9. Cleanly delete unlinked test commodity
+        del_res = client.delete(f"/api/commodities/{test_code}")
+        assert del_res.status_code == 200
+
+        # 10. Verify deleted from DB
+        assert db.commodities.find_one({"commodity_code": test_code}) is None
+
+    finally:
+        # Guarantee test isolation: always purge test record from MongoDB
+        db.commodities.delete_many({"commodity_code": test_code})
 
 
 def test_commodity_ids_linked_with_inventory_and_forecasting(client):
