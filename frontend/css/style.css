@@ -232,11 +232,14 @@ h1, h2, h3, h4, h5, .brand-title {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 .top-navbar {
-  height: var(--header-height);
-  padding: 0 32px;
+  min-height: var(--header-height);
+  padding: 12px 32px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -246,6 +249,8 @@ h1, h2, h3, h4, h5, .brand-title {
   position: sticky;
   top: 0;
   z-index: 90;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
 .page-title-box h1 {
@@ -261,7 +266,8 @@ h1, h2, h3, h4, h5, .brand-title {
 .nav-actions {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .status-indicator {
@@ -382,6 +388,16 @@ h1, h2, h3, h4, h5, .brand-title {
   grid-template-columns: 2fr 1fr;
   gap: 24px;
   margin-bottom: 28px;
+  min-width: 0;
+}
+
+.predictions-layout-grid {
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  gap: 20px;
+  margin-bottom: 24px;
+  width: 100%;
+  min-width: 0;
 }
 
 .chart-card {
@@ -391,6 +407,8 @@ h1, h2, h3, h4, h5, .brand-title {
   border-radius: var(--radius-md);
   padding: 24px;
   box-shadow: var(--shadow-card);
+  min-width: 0;
+  overflow: hidden;
 }
 
 .chart-header {
@@ -479,10 +497,31 @@ h1, h2, h3, h4, h5, .brand-title {
 .table-responsive {
   width: 100%;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  display: block;
+}
+
+.table-responsive::-webkit-scrollbar {
+  height: 6px;
+}
+
+.table-responsive::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 4px;
+}
+
+.table-responsive::-webkit-scrollbar-thumb {
+  background: rgba(59, 130, 246, 0.3);
+  border-radius: 4px;
+}
+
+.table-responsive::-webkit-scrollbar-thumb:hover {
+  background: rgba(59, 130, 246, 0.5);
 }
 
 .custom-table {
   width: 100%;
+  min-width: 720px;
   border-collapse: collapse;
   text-align: left;
   font-size: 0.85rem;
@@ -802,9 +841,36 @@ h1, h2, h3, h4, h5, .brand-title {
 }
 
 /* ---------------- Responsive Styles ---------------- */
-@media (max-width: 1024px) {
+@media (max-width: 1150px) {
+  .predictions-layout-grid,
   .charts-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr !important;
+  }
+  .top-navbar {
+    height: auto;
+    padding: 14px 24px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .nav-actions {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}
+
+@media (max-width: 900px) {
+  .content-body {
+    padding: 16px;
+  }
+  .chart-card {
+    padding: 18px 16px;
+  }
+  .panel-header {
+    padding: 16px;
+    flex-wrap: wrap;
+    gap: 10px;
   }
 }
 
@@ -817,8 +883,32 @@ h1, h2, h3, h4, h5, .brand-title {
   }
   .main-wrapper {
     margin-left: 0;
+    width: 100%;
+    max-width: 100vw;
+  }
+  .top-navbar {
+    padding: 12px 16px;
   }
   .content-body {
-    padding: 20px 16px;
+    padding: 14px 12px;
+  }
+  .form-row {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .card-top {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  .btn {
+    width: 100%;
+  }
+  .nav-actions {
+    flex-direction: column;
+    align-items: stretch;
   }
 }

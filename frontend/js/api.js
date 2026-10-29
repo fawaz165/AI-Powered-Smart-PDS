@@ -151,8 +151,22 @@ const API = {
     });
   },
 
-  getFraudAlerts() {
-    return this.request('/transactions/fraud-alerts');
+  getFraudAlerts(params = {}) {
+    const query = new URLSearchParams(params).toString();
+    return this.request(`/transactions/fraud-alerts?${query}`);
+  },
+
+  reviewFraudAlert(transactionId, payload) {
+    return this.request(`/transactions/fraud-alerts/${encodeURIComponent(transactionId)}/review`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  resolveFraudAlert(transactionId) {
+    return this.request(`/transactions/fraud-alerts/${encodeURIComponent(transactionId)}/resolve`, {
+      method: 'POST'
+    });
   },
 
   // ML Intelligence
@@ -180,12 +194,6 @@ const API = {
 
   getMLStatus() {
     return this.request('/ml-status');
-  },
-
-  resolveFraudAlert(transactionId) {
-    return this.request(`/transactions/fraud-alerts/${encodeURIComponent(transactionId)}/resolve`, {
-      method: 'POST'
-    });
   }
 };
 

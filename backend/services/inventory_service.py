@@ -115,6 +115,34 @@ class InventoryService:
                 anomaly_score = anomaly_info.get("anomaly_score", 0.0)
                 reason = anomaly_info.get("reason", reason)
 
+            now_dt = datetime.utcnow()
+            audit_events = [
+                {
+                    "step": 1,
+                    "action": "VALIDATION_PASSED",
+                    "timestamp": now_dt.isoformat(),
+                    "details": f"Beneficiary {beneficiary_id} eligible, sufficient stock verified ({current_stock} kg available)"
+                },
+                {
+                    "step": 2,
+                    "action": "ML_ANOMALY_ASSESSED",
+                    "timestamp": now_dt.isoformat(),
+                    "details": f"Status: {status}, Risk: {risk_level}, Score: {anomaly_score}"
+                },
+                {
+                    "step": 3,
+                    "action": "STOCK_DEDUCTED",
+                    "timestamp": now_dt.isoformat(),
+                    "details": f"Inventory updated from {current_stock} kg to {new_stock} kg (-{quantity} kg)"
+                },
+                {
+                    "step": 4,
+                    "action": "TRANSACTION_COMPLETED",
+                    "timestamp": now_dt.isoformat(),
+                    "details": f"Transaction {txn_id} committed to ledger"
+                }
+            ]
+
             txn_doc = TransactionModel.create_doc(
                 transaction_id=txn_id,
                 beneficiary_id=beneficiary_id,
@@ -123,11 +151,15 @@ class InventoryService:
                 commodity_code=commodity_code,
                 quantity=quantity,
                 region=region,
-                timestamp=datetime.utcnow(),
+                timestamp=now_dt,
                 status=status,
                 risk_level=risk_level,
                 anomaly_score=anomaly_score,
-                reason=reason
+                reason=reason,
+                processing_status="COMPLETED",
+                previous_stock=current_stock,
+                remaining_stock=new_stock,
+                audit_trail=audit_events
             )
             db.transactions.insert_one(txn_doc)
 
@@ -145,7 +177,15 @@ class InventoryService:
                         "region": region,
                         "risk_level": risk_level,
                         "anomaly_score": anomaly_score,
+                        "score_interpretation": anomaly_info.get("score_interpretation"),
+                        "score_badge": anomaly_info.get("score_badge"),
+                        "entitled_quota": anomaly_info.get("entitled_quota"),
+                        "quantity_to_quota_ratio": anomaly_info.get("quantity_to_quota_ratio"),
                         "status": "PENDING_REVIEW",
+                        "review_decision": None,
+                        "reviewed_by": None,
+                        "reviewed_at": None,
+                        "review_history": [],
                         "reason": reason,
                         "created_at": datetime.utcnow()
                     }},

@@ -4,10 +4,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI Demand Prediction Workbench | AI-Powered Smart PDS</title>
+  <title>AI Demand Forecast | AI-Powered Smart PDS</title>
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
 <body>
@@ -25,10 +24,8 @@
         <a href="beneficiaries.html" class="nav-link"><i class="icon fa-solid fa-users"></i> Beneficiaries</a>
         <a href="commodities.html" class="nav-link"><i class="icon fa-solid fa-boxes-stacked"></i> Commodities</a>
         <a href="inventory.html" class="nav-link"><i class="icon fa-solid fa-warehouse"></i> Inventory Stock</a>
-        <a href="transactions.html" class="nav-link"><i class="icon fa-solid fa-arrow-right-arrow-left"></i>
-          Transactions</a>
-        <a href="predictions.html" class="nav-link active"><i class="icon fa-solid fa-wand-magic-sparkles"></i> Demand
-          Forecast</a>
+        <a href="transactions.html" class="nav-link"><i class="icon fa-solid fa-arrow-right-arrow-left"></i> Transactions</a>
+        <a href="predictions.html" class="nav-link active"><i class="icon fa-solid fa-wand-magic-sparkles"></i> Demand Forecast</a>
         <a href="fraud.html" class="nav-link"><i class="icon fa-solid fa-shield-halved"></i> Anomaly & Fraud</a>
         <a href="reports.html" class="nav-link"><i class="icon fa-solid fa-file-excel"></i> Reports Export</a>
         <a href="about.html" class="nav-link"><i class="icon fa-solid fa-circle-info"></i> Viva Guide & About</a>
@@ -41,38 +38,52 @@
             <p id="sidebar-user-role">PDS CHIEF OFFICER</p>
           </div>
         </div>
-        <button class="btn-logout" title="Logout" onclick="handleLogout()"><i
-            class="fa-solid fa-arrow-right-from-bracket"></i></button>
+        <button class="btn-logout" title="Logout" onclick="handleLogout()"><i class="fa-solid fa-arrow-right-from-bracket"></i></button>
       </div>
     </aside>
 
     <main class="main-wrapper">
       <header class="top-navbar">
         <div class="page-title-box">
-          <h1>Machine Learning Demand Prediction Workbench</h1>
-          <p>Supervised regression forecasting using historical lags, seasonal indices, and beneficiary demographics</p>
+          <h1>Demand Forecast Workbench</h1>
+          <p>Machine learning demand inference with seasonal multipliers, configurable safety stock, and factor explainability</p>
+        </div>
+        <div class="nav-actions">
+          <button class="btn btn-secondary btn-sm" onclick="syncDatabaseValues()">
+            <i class="fa-solid fa-database"></i> Use Live DB Values
+          </button>
+          <button class="btn btn-primary btn-sm" onclick="fillProjectExample()">
+            <i class="fa-solid fa-flask"></i> Load Simulation Scenario
+          </button>
         </div>
       </header>
 
       <div class="content-body">
 
-        <!-- Two Column Layout: Predictor Form on Left, Result & Visuals on Right -->
-        <div class="charts-grid" style="grid-template-columns: 1fr 1fr;">
+        <!-- Two Column Layout: Parameters Form (Left) & Forecast Assessment (Right) -->
+        <div class="predictions-layout-grid">
 
-          <!-- Prediction Form Card -->
+          <!-- Prediction Parameters Card -->
           <div class="chart-card">
-            <div class="chart-header">
-              <h3><i class="fa-solid fa-sliders" style="color: var(--primary);"></i> Forecasting Parameters</h3>
-              <button class="btn btn-secondary btn-sm" onclick="fillProjectExample()">
-                <i class="fa-solid fa-wand-magic"></i> Load Project Scenario
-              </button>
+            <div class="chart-header" style="flex-wrap: wrap; gap: 10px;">
+              <div>
+                <h3 style="font-size: 1rem;"><i class="fa-solid fa-sliders" style="color: var(--primary);"></i> Forecasting Parameters</h3>
+              </div>
+              <div style="display: flex; gap: 6px; align-items: center;">
+                <span id="form-source-badge" class="badge badge-info" style="font-size: 0.72rem;">
+                  <i class="fa-solid fa-database"></i> Live Database Values
+                </span>
+              </div>
             </div>
 
             <form id="demand-forecast-form">
               <div class="form-row">
                 <div class="form-group">
-                  <label class="form-label" for="pred-commodity">Commodity</label>
-                  <select id="pred-commodity" class="form-control" required>
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <label class="form-label" for="pred-commodity">Commodity</label>
+                    <span id="badge-commodity" class="badge badge-info" style="font-size: 0.62rem; padding: 1px 5px;"><i class="fa-solid fa-database"></i> Catalog</span>
+                  </div>
+                  <select id="pred-commodity" class="form-control" required onchange="onParameterChange()">
                     <option value="Rice">Rice</option>
                     <option value="Wheat">Wheat</option>
                     <option value="Sugar">Sugar</option>
@@ -80,8 +91,11 @@
                   </select>
                 </div>
                 <div class="form-group">
-                  <label class="form-label" for="pred-region">Region / District</label>
-                  <select id="pred-region" class="form-control" required>
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <label class="form-label" for="pred-region">District / Depot</label>
+                    <span id="badge-region" class="badge badge-info" style="font-size: 0.62rem; padding: 1px 5px;"><i class="fa-solid fa-database"></i> Depot</span>
+                  </div>
+                  <select id="pred-region" class="form-control" required onchange="onParameterChange()">
                     <option value="Chennai">Chennai</option>
                     <option value="Coimbatore">Coimbatore</option>
                     <option value="Madurai">Madurai</option>
@@ -93,89 +107,145 @@
 
               <div class="form-row">
                 <div class="form-group">
-                  <label class="form-label" for="pred-month">Forecast Month</label>
-                  <select id="pred-month" class="form-control" required>
-                    <option value="1">January (Pongal Festival Peak)</option>
-                    <option value="2">February</option>
-                    <option value="3">March</option>
-                    <option value="4">April</option>
-                    <option value="5">May (Summer Peak)</option>
-                    <option value="6">June</option>
-                    <option value="7">July</option>
-                    <option value="8">August</option>
-                    <option value="9">September</option>
-                    <option value="10">October (Diwali Season)</option>
-                    <option value="11" selected>November</option>
-                    <option value="12">December</option>
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <label class="form-label" for="pred-month">Forecast Month</label>
+                    <span id="badge-month" class="badge badge-secondary" style="font-size: 0.62rem; padding: 1px 5px;">Seasonal Multiplier</span>
+                  </div>
+                  <select id="pred-month" class="form-control" required onchange="onFieldManualEdit('month')">
+                    <option value="1">January (Pongal Peak - 1.25x)</option>
+                    <option value="2">February (Standard - 1.00x)</option>
+                    <option value="3">March (Standard - 1.00x)</option>
+                    <option value="4">April (Standard - 1.00x)</option>
+                    <option value="5">May (Summer Peak - 1.04x)</option>
+                    <option value="6">June (Standard - 1.00x)</option>
+                    <option value="7">July (Monsoon - 0.96x)</option>
+                    <option value="8">August (Monsoon - 0.96x)</option>
+                    <option value="9">September (Monsoon - 0.96x)</option>
+                    <option value="10">October (Diwali Season - 1.12x)</option>
+                    <option value="11" selected>November (Diwali Season - 1.12x)</option>
+                    <option value="12">December (Winter Baseline - 1.00x)</option>
                   </select>
                 </div>
                 <div class="form-group">
-                  <label class="form-label" for="pred-beneficiaries">Beneficiary Card Count</label>
-                  <input type="number" id="pred-beneficiaries" class="form-control" value="12500" required>
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <label class="form-label" for="pred-year">Forecast Year</label>
+                    <span id="badge-year" class="badge badge-secondary" style="font-size: 0.62rem; padding: 1px 5px;">Forward Trend</span>
+                  </div>
+                  <input type="number" id="pred-year" class="form-control" min="2024" max="2035" value="2026" required oninput="onFieldManualEdit('year')">
                 </div>
               </div>
 
               <div class="form-row">
                 <div class="form-group">
-                  <label class="form-label" for="pred-stock">Current Stock in Depot (kg)</label>
-                  <input type="number" step="10" id="pred-stock" class="form-control" value="3800" required>
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <label class="form-label" for="pred-beneficiaries">Beneficiary Cardholders</label>
+                    <span id="badge-ben" class="badge badge-info" style="font-size: 0.62rem; padding: 1px 5px;"><i class="fa-solid fa-database"></i> Live DB</span>
+                  </div>
+                  <input type="number" id="pred-beneficiaries" class="form-control" value="12500" min="1" required oninput="onFieldManualEdit('ben')">
+                  <span id="ben-source-label" style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">Synchronized from registered cards</span>
                 </div>
                 <div class="form-group">
-                  <label class="form-label" for="pred-prev-demand">Previous Month Demand (kg)</label>
-                  <input type="number" step="10" id="pred-prev-demand" class="form-control" value="4200" required>
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <label class="form-label" for="pred-stock">Current Stock in Depot (kg)</label>
+                    <span id="badge-stock" class="badge badge-info" style="font-size: 0.62rem; padding: 1px 5px;"><i class="fa-solid fa-database"></i> Live DB</span>
+                  </div>
+                  <input type="number" step="0.5" id="pred-stock" class="form-control" value="3800" min="0" required oninput="onFieldManualEdit('stock')">
+                  <span id="stock-source-label" style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">Warehouse inventory balance</span>
                 </div>
               </div>
 
-              <button type="submit" class="btn btn-primary" style="width: 100%; padding: 14px; margin-top: 10px;"
-                id="btn-predict-demand">
-                <i class="fa-solid fa-microchip"></i> Execute ML Demand Prediction
+              <div class="form-row">
+                <div class="form-group">
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <label class="form-label" for="pred-prev-demand">Previous Demand Baseline (kg)</label>
+                    <span id="badge-prev-demand" class="badge badge-secondary" style="font-size: 0.62rem; padding: 1px 5px;">Historical Baseline</span>
+                  </div>
+                  <input type="number" step="10" id="pred-prev-demand" class="form-control" value="4200" min="0" required oninput="onFieldManualEdit('prev-demand')">
+                </div>
+                <div class="form-group">
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <label class="form-label" for="pred-safety-stock">Safety Buffer Stock (kg)</label>
+                    <span id="badge-safety-stock" class="badge badge-info" style="font-size: 0.62rem; padding: 1px 5px;"><i class="fa-solid fa-database"></i> DB Buffer</span>
+                  </div>
+                  <input type="number" step="10" id="pred-safety-stock" class="form-control" value="500" min="0" required oninput="onFieldManualEdit('safety-stock')">
+                </div>
+              </div>
+
+              <button type="submit" class="btn btn-primary" style="width: 100%; padding: 12px; margin-top: 8px;" id="btn-predict-demand">
+                <i class="fa-solid fa-microchip"></i> Calculate Demand & Procurement
               </button>
             </form>
           </div>
 
-          <!-- Prediction Result Card -->
-          <div class="chart-card" id="result-card"
-            style="display: flex; flex-direction: column; justify-content: space-between;">
-            <div class="chart-header">
-              <h3><i class="fa-solid fa-circle-nodes" style="color: var(--accent-emerald);"></i> Intelligent Inventory
-                Assessment</h3>
-              <span id="res-status-badge" class="badge badge-success">Awaiting Input</span>
-            </div>
-
-            <div id="result-display-box"
-              style="flex: 1; display: flex; flex-direction: column; justify-content: center;">
-              <div style="text-align: center; padding: 20px 0;">
-                <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 8px;">Predicted Monthly Demand
-                </p>
-                <div id="res-predicted-demand"
-                  style="font-size: 3rem; font-weight: 800; font-family: 'Outfit', sans-serif; color: #fff;">
-                  4,618 <span style="font-size: 1.2rem; color: var(--text-secondary); font-weight: 500;">kg</span>
-                </div>
+          <!-- Prediction Result & Factor Explainability Card -->
+          <div class="chart-card" id="result-card" style="display: flex; flex-direction: column;">
+            <div class="chart-header" style="margin-bottom: 12px;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <h3 style="font-size: 1rem;"><i class="fa-solid fa-chart-line" style="color: var(--accent-emerald);"></i> Forecast Assessment</h3>
               </div>
-
-              <div
-                style="background: rgba(13, 20, 36, 0.8); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 18px; margin: 15px 0;">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                  <span style="color: var(--text-secondary);">Current Warehouse Stock:</span>
-                  <strong id="res-current-stock">3,800 kg</strong>
-                </div>
-                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                  <span style="color: var(--text-secondary);">Detected Shortage:</span>
-                  <strong id="res-shortage" style="color: var(--accent-rose);">818 kg</strong>
-                </div>
-                <div
-                  style="display: flex; justify-content: space-between; padding-top: 8px; border-top: 1px dashed var(--border-subtle);">
-                  <span style="font-weight: 600; color: #fed7aa;">Recommended Procurement:</span>
-                  <strong id="res-procurement" style="color: var(--accent-amber); font-size: 1.15rem;">818 kg</strong>
-                </div>
-              </div>
-
-              <div id="res-ai-message"
-                style="padding: 12px; border-radius: var(--radius-sm); font-size: 0.85rem; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); color: #fde68a;">
-                <i class="fa-solid fa-triangle-exclamation"></i> Potential shortage: 818 kg. Recommended procurement:
-                818 kg.
+              <div style="display: flex; gap: 6px;">
+                <span id="res-source-badge" class="badge badge-info" style="font-size: 0.72rem;">Live DB Values</span>
+                <span id="res-status-badge" class="badge badge-danger">Potential Shortage</span>
               </div>
             </div>
+
+            <!-- Big KPI Number -->
+            <div style="text-align: center; padding: 14px 0; border-bottom: 1px solid var(--border-subtle);">
+              <span style="color: var(--text-muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em;">Anticipated Monthly Need</span>
+              <div id="res-predicted-demand" style="font-size: 2.8rem; font-weight: 800; font-family: 'Outfit', sans-serif; color: #fff; margin-top: 4px;">
+                4,618 <span style="font-size: 1.1rem; color: var(--text-secondary); font-weight: 500;">kg</span>
+              </div>
+              <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 2px;" id="res-model-info">
+                Model: Linear Regression • Benchmark Validated
+              </div>
+            </div>
+
+            <!-- Inventory Breakdown Grid -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 14px 0; border-bottom: 1px solid var(--border-subtle);">
+              <div style="background: rgba(255,255,255,0.02); padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+                <span style="font-size: 0.74rem; color: var(--text-muted);">Current Warehouse Stock</span>
+                <div id="res-current-stock" style="font-weight: 600; color: var(--text-primary); font-size: 1.05rem;">3,800 kg</div>
+              </div>
+              <div style="background: rgba(255,255,255,0.02); padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+                <span style="font-size: 0.74rem; color: var(--text-muted);">Safety Buffer Target</span>
+                <div id="res-safety-stock" style="font-weight: 600; color: var(--text-primary); font-size: 1.05rem;">500 kg</div>
+              </div>
+              <div style="background: rgba(255,255,255,0.02); padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+                <span style="font-size: 0.74rem; color: var(--text-muted);">Detected Shortage</span>
+                <div id="res-shortage" style="font-weight: 700; color: var(--accent-rose); font-size: 1.05rem;">818 kg</div>
+              </div>
+              <div style="background: rgba(245, 158, 11, 0.08); padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid rgba(245, 158, 11, 0.25);">
+                <span style="font-size: 0.74rem; color: #fed7aa;">Recommended Procurement</span>
+                <div id="res-procurement" style="font-weight: 700; color: var(--accent-amber); font-size: 1.05rem;">1,318 kg</div>
+              </div>
+            </div>
+
+            <!-- Explainability Summary & Factors -->
+            <div style="padding-top: 14px; flex: 1;">
+              <h4 style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 8px;">
+                <i class="fa-solid fa-brain" style="color: var(--accent-cyan);"></i> Calculation Factors & Explainability
+              </h4>
+              <p id="res-explanation-summary" style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.45; margin-bottom: 12px;">
+                Loading factor analysis...
+              </p>
+              <div id="res-factors-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                <!-- Dynamically populated factor pills -->
+              </div>
+
+              <!-- Mathematical Calculation Breakdown -->
+              <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 10px 12px; margin-top: 14px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                  <span style="font-size: 0.75rem; font-weight: 600; color: var(--accent-cyan);">
+                    <i class="fa-solid fa-calculator"></i> Step-by-Step Derivation Breakdown
+                  </span>
+                  <span style="font-size: 0.68rem; color: var(--text-muted); font-family: monospace;">Formula: max(0, (Demand + Buffer) - Stock)</span>
+                </div>
+                <div id="res-calculation-breakdown" style="font-size: 0.76rem; color: var(--text-secondary); line-height: 1.55;">
+                  <!-- Dynamically populated math breakdown -->
+                </div>
+              </div>
+            </div>
+
           </div>
 
         </div>
@@ -184,14 +254,12 @@
         <div class="data-panel" style="margin-top: 24px;">
           <div class="panel-header">
             <div>
-              <h3><i class="fa-solid fa-award" style="color: var(--accent-amber);"></i> ML Regression Models Benchmark &
-                Comparison</h3>
+              <h3 style="font-size: 1rem;"><i class="fa-solid fa-award" style="color: var(--accent-amber);"></i> ML Regression Models Benchmark & Comparison</h3>
               <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 4px;">
-                Evaluated on unseen test set using MAE, MSE, RMSE, and R² scores. The best model is loaded during Flask
-                startup.
+                Evaluated on an unseen 20% test partition without data leakage. Metrics (MAE, MSE, RMSE, R²) are derived from actual model predictions.
               </p>
             </div>
-            <span class="badge badge-success"><i class="fa-solid fa-check-double"></i> Real Test Metrics</span>
+            <span class="badge badge-success"><i class="fa-solid fa-check-double"></i> Unseen Test Set (No Leakage)</span>
           </div>
           <div class="table-responsive">
             <table class="custom-table">
@@ -201,14 +269,13 @@
                   <th>Mean Absolute Error (MAE)</th>
                   <th>Mean Squared Error (MSE)</th>
                   <th>Root Mean Squared Error (RMSE)</th>
-                  <th>R² Score</th>
-                  <th>Model Status</th>
+                  <th>Coefficient of Determination (R²)</th>
+                  <th>Production Status</th>
                 </tr>
               </thead>
               <tbody id="metrics-tbody">
                 <tr>
-                  <td colspan="6" style="text-align: center; color: var(--text-muted);">Loading benchmark metrics...
-                  </td>
+                  <td colspan="6" style="text-align: center; color: var(--text-muted);">Loading benchmark metrics...</td>
                 </tr>
               </tbody>
             </table>

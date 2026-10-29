@@ -144,3 +144,113 @@ def test_reconciliation_commodity_and_regional_shortages(client):
     assert round(abs(total_shortage - sum_comm), 2) == 0.0
     assert round(abs(total_shortage - sum_region), 2) == 0.0
 
+
+def test_model_metrics_benchmark_evaluation(client):
+    """Verifies that all 4 regression models are benchmarked with valid non-hardcoded MAE, MSE, RMSE, R²."""
+    res = client.get("/api/model-metrics")
+    assert res.status_code == 200
+    data = res.get_json()["data"]
+
+    assert "best_model" in data
+    assert "evaluation_metrics" in data
+    eval_metrics = data["evaluation_metrics"]
+
+    expected_models = ["Linear Regression", "Decision Tree", "Random Forest", "XGBoost Regressor"]
+    for m in expected_models:
+        assert m in eval_metrics, f"Model {m} missing from benchmarks"
+        metrics = eval_metrics[m]
+        assert "MAE" in metrics and metrics["MAE"] > 0
+        assert "MSE" in metrics and metrics["MSE"] > 0
+        assert "RMSE" in metrics and metrics["RMSE"] > 0
+        assert "R2" in metrics and 0.5 <= metrics["R2"] <= 1.0
+
+
+def test_selected_model_validation():
+    """Verifies that MLService validates the best model against benchmark criteria before inference."""
+    from backend.services.ml_service import MLService
+    is_valid = MLService.validate_selected_model()
+    assert is_valid is True
+    assert MLService._model_validated is True
+
+
+def test_configurable_safety_stock_procurement(client):
+    """Verifies procurement recommendation incorporates configurable safety stock."""
+    payload = {
+        "commodity": "Rice",
+        "region": "Chennai",
+        "beneficiary_count": 12500,
+        "previous_demand": 4200,
+        "current_stock": 3800,
+        "safety_stock": 500.0,
+        "month": 11,
+        "year": 2026
+    }
+
+    res = client.post("/api/predict-demand", json=payload)
+    assert res.status_code == 200
+    d = res.get_json()["data"]
+
+    pred_demand = d["predicted_demand"]
+    # With safety stock, procurement = max(0, pred_demand + safety_stock - current_stock)
+    expected_procurement = round(max(0.0, pred_demand + 500.0 - 3800), 1)
+    assert d["recommended_procurement"] == expected_procurement
+    assert d["safety_stock"] == 500.0
+
+
+def test_prediction_explainability_factors(client):
+    """Verifies demand prediction returns structured factor explainability and drivers."""
+    payload = {
+        "commodity": "Rice",
+        "region": "Chennai",
+        "beneficiary_count": 12500,
+        "previous_demand": 4200,
+        "current_stock": 3800,
+        "month": 1,  # Pongal festival month
+        "year": 2026
+    }
+
+    res = client.post("/api/predict-demand", json=payload)
+    assert res.status_code == 200
+    d = res.get_json()["data"]
+
+    assert "explanation" in d
+    exp = d["explanation"]
+    assert "summary" in exp
+    assert "factors" in exp
+    assert len(exp["factors"]) == 4
+
+    # Verify factor names
+    factor_names = [f["name"] for f in exp["factors"]]
+    assert "Demographic Scale" in factor_names
+    assert "Seasonal & Festive Index" in factor_names
+    assert "Historical Momentum" in factor_names
+    assert "Warehouse Coverage" in factor_names
+
+
+def test_scenario_vs_database_data_source_flag(client):
+    """Verifies clear distinction between user simulation scenarios and database-backed values."""
+    # Scenario 1: custom scenario
+    res1 = client.post("/api/predict-demand", json={
+        "commodity": "Rice",
+        "region": "Chennai",
+        "beneficiary_count": 15000,
+        "previous_demand": 5000,
+        "current_stock": 2000,
+        "is_custom_scenario": True
+    })
+    assert res1.status_code == 200
+    assert res1.get_json()["data"]["data_source"] == "USER_SCENARIO"
+
+    # Scenario 2: database-backed
+    res2 = client.post("/api/predict-demand", json={
+        "commodity": "Rice",
+        "region": "Chennai",
+        "beneficiary_count": 12500,
+        "previous_demand": 4200,
+        "current_stock": 3800,
+        "is_custom_scenario": False
+    })
+    assert res2.status_code == 200
+    assert res2.get_json()["data"]["data_source"] == "DATABASE_BACKED"
+
+

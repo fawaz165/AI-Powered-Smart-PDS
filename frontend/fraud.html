@@ -56,41 +56,87 @@
       <div class="content-body">
         
         <!-- Ethical AI & Administrative Notice Banner -->
-        <div class="alert-banner" style="background: linear-gradient(90deg, rgba(59, 130, 246, 0.15), rgba(139, 92, 246, 0.15)); border-color: rgba(59, 130, 246, 0.4);">
+        <div class="alert-banner" style="background: linear-gradient(90deg, rgba(59, 130, 246, 0.15), rgba(139, 92, 246, 0.15)); border-color: rgba(59, 130, 246, 0.4); margin-bottom: 20px;">
           <div class="alert-banner-left">
-            <i class="fa-solid fa-circle-info alert-icon-large" style="color: #60a5fa;"></i>
+            <i class="fa-solid fa-scale-balanced alert-icon-large" style="color: #60a5fa;"></i>
             <div class="alert-text">
-              <h4 style="color: #bfdbfe;">Administrative Audit Principle</h4>
+              <h4 style="color: #bfdbfe;">Administrative Audit & Fair Allocation Principle</h4>
               <p style="color: #93c5fd;">
-                Statistical anomalies are potential irregularities and must <strong>NOT</strong> automatically be classified as fraud without officer verification. All flagged records remain in review state.
+                Statistical anomalies flagged by the Isolation Forest are mathematical deviations, <strong>NOT unilateral proof of fraud</strong>. All flagged transactions remain in review state until an authorized officer logs an official decision with written audit rationale. Original transaction records and ML anomaly scores are permanently preserved.
               </p>
             </div>
           </div>
         </div>
 
-        <!-- Fraud Alerts Table -->
+        <!-- Fraud Alerts Table Panel -->
         <div class="data-panel">
-          <div class="panel-header">
-            <h3>Flagged Transactions Requiring Review</h3>
-            <span class="badge badge-danger" id="fraud-total-badge">0 Flagged Outliers</span>
+          <div class="panel-header" style="flex-wrap: wrap; gap: 12px;">
+            <div>
+              <h3 style="font-size: 1.05rem;">Flagged Transactions Requiring Administrative Review</h3>
+              <p style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 2px;">
+                Filter and review flagged food-grain distributions against commodity entitlements.
+              </p>
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+              <span class="badge badge-danger" id="fraud-pending-badge">0 Pending Review</span>
+              <span class="badge badge-info" id="fraud-total-badge">0 Total Outliers</span>
+            </div>
           </div>
+
+          <!-- Filter Controls -->
+          <div style="padding: 14px 20px; background: rgba(255,255,255,0.015); border-bottom: 1px solid var(--border-subtle); display: flex; gap: 14px; flex-wrap: wrap; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <label style="font-size: 0.78rem; color: var(--text-muted); font-weight: 600;" for="filter-fraud-region">Depot / District:</label>
+              <select id="filter-fraud-region" class="form-control" style="width: auto; padding: 6px 10px; font-size: 0.8rem;" onchange="loadFraudAlerts()">
+                <option value="ALL">All Districts</option>
+                <option value="Chennai">Chennai</option>
+                <option value="Coimbatore">Coimbatore</option>
+                <option value="Madurai">Madurai</option>
+                <option value="Salem">Salem</option>
+                <option value="Tiruchirappalli">Tiruchirappalli</option>
+              </select>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <label style="font-size: 0.78rem; color: var(--text-muted); font-weight: 600;" for="filter-fraud-risk">Risk Level:</label>
+              <select id="filter-fraud-risk" class="form-control" style="width: auto; padding: 6px 10px; font-size: 0.8rem;" onchange="loadFraudAlerts()">
+                <option value="ALL">All Risk Levels</option>
+                <option value="HIGH">High Risk</option>
+                <option value="MEDIUM">Medium Risk</option>
+              </select>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <label style="font-size: 0.78rem; color: var(--text-muted); font-weight: 600;" for="filter-fraud-status">Review Status:</label>
+              <select id="filter-fraud-status" class="form-control" style="width: auto; padding: 6px 10px; font-size: 0.8rem;" onchange="loadFraudAlerts()">
+                <option value="ALL">All Records</option>
+                <option value="PENDING_REVIEW" selected>Pending Review</option>
+                <option value="REVIEWED">Reviewed / Decided</option>
+              </select>
+            </div>
+
+            <button class="btn btn-secondary btn-sm" onclick="resetFraudFilters()" style="margin-left: auto;">
+              <i class="fa-solid fa-rotate-left"></i> Reset Filters
+            </button>
+          </div>
+
           <div class="table-responsive">
-            <table class="custom-table">
+            <table class="custom-table" style="min-width: 900px;">
               <thead>
                 <tr>
                   <th>Transaction ID</th>
                   <th>Beneficiary ID</th>
-                  <th>Commodity</th>
-                  <th>Quantity (kg)</th>
-                  <th>Region</th>
+                  <th>Commodity &amp; Quantity</th>
+                  <th>Depot Region</th>
                   <th>Risk Level</th>
-                  <th>Anomaly Score</th>
-                  <th>Explainable Reason</th>
+                  <th>Anomaly Score &amp; Status</th>
+                  <th>Explainable Detection Reasons</th>
+                  <th>Official Review Decision</th>
                   <th>Audit Actions</th>
                 </tr>
               </thead>
               <tbody id="fraud-alerts-tbody">
-                <tr><td colspan="9" style="text-align: center; color: var(--text-muted);">Scanning flagged transactions...</td></tr>
+                <tr><td colspan="9" style="text-align: center; color: var(--text-muted); padding: 24px;">Scanning flagged transactions...</td></tr>
               </tbody>
             </table>
           </div>
@@ -98,6 +144,66 @@
 
       </div>
     </main>
+  </div>
+
+  <!-- Official Officer Audit Review Modal -->
+  <div id="review-fraud-modal" class="modal-overlay">
+    <div class="modal-card" style="max-width: 620px;">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-gavel" style="color: var(--accent-amber);"></i> Official Administrative Review</h3>
+        <button class="modal-close" onclick="closeModal('review-fraud-modal')">&times;</button>
+      </div>
+      <form id="review-fraud-form">
+        <input type="hidden" id="rev-txn-id">
+        <div class="modal-body">
+          
+          <!-- Summary Context Box -->
+          <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <span style="font-weight: 700; color: #fff;" id="rev-modal-txn-title">TXN-0000</span>
+              <span id="rev-modal-risk-badge" class="badge badge-danger">HIGH RISK</span>
+            </div>
+            <div style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.45;">
+              <div>Beneficiary: <strong style="color: var(--text-primary);" id="rev-modal-ben">BEN000</strong> &bull; Region: <strong style="color: var(--text-primary);" id="rev-modal-region">Chennai</strong></div>
+              <div>Commodity: <strong style="color: var(--accent-cyan);" id="rev-modal-commodity">Rice</strong> &bull; Quantity: <strong style="color: var(--accent-rose);" id="rev-modal-quantity">95 kg</strong> (Entitlement: <span id="rev-modal-quota">20 kg</span>)</div>
+              <div>Isolation Forest Score: <code id="rev-modal-score" style="color: var(--accent-amber);">-0.3800</code> &bull; <span id="rev-modal-score-interp" style="color: var(--text-muted);">Severe Outlier</span></div>
+            </div>
+            <div style="font-size: 0.76rem; color: #fca5a5; margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--border-subtle);" id="rev-modal-reason">
+              Reason: Unusually high quantity exceeding normal family distribution cap
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="rev-officer-id">Reviewing Officer ID / Badge *</label>
+              <input type="text" id="rev-officer-id" class="form-control" value="OFFICER-CHN-01" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="rev-decision">Official Review Decision *</label>
+              <select id="rev-decision" class="form-control" required>
+                <option value="APPROVED_GENUINE">Approved Genuine (Special need / advance quota verified)</option>
+                <option value="DISMISSED_FALSE_POSITIVE">Dismissed False Positive (Model outlier, valid distribution)</option>
+                <option value="FLAGGED_FRAUD">Flagged as Fraud (Confirmed diversion / unauthorized card use)</option>
+                <option value="REQUIRES_INSPECTION">Requires Field Inspection (Dispatched for physical verification)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label" for="rev-reason">Mandatory Audit Justification / Written Findings *</label>
+            <textarea id="rev-reason" class="form-control" rows="3" placeholder="Provide detailed administrative justification for this review decision..." required></textarea>
+            <span style="font-size: 0.7rem; color: var(--text-muted); margin-top: 2px;">This rationale is permanently logged in the transaction audit trail.</span>
+          </div>
+
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('review-fraud-modal')">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="btn-submit-review">
+            <i class="fa-solid fa-stamp"></i> Record Official Decision
+          </button>
+        </div>
+      </form>
+    </div>
   </div>
 
   <!-- Test Anomaly Scanner Modal -->
@@ -113,15 +219,15 @@
             <div class="form-group">
               <label class="form-label" for="sim-commodity">Commodity</label>
               <select id="sim-commodity" class="form-control" required>
-                <option value="Rice">Rice (Family cap: ~20kg)</option>
-                <option value="Wheat">Wheat (Family cap: ~8kg)</option>
-                <option value="Sugar">Sugar (Family cap: ~2kg)</option>
-                <option value="Dal">Dal (Family cap: ~2kg)</option>
+                <option value="Rice">Rice (Family cap: ~20kg for PHH)</option>
+                <option value="Wheat">Wheat (Family cap: ~8kg for PHH)</option>
+                <option value="Sugar">Sugar (Family cap: ~1-2kg)</option>
+                <option value="Dal">Dal (Family cap: ~1-2kg)</option>
               </select>
             </div>
             <div class="form-group">
               <label class="form-label" for="sim-qty">Attempted Withdrawal Quantity (kg)</label>
-              <input type="number" step="1" id="sim-qty" class="form-control" value="95" required>
+              <input type="number" step="0.5" id="sim-qty" class="form-control" value="95" required>
             </div>
           </div>
 
@@ -159,6 +265,10 @@
             </div>
             <div id="sim-res-reason" style="font-size: 0.82rem; margin-top: 4px;"></div>
             <div id="sim-res-score" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 6px;"></div>
+            <div id="sim-res-interp" style="font-size: 0.72rem; color: var(--accent-cyan); margin-top: 4px;"></div>
+            <div style="font-size: 0.68rem; color: var(--text-muted); margin-top: 8px; font-style: italic;">
+              Notice: An anomaly score is an investigative flag for officer review and not proof of fraud.
+            </div>
           </div>
         </div>
         <div class="modal-footer">

@@ -36,6 +36,30 @@ def predict_demand_endpoint():
     if not data.get("region"):
         return jsonify({"status": "error", "message": "region is required"}), 400
 
+    if "month" in data:
+        try:
+            m = int(data["month"])
+            if m < 1 or m > 12:
+                return jsonify({"status": "error", "message": "Forecast month must be between 1 and 12"}), 400
+        except (ValueError, TypeError):
+            return jsonify({"status": "error", "message": "Forecast month must be an integer between 1 and 12"}), 400
+
+    if "year" in data or "forecast_year" in data:
+        try:
+            y = int(data.get("year") or data.get("forecast_year"))
+            if y < 2020 or y > 2050:
+                return jsonify({"status": "error", "message": "Forecast year must be between 2020 and 2050"}), 400
+        except (ValueError, TypeError):
+            return jsonify({"status": "error", "message": "Forecast year must be a valid 4-digit year"}), 400
+
+    if "beneficiary_count" in data:
+        try:
+            bc = int(data["beneficiary_count"])
+            if bc <= 0:
+                return jsonify({"status": "error", "message": "Beneficiary count must be a positive integer"}), 400
+        except (ValueError, TypeError):
+            return jsonify({"status": "error", "message": "Beneficiary count must be a valid integer"}), 400
+
     try:
         prediction_result = MLService.predict_demand(data)
         logger.info(
