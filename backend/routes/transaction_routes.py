@@ -3,6 +3,7 @@ from flask import Blueprint, request, jsonify
 from backend.database.mongo import get_db
 from backend.services.inventory_service import InventoryService
 from backend.services.ml_service import MLService
+from backend.services.auth_service import token_required, role_required
 from backend.utils.validators import validate_transaction_payload
 from backend.utils.logger import logger
 
@@ -54,15 +55,16 @@ def get_transaction(transaction_id):
 
 
 @transaction_bp.route("", methods=["POST"])
+@role_required("admin", "officer", "dealer")
 def create_transaction():
     """
     Executes a PDS grain distribution transaction.
-    1. Validates input payload
+    1. Validates input payload and user authorization
     2. Verifies beneficiary exists in the registry
     3. Checks monthly entitlement quota for the commodity
     4. Guards against duplicate submissions within a short time window
     5. Runs Anomaly Detection ML model
-    6. Thread-safely checks and deducts stock using InventoryService
+    6. Thread-safely and atomically checks and deducts stock using InventoryService
     7. Records transaction and any suspicious alert
     """
     data = request.get_json(silent=True) or {}
@@ -75,6 +77,14 @@ def create_transaction():
     quantity = float(data["quantity"])
     ration_shop_id = data.get("ration_shop_id", "FPS-CHN-001").strip()
     region = data.get("region", "Chennai").strip()
+
+    user = getattr(request, "user", {})
+    if user.get("role") == "dealer" and user.get("region"):
+        if user["region"].lower() != region.lower():
+            return jsonify({
+                "status": "error",
+                "message": f"Dealer authorization restricted to assigned district '{user['region']}'."
+            }), 403
 
     db = get_db()
 
@@ -175,7 +185,17 @@ def list_fraud_alerts():
     if risk_level and risk_level.upper() != "ALL":
         filter_query["risk_level"] = risk_level.upper()
     if status_filter and status_filter.upper() != "ALL":
-        filter_query["status"] = status_filter.upper()
+        sf = status_filter.upper()
+        if sf == "PENDING_REVIEW":
+            filter_query["status"] = "PENDING_REVIEW"
+        elif sf in ["VERIFIED_LEGITIMATE", "APPROVED_GENUINE"]:
+            filter_query["status"] = {"$in": ["VERIFIED_LEGITIMATE", "APPROVED_GENUINE", "DISMISSED_FALSE_POSITIVE"]}
+        elif sf in ["CONFIRMED_IRREGULARITY", "FLAGGED_FRAUD"]:
+            filter_query["status"] = {"$in": ["CONFIRMED_IRREGULARITY", "FLAGGED_FRAUD"]}
+        elif sf == "REVIEWED":
+            filter_query["status"] = {"$in": ["REVIEWED", "VERIFIED_LEGITIMATE", "CONFIRMED_IRREGULARITY", "RESOLVED", "APPROVED_GENUINE", "FLAGGED_FRAUD"]}
+        else:
+            filter_query["status"] = sf
     if commodity and commodity.upper() != "ALL":
         filter_query["commodity"] = commodity
 
@@ -211,10 +231,12 @@ def list_fraud_alerts():
 
 
 @transaction_bp.route("/fraud-alerts/<transaction_id>/review", methods=["POST"])
+@role_required("admin", "officer")
 def review_fraud_alert(transaction_id):
     """
-    Submits an official auditable review decision by an officer.
+    Submits an official auditable review decision by an authorized officer.
     Records officer ID, timestamp, decision, and audit reason without altering original transaction metrics.
+    Review statuses: Pending Review, Verified Legitimate, and Confirmed Irregularity.
     """
     db = get_db()
     tid = transaction_id.strip().upper()
@@ -235,6 +257,8 @@ def review_fraud_alert(transaction_id):
     reason = str(data.get("reason") or "").strip()
 
     valid_decisions = [
+        "VERIFIED_LEGITIMATE",
+        "CONFIRMED_IRREGULARITY",
         "APPROVED_GENUINE",
         "FLAGGED_FRAUD",
         "DISMISSED_FALSE_POSITIVE",
@@ -253,21 +277,31 @@ def review_fraud_alert(transaction_id):
             "message": "Audit reason / rationale is required (minimum 3 characters)."
         }), 400
 
+    if decision in ["VERIFIED_LEGITIMATE", "APPROVED_GENUINE", "DISMISSED_FALSE_POSITIVE"]:
+        standard_status = "VERIFIED_LEGITIMATE"
+    elif decision in ["CONFIRMED_IRREGULARITY", "FLAGGED_FRAUD"]:
+        standard_status = "CONFIRMED_IRREGULARITY"
+    elif decision == "REQUIRES_INSPECTION":
+        standard_status = "REQUIRES_INSPECTION"
+    else:
+        standard_status = "REVIEWED"
+
     reviewed_at = datetime.utcnow()
     review_record = {
         "officer_id": officer_id,
         "decision": decision,
+        "standard_status": standard_status,
         "reason": reason,
         "reviewed_at": reviewed_at,
         "previous_status": alert.get("status", "PENDING_REVIEW")
     }
 
-    # 1. Update fraud alert document
+    # 1. Update fraud alert document with review decision and standard status
     db.fraud_alerts.update_one(
         {"transaction_id": tid},
         {
             "$set": {
-                "status": "REVIEWED" if decision != "RESOLVED" else "RESOLVED",
+                "status": standard_status,
                 "review_decision": decision,
                 "review_reason": reason,
                 "reviewed_by": officer_id,
@@ -284,7 +318,8 @@ def review_fraud_alert(transaction_id):
         {"transaction_id": tid},
         {
             "$set": {
-                "review_status": decision,
+                "review_status": standard_status,
+                "review_decision": decision,
                 "reviewed_by": officer_id,
                 "reviewed_at": reviewed_at
             },
@@ -293,6 +328,7 @@ def review_fraud_alert(transaction_id):
                     "action": "ADMINISTRATIVE_FRAUD_REVIEW",
                     "officer_id": officer_id,
                     "decision": decision,
+                    "standard_status": standard_status,
                     "reason": reason,
                     "timestamp": reviewed_at
                 }
@@ -300,7 +336,7 @@ def review_fraud_alert(transaction_id):
         }
     )
 
-    logger.info(f"[Audit Review] Alert {tid} reviewed by {officer_id}: Decision={decision}, Reason={reason}")
+    logger.info(f"[Audit Review] Alert {tid} reviewed by {officer_id}: Decision={decision} (Status={standard_status}), Reason={reason}")
 
     return jsonify({
         "status": "success",
@@ -308,6 +344,7 @@ def review_fraud_alert(transaction_id):
         "data": {
             "transaction_id": tid,
             "decision": decision,
+            "status": standard_status,
             "officer_id": officer_id,
             "reviewed_at": reviewed_at.isoformat(),
             "reason": reason
@@ -316,13 +353,14 @@ def review_fraud_alert(transaction_id):
 
 
 @transaction_bp.route("/fraud-alerts/<transaction_id>/resolve", methods=["POST", "PUT"])
+@role_required("admin", "officer")
 def resolve_fraud_alert(transaction_id):
     """Marks a flagged suspicious alert as reviewed/resolved by the officer (retained for backward compatibility)."""
     data = request.get_json(silent=True) or {}
     if not data.get("reason"):
-        data["reason"] = "Officer verified and approved transaction."
+        data["reason"] = data.get("resolution_notes") or "Officer verified and approved transaction."
     if not data.get("decision"):
-        data["decision"] = "APPROVED_GENUINE"
+        data["decision"] = "VERIFIED_LEGITIMATE"
     if not data.get("officer_id"):
         data["officer_id"] = "admin"
     

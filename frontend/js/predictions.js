@@ -14,6 +14,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   await syncDatabaseValues();
   // Trigger initial forecast
   await executeDemandForecast();
+  // Load forecast audit history
+  await loadForecastHistory();
 
   const form = document.getElementById('demand-forecast-form');
   if (form) {
@@ -241,6 +243,27 @@ async function executeDemandForecast() {
         modelInfoEl.innerHTML = `<i class="fa-solid fa-circle-check" style="color:var(--accent-emerald);"></i> Pipeline Model: <strong>${escapeHtml(d.model_used || 'Linear Regression')}</strong> • Benchmark Validated`;
       }
 
+      // Confidence Interval Display
+      const conf = d.confidence_range;
+      const confRangeEl = document.getElementById('res-confidence-range');
+      if (confRangeEl && conf) {
+        confRangeEl.textContent = `${Math.round(conf.lower_bound).toLocaleString()} kg – ${Math.round(conf.upper_bound).toLocaleString()} kg (±${Math.round(conf.margin_of_error_kg || 799)} kg)`;
+      }
+
+      // Actual vs Predicted Comparison
+      const act = d.actual_comparison;
+      const actContainer = document.getElementById('res-actual-container');
+      const actText = document.getElementById('res-actual-text');
+      if (actContainer && actText) {
+        if (act && act.available) {
+          actContainer.style.display = 'block';
+          const diffSign = act.variance_kg >= 0 ? '+' : '';
+          actText.innerHTML = `Actual Ledger: <strong>${Math.round(act.actual_demand_kg).toLocaleString()} kg</strong> &bull; Variance: <strong>${diffSign}${Math.round(act.variance_kg).toLocaleString()} kg (${diffSign}${act.variance_pct}%)</strong> &bull; <em>${escapeHtml(act.interpretation)}</em>`;
+        } else {
+          actContainer.style.display = 'none';
+        }
+      }
+
       // 3. Status and Data Source Badges
       const statusBadge = document.getElementById('res-status-badge');
       updateSourceBadges(d.data_source === 'USER_SCENARIO' || isCustomScenario);
@@ -310,6 +333,7 @@ async function executeDemandForecast() {
       }
 
       showToast(`Calculated demand: ${Math.round(d.predicted_demand).toLocaleString()} kg for ${commodity} in ${region}`, 'success');
+      loadForecastHistory();
     }
   } catch (err) {
     showToast(err.message || 'Demand forecast failed', 'error');
@@ -318,6 +342,41 @@ async function executeDemandForecast() {
       btn.disabled = false;
       btn.innerHTML = '<i class="fa-solid fa-microchip"></i> Calculate Demand & Procurement';
     }
+  }
+}
+
+/**
+ * Loads and renders the archival forecast history from backend
+ */
+async function loadForecastHistory() {
+  const tbody = document.getElementById('forecast-history-tbody');
+  if (!tbody) return;
+
+  try {
+    const res = await API.getForecastHistory({ limit: 10 });
+    if (res && res.status === 'success' && Array.isArray(res.data) && res.data.length > 0) {
+      tbody.innerHTML = res.data.map(h => {
+        const dt = h.created_at ? new Date(h.created_at).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' }) : 'Recent';
+        const confStr = h.confidence_range ? `${Math.round(h.confidence_range.lower_bound).toLocaleString()} – ${Math.round(h.confidence_range.upper_bound).toLocaleString()} kg` : '±799 kg';
+        return `
+          <tr>
+            <td style="font-size:0.78rem; color:var(--text-muted);">${escapeHtml(dt)}</td>
+            <td><span class="badge badge-info">${escapeHtml(h.commodity)}</span></td>
+            <td><strong>${escapeHtml(h.region || h.district || 'Chennai')}</strong></td>
+            <td>${escapeHtml(h.month || '')}/${escapeHtml(h.year || '')}</td>
+            <td><span class="badge badge-secondary" style="font-size:0.72rem;">${escapeHtml(h.model_used || 'Linear Regression')}</span></td>
+            <td><strong style="color:#fff;">${Math.round(h.predicted_demand).toLocaleString()} kg</strong></td>
+            <td style="font-family:monospace; font-size:0.76rem; color:var(--accent-cyan);">${confStr}</td>
+            <td><strong style="color:var(--accent-amber);">${Math.round(h.recommended_procurement || 0).toLocaleString()} kg</strong></td>
+          </tr>
+        `;
+      }).join('');
+    } else {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 18px;">No forecast history records logged yet. Run a prediction to record an entry.</td></tr>';
+    }
+  } catch (err) {
+    console.warn('Could not load forecast history:', err);
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 18px;">History temporarily unavailable.</td></tr>';
   }
 }
 

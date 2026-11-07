@@ -113,10 +113,10 @@ async function loadFraudAlerts() {
         const score = typeof a.anomaly_score === 'number' ? a.anomaly_score.toFixed(4) : (a.anomaly_score || '-0.2500');
         
         let decisionBadge = '<span class="badge badge-warning"><i class="fa-solid fa-clock"></i> Pending Review</span>';
-        if (a.review_decision === 'APPROVED_GENUINE') {
-          decisionBadge = '<span class="badge badge-success"><i class="fa-solid fa-circle-check"></i> Approved Genuine</span>';
-        } else if (a.review_decision === 'FLAGGED_FRAUD') {
-          decisionBadge = '<span class="badge badge-danger"><i class="fa-solid fa-ban"></i> Confirmed Fraud</span>';
+        if (a.review_decision === 'VERIFIED_LEGITIMATE' || a.status === 'VERIFIED_LEGITIMATE' || a.review_decision === 'APPROVED_GENUINE') {
+          decisionBadge = '<span class="badge badge-success"><i class="fa-solid fa-circle-check"></i> Verified Legitimate</span>';
+        } else if (a.review_decision === 'CONFIRMED_IRREGULARITY' || a.status === 'CONFIRMED_IRREGULARITY' || a.review_decision === 'FLAGGED_FRAUD') {
+          decisionBadge = '<span class="badge badge-danger"><i class="fa-solid fa-ban"></i> Confirmed Irregularity</span>';
         } else if (a.review_decision === 'DISMISSED_FALSE_POSITIVE') {
           decisionBadge = '<span class="badge badge-secondary"><i class="fa-solid fa-circle-xmark"></i> False Positive</span>';
         } else if (a.review_decision === 'REQUIRES_INSPECTION') {

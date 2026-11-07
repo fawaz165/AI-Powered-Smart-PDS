@@ -236,7 +236,15 @@ class ReportService:
         if risk_level and risk_level.upper() != "ALL":
             filter_query["risk_level"] = risk_level.upper()
         if status and status.upper() != "ALL":
-            filter_query["status"] = status.upper()
+            st = status.upper()
+            if st in ["VERIFIED_LEGITIMATE", "APPROVED_GENUINE"]:
+                filter_query["status"] = {"$in": ["VERIFIED_LEGITIMATE", "APPROVED_GENUINE", "DISMISSED_FALSE_POSITIVE"]}
+            elif st in ["CONFIRMED_IRREGULARITY", "FLAGGED_FRAUD"]:
+                filter_query["status"] = {"$in": ["CONFIRMED_IRREGULARITY", "FLAGGED_FRAUD"]}
+            elif st == "REVIEWED":
+                filter_query["status"] = {"$in": ["REVIEWED", "VERIFIED_LEGITIMATE", "CONFIRMED_IRREGULARITY", "RESOLVED", "APPROVED_GENUINE", "FLAGGED_FRAUD"]}
+            else:
+                filter_query["status"] = st
 
         dt_start = cls._parse_date_bound(start_date, is_end=False)
         dt_end = cls._parse_date_bound(end_date, is_end=True)

@@ -1,11 +1,13 @@
 from flask import Blueprint, jsonify, send_file, request
 from backend.services.report_service import ReportService
+from backend.services.auth_service import token_required, role_required
 from backend.utils.logger import logger
 
 report_bp = Blueprint("reports", __name__, url_prefix="/api/reports")
 
 
 @report_bp.route("/inventory", methods=["GET"])
+@role_required("admin", "officer")
 def download_inventory_report():
     """Generates and triggers download for the Warehouse Inventory Excel report with optional filters."""
     try:
@@ -24,6 +26,7 @@ def download_inventory_report():
 
 
 @report_bp.route("/distribution", methods=["GET"])
+@role_required("admin", "officer")
 def download_distribution_report():
     """Generates and triggers download for the Distribution Transactions Excel report with optional filters."""
     try:
@@ -52,6 +55,7 @@ def download_distribution_report():
 
 
 @report_bp.route("/fraud", methods=["GET"])
+@role_required("admin", "officer")
 def download_fraud_report():
     """Generates and triggers download for the Fraud/Anomaly Review Excel report with optional filters."""
     try:
@@ -80,6 +84,7 @@ def download_fraud_report():
 
 
 @report_bp.route("/predictions", methods=["GET"])
+@role_required("admin", "officer")
 def download_predictions_report():
     """Generates and triggers download for the ML Demand Predictions Excel report with optional filters."""
     try:

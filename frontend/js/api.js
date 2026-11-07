@@ -194,6 +194,11 @@ const API = {
 
   getMLStatus() {
     return this.request('/ml-status');
+  },
+
+  getForecastHistory(params = {}) {
+    const query = new URLSearchParams(params).toString();
+    return this.request(`/predictions/history?${query}`);
   }
 };
 
@@ -248,11 +253,90 @@ document.addEventListener('DOMContentLoaded', () => {
     const user = API.getUser();
     if (!user) {
       window.location.href = 'index.html';
-    } else {
-      const userElem = document.getElementById('sidebar-user-name');
-      if (userElem) userElem.textContent = user.full_name || user.username;
-      const roleElem = document.getElementById('sidebar-user-role');
-      if (roleElem) roleElem.textContent = (user.role || 'Officer').toUpperCase();
+      return;
+    }
+
+    const role = (user.role || 'admin').toLowerCase();
+
+    // Role-based sidebar menu filtering
+    const dealerRestrictedPages = ['commodities.html', 'beneficiaries.html', 'fraud.html', 'reports.html'];
+    if (role === 'dealer') {
+      dealerRestrictedPages.forEach(p => {
+        document.querySelectorAll(`.sidebar-menu a[href="${p}"]`).forEach(el => {
+          if (el.parentElement) el.parentElement.style.display = 'none';
+        });
+      });
+
+      // Guard: If dealer navigates to restricted page directly
+      if (dealerRestrictedPages.includes(path)) {
+        document.body.innerHTML = `
+          <div style="display:flex; justify-content:center; align-items:center; height:100vh; background:#0a0e17; color:#fff; font-family:'Inter',sans-serif; text-align:center; padding:20px;">
+            <div style="background:#0d1322; border:1px solid rgba(255,255,255,0.08); padding:32px 40px; border-radius:12px; max-width:480px; box-shadow:0 12px 32px rgba(0,0,0,0.5);">
+              <i class="fa-solid fa-lock" style="font-size:3rem; color:#f59e0b; margin-bottom:16px;"></i>
+              <h2 style="font-size:1.35rem; margin-bottom:8px; color:#fff;">Access Restricted</h2>
+              <p style="color:#94a3b8; font-size:0.88rem; line-height:1.5; margin-bottom:20px;">
+                This module is restricted to District Officers and System Administrators. As an <strong>FPS Dealer</strong>, your permissions are focused on distributing grain and checking local inventory.
+              </p>
+              <a href="transactions.html" style="display:inline-block; background:#3b82f6; color:#fff; padding:10px 22px; border-radius:8px; text-decoration:none; font-weight:600; font-size:0.9rem;">
+                <i class="fa-solid fa-arrow-left"></i> Return to Transactions
+              </a>
+            </div>
+          </div>
+        `;
+        return;
+      }
+    }
+
+    // District Officer restrictions (e.g. cannot alter global commodity prices)
+    if (role === 'officer' && path === 'commodities.html') {
+      const addBtn = document.getElementById('btn-add-commodity');
+      if (addBtn) addBtn.style.display = 'none';
+    }
+
+    // Mount user identity & role badge in sidebar
+    const userElem = document.getElementById('sidebar-user-name');
+    if (userElem) userElem.textContent = user.full_name || user.username;
+    const roleElem = document.getElementById('sidebar-user-role');
+    if (roleElem) {
+      let roleLabel = 'ADMIN';
+      if (role === 'officer') roleLabel = 'DISTRICT OFFICER';
+      else if (role === 'dealer') roleLabel = 'FPS DEALER';
+      roleElem.textContent = roleLabel;
+    }
+
+    // Mount User Header Pill & Logout Button in Topbar
+    const headerRight = document.querySelector('.header-right') || document.querySelector('.nav-actions');
+    if (headerRight && !document.getElementById('header-user-badge')) {
+      const userBox = document.createElement('div');
+      userBox.id = 'header-user-badge';
+      userBox.style.display = 'inline-flex';
+      userBox.style.alignItems = 'center';
+      userBox.style.gap = '8px';
+      userBox.style.marginLeft = '8px';
+      userBox.style.padding = '4px 10px';
+      userBox.style.background = 'rgba(255,255,255,0.03)';
+      userBox.style.borderRadius = '20px';
+      userBox.style.border = '1px solid rgba(255,255,255,0.08)';
+      userBox.style.fontSize = '0.78rem';
+
+      let rolePillClass = 'badge-primary';
+      let roleText = 'Admin';
+      if (role === 'officer') {
+        rolePillClass = 'badge-info';
+        roleText = 'District Officer';
+      } else if (role === 'dealer') {
+        rolePillClass = 'badge-warning';
+        roleText = 'FPS Dealer';
+      }
+
+      userBox.innerHTML = `
+        <span style="color:var(--text-secondary);"><i class="fa-regular fa-circle-user" style="color:var(--primary);"></i> ${user.full_name || user.username}</span>
+        <span class="badge ${rolePillClass}" style="font-size:0.65rem; padding:2px 7px;">${roleText}</span>
+        <button onclick="handleLogout()" class="btn btn-secondary btn-sm" style="padding:2px 8px; font-size:0.72rem; border-radius:12px; margin-left:4px;" title="Sign Out">
+          <i class="fa-solid fa-power-off" style="color:#ef4444;"></i>
+        </button>
+      `;
+      headerRight.appendChild(userBox);
     }
   }
 });

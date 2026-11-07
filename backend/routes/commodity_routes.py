@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify
 import re
 from backend.database.mongo import get_db
 from backend.models.commodity import CommodityModel
-from backend.services.auth_service import token_required
+from backend.services.auth_service import token_required, role_required
 from backend.utils.validators import validate_commodity_payload
 from backend.utils.logger import logger
 
@@ -130,7 +130,7 @@ def get_commodity(commodity_code):
 
 
 @commodity_bp.route("", methods=["POST"])
-@token_required
+@role_required("admin")
 def create_commodity():
     """Registers a new commodity with validation, duplicate checks, and configurable pricing."""
     data = request.get_json(silent=True) or {}
@@ -171,7 +171,7 @@ def create_commodity():
 
 
 @commodity_bp.route("/<commodity_code>", methods=["PUT"])
-@token_required
+@role_required("admin")
 def update_commodity(commodity_code):
     """Updates commodity pricing, classification, or details."""
     data = request.get_json(silent=True) or {}
@@ -250,7 +250,7 @@ def update_commodity(commodity_code):
 
 
 @commodity_bp.route("/<commodity_code>", methods=["DELETE"])
-@token_required
+@role_required("admin")
 def delete_commodity(commodity_code):
     """
     Safely deletes a commodity.

@@ -111,7 +111,9 @@
               <select id="filter-fraud-status" class="form-control" style="width: auto; padding: 6px 10px; font-size: 0.8rem;" onchange="loadFraudAlerts()">
                 <option value="ALL">All Records</option>
                 <option value="PENDING_REVIEW" selected>Pending Review</option>
-                <option value="REVIEWED">Reviewed / Decided</option>
+                <option value="VERIFIED_LEGITIMATE">Verified Legitimate</option>
+                <option value="CONFIRMED_IRREGULARITY">Confirmed Irregularity</option>
+                <option value="REVIEWED">All Decided / Reviewed</option>
               </select>
             </div>
 
@@ -181,6 +183,8 @@
             <div class="form-group">
               <label class="form-label" for="rev-decision">Official Review Decision *</label>
               <select id="rev-decision" class="form-control" required>
+                <option value="VERIFIED_LEGITIMATE">Verified Legitimate (Authorized distribution / valid exception)</option>
+                <option value="CONFIRMED_IRREGULARITY">Confirmed Irregularity (Unauthorized diversion / fraudulent activity)</option>
                 <option value="APPROVED_GENUINE">Approved Genuine (Special need / advance quota verified)</option>
                 <option value="DISMISSED_FALSE_POSITIVE">Dismissed False Positive (Model outlier, valid distribution)</option>
                 <option value="FLAGGED_FRAUD">Flagged as Fraud (Confirmed diversion / unauthorized card use)</option>
@@ -281,6 +285,7 @@
 
   <div id="toast-container" class="toast-container"></div>
 
+  <script src="js/i18n.js"></script>
   <script src="js/api.js"></script>
   <script src="js/fraud.js"></script>
 </body>

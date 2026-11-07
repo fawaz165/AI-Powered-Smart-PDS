@@ -79,6 +79,24 @@ def predict_demand_endpoint():
         }), 500
 
 
+@ml_bp.route("/predictions/history", methods=["GET"])
+def get_prediction_history_endpoint():
+    """Returns past demand forecast history with actual demand comparisons and confidence ranges."""
+    try:
+        region = request.args.get("region", "").strip()
+        commodity = request.args.get("commodity", "").strip()
+        limit = int(request.args.get("limit", 20))
+        history = MLService.get_forecast_history(region=region, commodity=commodity, limit=limit)
+        return jsonify({
+            "status": "success",
+            "count": len(history),
+            "data": history
+        }), 200
+    except Exception as e:
+        logger.error(f"Failed to fetch forecast history: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
 @ml_bp.route("/detect-anomaly", methods=["POST"])
 def detect_anomaly_endpoint():
     """

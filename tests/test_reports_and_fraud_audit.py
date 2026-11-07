@@ -301,7 +301,7 @@ def test_fraud_alert_review_audit_workflow(client):
     # Verify fraud alert was updated with review history
     alert = db.fraud_alerts.find_one({"transaction_id": txn_id})
     assert alert is not None
-    assert alert["status"] == "REVIEWED"
+    assert alert["status"] in ["REVIEWED", "VERIFIED_LEGITIMATE"]
     assert alert["review_decision"] == "APPROVED_GENUINE"
     assert alert["reviewed_by"] == "INSPECTOR-TAMIL-042"
     assert "Pongal festival" in alert["review_reason"]

@@ -20,6 +20,8 @@ class AuthService:
         payload = {
             "sub": user_data["username"],
             "role": user_data.get("role", "admin"),
+            "region": user_data.get("region"),
+            "ration_shop_id": user_data.get("ration_shop_id"),
             "exp": int(time.time()) + expires_in_sec
         }
         payload_bytes = json.dumps(payload, separators=(',', ':')).encode('utf-8')
@@ -77,7 +79,9 @@ class AuthService:
                 "token": token,
                 "username": user["username"],
                 "role": user.get("role", "admin"),
-                "full_name": user.get("full_name", user["username"].capitalize())
+                "full_name": user.get("full_name", user["username"].capitalize()),
+                "region": user.get("region"),
+                "ration_shop_id": user.get("ration_shop_id")
             }
         return None
 
@@ -109,3 +113,34 @@ def token_required(f):
         request.user = payload
         return f(*args, **kwargs)
     return decorated
+
+
+def role_required(*allowed_roles):
+    """
+    Decorator to enforce Role-Based Access Control (RBAC).
+    Supported roles: 'admin', 'officer' (District Officer), 'dealer' (FPS Dealer).
+    """
+    normalized_allowed = set()
+    for r in allowed_roles:
+        clean_r = str(r).strip().lower()
+        normalized_allowed.add(clean_r)
+        if clean_r in ["officer", "district_officer", "district officer"]:
+            normalized_allowed.update(["officer", "district_officer", "district officer"])
+        elif clean_r in ["dealer", "fps_dealer", "fps dealer"]:
+            normalized_allowed.update(["dealer", "fps_dealer", "fps dealer"])
+
+    def decorator(f):
+        @wraps(f)
+        @token_required
+        def decorated_function(*args, **kwargs):
+            user = getattr(request, "user", {})
+            user_role = str(user.get("role", "")).strip().lower()
+            if user_role not in normalized_allowed:
+                logger.warning(f"Forbidden access: User '{user.get('sub')}' with role '{user_role}' denied on {request.path}")
+                return jsonify({
+                    "status": "error",
+                    "message": f"Access denied. User role '{user_role}' does not have permission for this operation."
+                }), 403
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator

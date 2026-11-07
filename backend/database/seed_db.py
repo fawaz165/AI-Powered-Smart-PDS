@@ -22,18 +22,49 @@ def seed_database():
     logger.info("Initializing database seed process...")
 
     # 1. Seed Administrative User
-    if db.users.count_documents({"username": "admin"}) == 0:
-        admin_doc = UserModel.create_user_doc(
-            username="admin",
-            password="admin123",
-            role="admin",
-            email="admin@smartpds.gov.in",
-            full_name="PDS Chief Administrator"
-        )
-        db.users.insert_one(admin_doc)
-        logger.info("Seeded primary admin user: admin / admin123")
-    else:
-        logger.info("Admin user already exists.")
+    # 1. Seed Roles: Admin, District Officer, and FPS Dealer
+    initial_users = [
+        {
+            "username": "admin",
+            "password": "admin123",
+            "role": "admin",
+            "email": "admin@smartpds.gov.in",
+            "full_name": "PDS Chief Administrator"
+        },
+        {
+            "username": "officer_chennai",
+            "password": "officer123",
+            "role": "officer",
+            "region": "Chennai",
+            "email": "dso.chennai@smartpds.gov.in",
+            "full_name": "Chennai District Supply Officer"
+        },
+        {
+            "username": "dealer_001",
+            "password": "dealer123",
+            "role": "dealer",
+            "region": "Chennai",
+            "ration_shop_id": "FPS-CHN-001",
+            "email": "fps001@smartpds.gov.in",
+            "full_name": "Anna Nagar FPS Dealer"
+        }
+    ]
+
+    for u in initial_users:
+        if db.users.count_documents({"username": u["username"]}) == 0:
+            user_doc = UserModel.create_user_doc(
+                username=u["username"],
+                password=u["password"],
+                role=u["role"],
+                email=u.get("email"),
+                full_name=u.get("full_name"),
+                region=u.get("region"),
+                ration_shop_id=u.get("ration_shop_id")
+            )
+            db.users.insert_one(user_doc)
+            logger.info(f"Seeded user: {u['username']} (Role: {u['role']})")
+        else:
+            logger.info(f"User {u['username']} already exists.")
 
     # 2. Seed Commodities with Configured Subsidized Prices & Official vs Demo Rates
     commodities = [

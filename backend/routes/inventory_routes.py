@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 from datetime import datetime
 from backend.database.mongo import get_db
 from backend.services.inventory_service import InventoryService
+from backend.services.auth_service import token_required, role_required
 from backend.utils.validators import validate_inventory_payload
 from backend.utils.logger import logger
 
@@ -44,6 +45,7 @@ def get_inventory_alerts():
 
 
 @inventory_bp.route("", methods=["POST"])
+@role_required("admin", "officer")
 def add_inventory():
     """Adds a new commodity/region inventory record or adjusts existing."""
     data = request.get_json(silent=True) or {}

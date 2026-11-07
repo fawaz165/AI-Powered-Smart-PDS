@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify
 from datetime import datetime
 from backend.database.mongo import get_db
 from backend.models.beneficiary import BeneficiaryModel
-from backend.services.auth_service import token_required
+from backend.services.auth_service import token_required, role_required
 from backend.utils.validators import validate_beneficiary_payload
 from backend.utils.logger import logger
 
@@ -69,7 +69,7 @@ def get_beneficiary(beneficiary_id):
 
 
 @beneficiary_bp.route("", methods=["POST"])
-@token_required
+@role_required("admin", "officer")
 def create_beneficiary():
     """Creates a new beneficiary record with input validation, duplicate rejection, and unique card number generation."""
     data = request.get_json(silent=True) or {}
@@ -118,7 +118,7 @@ def create_beneficiary():
 
 
 @beneficiary_bp.route("/<beneficiary_id>", methods=["PUT"])
-@token_required
+@role_required("admin", "officer")
 def update_beneficiary(beneficiary_id):
     """Updates an existing beneficiary record with authorization and input validation."""
     data = request.get_json(silent=True) or {}
@@ -184,7 +184,7 @@ def update_beneficiary(beneficiary_id):
 
 
 @beneficiary_bp.route("/<beneficiary_id>", methods=["DELETE"])
-@token_required
+@role_required("admin", "officer")
 def delete_beneficiary(beneficiary_id):
     """
     Safely deletes a beneficiary record.

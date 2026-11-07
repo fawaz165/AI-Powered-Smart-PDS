@@ -339,6 +339,60 @@ class MLService:
             "procurement_formula": "max(0.0, (Predicted Demand + Safety Buffer) - Current Stock)"
         }
 
+        # Mathematically reliable 95% confidence range based on genuine benchmark test RMSE
+        best_model_name = cls.get_model_metrics().get("best_model", "Linear Regression")
+        model_rmse = float(cls.get_model_metrics().get("metrics", {}).get(best_model_name, {}).get("RMSE", 407.78))
+        margin_of_error = round(1.96 * model_rmse, 1)
+        lower_bound = max(0.0, round(predicted_demand - margin_of_error, 1))
+        upper_bound = round(predicted_demand + margin_of_error, 1)
+
+        confidence_range = {
+            "confidence_level": "95%",
+            "model_rmse": model_rmse,
+            "margin_of_error_kg": margin_of_error,
+            "lower_bound_kg": lower_bound,
+            "upper_bound_kg": upper_bound,
+            "formatted_range": f"{lower_bound:,.1f} kg – {upper_bound:,.1f} kg",
+            "methodology": f"Derived from empirical unseen test RMSE ({model_rmse:.2f} kg) of {best_model_name}"
+        }
+
+        # Simple Predicted vs Actual Demand comparison when actual transaction data is available
+        actual_comparison = None
+        try:
+            db_conn = get_db()
+            agg = list(db_conn.transactions.aggregate([
+                {
+                    "$match": {
+                        "commodity": {"$regex": f"^{re.escape(commodity)}$", "$options": "i"},
+                        "region": {"$regex": f"^{re.escape(region)}$", "$options": "i"}
+                    }
+                },
+                {"$group": {"_id": None, "total_actual": {"$sum": "$quantity"}, "txn_count": {"$sum": 1}}}
+            ]))
+            if agg and agg[0].get("total_actual", 0) > 0:
+                act = round(float(agg[0]["total_actual"]), 1)
+                diff = round(predicted_demand - act, 1)
+                var_pct = round(((predicted_demand - act) / act) * 100, 1) if act > 0 else 0.0
+                actual_comparison = {
+                    "has_actual_data": True,
+                    "actual_demand_kg": act,
+                    "difference_kg": diff,
+                    "variance_percentage": var_pct,
+                    "transaction_count": agg[0].get("txn_count", 0),
+                    "comparison_summary": f"Actual recorded offtake: {act:,.1f} kg (Variance: {diff:+,.1f} kg, {var_pct:+.1f}%)"
+                }
+        except Exception as e:
+            logger.warning(f"Could not compute actual demand comparison: {e}")
+
+        if not actual_comparison:
+            actual_comparison = {
+                "has_actual_data": False,
+                "actual_demand_kg": None,
+                "difference_kg": None,
+                "variance_percentage": None,
+                "comparison_summary": "Actual distribution data not yet recorded for this horizon."
+            }
+
         result = {
             "commodity": commodity,
             "commodity_code": commodity_code,
@@ -352,6 +406,8 @@ class MLService:
             "shortage": max(0.0, shortage),
             "status": status,
             "recommended_procurement": recommended_procurement,
+            "confidence_range": confidence_range,
+            "actual_comparison": actual_comparison,
             "message": message,
             "explanation": explanation,
             "calculation_breakdown": calculation_breakdown,
@@ -371,6 +427,57 @@ class MLService:
                 logger.warning(f"Could not persist prediction audit: {e}")
 
         return result
+
+    @classmethod
+    def get_forecast_history(cls, region: str = None, commodity: str = None, limit: int = 50) -> list:
+        """
+        Retrieves historical demand forecasts with date, commodity, district, predicted demand,
+        actual comparison, and model used.
+        """
+        db = get_db()
+        filter_query = {}
+        if region and region.upper() != "ALL":
+            filter_query["region"] = region
+        if commodity and commodity.upper() != "ALL":
+            filter_query["commodity"] = commodity
+
+        records = list(db.predictions.find(filter_query, {"_id": 0}).sort("created_at", -1).limit(limit))
+        
+        # Enrich each record if actual_comparison or confidence_range missing
+        for r in records:
+            if "confidence_range" not in r:
+                pred = float(r.get("predicted_demand", 0.0))
+                margin = 799.2
+                r["confidence_range"] = {
+                    "confidence_level": "95%",
+                    "lower_bound_kg": max(0.0, round(pred - margin, 1)),
+                    "upper_bound_kg": round(pred + margin, 1),
+                    "formatted_range": f"{max(0.0, round(pred - margin, 1)):,.1f} kg – {round(pred + margin, 1):,.1f} kg"
+                }
+            if "actual_comparison" not in r:
+                r_comm = r.get("commodity", "")
+                r_reg = r.get("region", "")
+                agg = list(db.transactions.aggregate([
+                    {"$match": {"commodity": r_comm, "region": r_reg}},
+                    {"$group": {"_id": None, "total": {"$sum": "$quantity"}}}
+                ]))
+                if agg and agg[0].get("total", 0) > 0:
+                    act = round(float(agg[0]["total"]), 1)
+                    pred = float(r.get("predicted_demand", 0.0))
+                    diff = round(pred - act, 1)
+                    r["actual_comparison"] = {
+                        "has_actual_data": True,
+                        "actual_demand_kg": act,
+                        "difference_kg": diff,
+                        "variance_percentage": round(((pred - act) / act) * 100, 1)
+                    }
+                else:
+                    r["actual_comparison"] = {"has_actual_data": False, "actual_demand_kg": None}
+
+            if "created_at" in r and isinstance(r["created_at"], datetime):
+                r["created_at_formatted"] = r["created_at"].strftime("%Y-%m-%d %H:%M")
+
+        return records
 
     @classmethod
     def detect_anomaly(cls, transaction: dict = None, **kwargs) -> dict:

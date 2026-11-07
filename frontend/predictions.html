@@ -198,6 +198,18 @@
               <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 2px;" id="res-model-info">
                 Model: Linear Regression • Benchmark Validated
               </div>
+
+              <!-- Statistically Reliable 95% Confidence Interval Banner -->
+              <div id="res-confidence-container" style="display: flex; align-items: center; justify-content: space-between; background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: var(--radius-sm); padding: 6px 12px; margin-top: 10px;">
+                <span style="font-size: 0.74rem; color: #7dd3fc;"><i class="fa-solid fa-chart-line"></i> 95% Confidence Interval (&plusmn;1.96&times;RMSE):</span>
+                <span id="res-confidence-range" style="font-size: 0.78rem; font-weight: 700; color: #38bdf8; font-family: monospace;">--</span>
+              </div>
+
+              <!-- Predicted vs Actual Demand Comparison (when actuals exist) -->
+              <div id="res-actual-container" style="display: none; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: var(--radius-sm); padding: 6px 12px; margin-top: 8px; text-align: left;">
+                <div style="font-size: 0.74rem; color: #6ee7b7; font-weight: 600;"><i class="fa-solid fa-scale-balanced"></i> Predicted vs. Actual Ledger Draw:</div>
+                <div id="res-actual-text" style="font-size: 0.76rem; color: var(--text-secondary); margin-top: 2px;">--</div>
+              </div>
             </div>
 
             <!-- Inventory Breakdown Grid -->
@@ -282,12 +294,49 @@
           </div>
         </div>
 
+        <!-- Demand Forecast Audit History Panel -->
+        <div class="data-panel" style="margin-top: 24px;">
+          <div class="panel-header">
+            <div>
+              <h3 style="font-size: 1rem;"><i class="fa-solid fa-clock-rotate-left" style="color: var(--accent-cyan);"></i> Demand Forecast Audit History</h3>
+              <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 4px;">
+                Logged demand predictions with commodity, district, model used, and recommended procurement.
+              </p>
+            </div>
+            <button class="btn btn-secondary" style="font-size: 0.78rem;" onclick="loadForecastHistory()">
+              <i class="fa-solid fa-arrows-rotate"></i> Refresh History
+            </button>
+          </div>
+          <div class="table-responsive">
+            <table class="custom-table">
+              <thead>
+                <tr>
+                  <th>Predicted At</th>
+                  <th>Commodity</th>
+                  <th>District</th>
+                  <th>Period</th>
+                  <th>Model Used</th>
+                  <th>Predicted Demand</th>
+                  <th>Confidence Interval</th>
+                  <th>Procurement</th>
+                </tr>
+              </thead>
+              <tbody id="forecast-history-tbody">
+                <tr>
+                  <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 18px;">Loading forecast history...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
       </div>
     </main>
   </div>
 
   <div id="toast-container" class="toast-container"></div>
 
+  <script src="js/i18n.js"></script>
   <script src="js/api.js"></script>
   <script src="js/predictions.js"></script>
 </body>

@@ -1,6 +1,7 @@
 import threading
 import re
 from datetime import datetime
+from pymongo import ReturnDocument
 from backend.database.mongo import get_db
 from backend.models.inventory import InventoryModel
 from backend.utils.logger import logger
@@ -90,16 +91,32 @@ class InventoryService:
                     "shortfall": round(quantity - current_stock, 2)
                 }
 
-            # 2. Compute new stock safely
-            new_stock = round(current_stock - quantity, 2)
-
-            # 3. Update database inventory by exact ID
-            db.inventory.update_one(
-                {"_id": inv["_id"]},
-                {"$set": {"current_stock": new_stock, "last_updated": datetime.utcnow()}}
+            # 2. Atomic conditional stock deduction guaranteeing non-negative inventory
+            deducted_doc = db.inventory.find_one_and_update(
+                {
+                    "_id": inv["_id"],
+                    "current_stock": {"$gte": quantity}
+                },
+                {
+                    "$inc": {"current_stock": -round(quantity, 2)},
+                    "$set": {"last_updated": datetime.utcnow()}
+                },
+                return_document=ReturnDocument.AFTER
             )
+            if not deducted_doc:
+                logger.warning(
+                    f"Transaction rejected: Concurrently depleted stock for {commodity} in {region}."
+                )
+                return {
+                    "success": False,
+                    "message": f"Insufficient stock. Warehouse inventory was depleted during transaction processing.",
+                    "available_stock": 0.0,
+                    "shortfall": quantity
+                }
 
-            # 4. Generate transaction record
+            new_stock = round(float(deducted_doc.get("current_stock", 0.0)), 2)
+
+            # 3. Generate transaction record
             from backend.models.transaction import TransactionModel
             import uuid
 
@@ -131,9 +148,9 @@ class InventoryService:
                 },
                 {
                     "step": 3,
-                    "action": "STOCK_DEDUCTED",
+                    "action": "STOCK_DEDUCTED_ATOMIC",
                     "timestamp": now_dt.isoformat(),
-                    "details": f"Inventory updated from {current_stock} kg to {new_stock} kg (-{quantity} kg)"
+                    "details": f"Inventory updated atomically from {current_stock} kg to {new_stock} kg (-{quantity} kg)"
                 },
                 {
                     "step": 4,
@@ -161,7 +178,14 @@ class InventoryService:
                 remaining_stock=new_stock,
                 audit_trail=audit_events
             )
-            db.transactions.insert_one(txn_doc)
+
+            try:
+                db.transactions.insert_one(txn_doc)
+            except Exception as e:
+                # Rollback deducted stock atomically to preserve consistency
+                db.inventory.update_one({"_id": inv["_id"]}, {"$inc": {"current_stock": quantity}})
+                logger.error(f"Transaction insertion failed for {txn_id}, stock rolled back: {e}")
+                raise e
 
             # If transaction is anomalous, also log to fraud_alerts collection
             if status != "NORMAL":
