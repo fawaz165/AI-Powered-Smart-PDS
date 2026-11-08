@@ -178,7 +178,7 @@ def seed_database():
     for inv in inventory_items:
         db.inventory.update_one(
             {"commodity": inv["commodity"], "region": inv["region"]},
-            {"$set": InventoryModel.create_doc(
+            {"$setOnInsert": InventoryModel.create_doc(
                 commodity=inv["commodity"],
                 region=inv["region"],
                 current_stock=inv["current_stock"],
@@ -186,9 +186,9 @@ def seed_database():
             )},
             upsert=True
         )
-    logger.info("Seeded 20 regional inventory commodity stocks")
+    logger.info("Verified regional inventory stocks (existing records preserved)")
 
-    # 5. Seed Beneficiaries
+    # 5. Seed Beneficiaries (Preserve existing modifications)
     sample_beneficiaries = [
         {"beneficiary_id": "BEN001", "name": "Aarav Sharma", "region": "Chennai", "family_size": 4, "ration_card_type": "Priority (PHH)"},
         {"beneficiary_id": "BEN002", "name": "Meenakshi Sundaram", "region": "Chennai", "family_size": 3, "ration_card_type": "Antyodaya Anna Yojana (AAY)"},
@@ -204,7 +204,7 @@ def seed_database():
     for b in sample_beneficiaries:
         db.beneficiaries.update_one(
             {"beneficiary_id": b["beneficiary_id"]},
-            {"$set": BeneficiaryModel.create_doc(
+            {"$setOnInsert": BeneficiaryModel.create_doc(
                 beneficiary_id=b["beneficiary_id"],
                 name=b["name"],
                 region=b["region"],
@@ -213,10 +213,10 @@ def seed_database():
             )},
             upsert=True
         )
-    logger.info(f"Seeded {len(sample_beneficiaries)} sample cardholder beneficiaries")
+    logger.info(f"Verified sample cardholder beneficiaries (existing records preserved)")
 
     # 6. Seed Realistic Demonstration Transactions (All 5 Districts, Multi-Commodity)
-    # Safely purge any test artifacts if present
+    # Safely purge only test-harness artifacts
     db.transactions.delete_many({
         "$or": [
             {"region": "ConcurrentTestRegion"},
@@ -266,15 +266,15 @@ def seed_database():
     for txn in txns:
         db.transactions.update_one(
             {"transaction_id": txn["transaction_id"]},
-            {"$set": txn},
+            {"$setOnInsert": txn},
             upsert=True
         )
-    logger.info(f"Seeded {len(txns)} realistic demonstration transactions across all 5 districts")
+    logger.info(f"Verified demonstration transactions (existing records preserved)")
 
     # Also register the anomalous transaction in fraud_alerts collection
     db.fraud_alerts.update_one(
         {"transaction_id": "TXN-1006"},
-        {"$set": {
+        {"$setOnInsert": {
             "transaction_id": "TXN-1006",
             "beneficiary_id": "BEN004",
             "ration_shop_id": "FPS-CHN-001",
