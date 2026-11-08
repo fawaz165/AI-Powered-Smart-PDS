@@ -95,100 +95,64 @@ The SmartPDS platform is designed across **four logical tiers**, deployed within
 ```mermaid
 flowchart TD
     %% ========================================================
-    %% 1. PRESENTATION LAYER (CLIENT-SIDE)
+    %% 1. PRESENTATION LAYER
     %% ========================================================
-    subgraph Tier1 ["1. Presentation Layer (Vanilla JS, HTML5, CSS3, Chart.js)"]
-        direction LR
-        UI_Admin["System Administrator Dashboard"]
-        UI_Officer["District Supply Officer Portal"]
-        UI_Dealer["FPS Ration Dealer Interface"]
+    L1["<b>1. Presentation Layer</b><br>FPS Dealer Portal · Admin Dashboard · District Officer Portal"]
+
+    %% ========================================================
+    %% 2. APPLICATION LAYER - FLASK
+    %% ========================================================
+    L2["<b>2. Application Layer – Flask</b><br>REST API · Authentication & RBAC · Validation · Concurrency Control"]
+
+    %% ========================================================
+    %% 3. MACHINE LEARNING & BUSINESS LOGIC LAYER
+    %% ========================================================
+    subgraph L3 ["3. Machine Learning & Business Logic Layer"]
+        direction TB
+        ML1["Demand Forecasting"] ~~~ ML2["Fraud Detection"]
+        ML3["Inventory Management"] ~~~ ML4["Beneficiary Management"]
+        ML5["Reports, Alerts & Recommendations"]
+
+        ML1 ~~~ ML3
+        ML2 ~~~ ML4
+        ML3 ~~~ ML5
+        ML4 ~~~ ML5
     end
 
     %% ========================================================
-    %% DOCKER COMPOSE HOSTING ENVIRONMENT
+    %% 4. DATABASE LAYER - MONGODB
     %% ========================================================
-    subgraph DockerEnv ["Deployment Environment: Docker Compose (Network: pds_network)"]
-
-        subgraph AppContainer ["Application Container: smart_pds_app (Python 3.11-slim, Port 5000)"]
-            %% 2. APPLICATION & CONCURRENCY LAYER
-            subgraph Tier2 ["2. Flask REST API & Application / Concurrency Layer"]
-                direction LR
-                API_Gateway["Flask REST API Blueprints (Routing & Endpoints)"]
-                API_Auth["Authentication & RBAC Guards (JWT & Decorators)"]
-                API_Lock["Concurrency & Validation (Atomic Deductions & 60s Locks)"]
-            end
-
-            %% 3. ML & BUSINESS LOGIC LAYER
-            subgraph Tier3 ["3. Machine Learning & Business Logic Layer"]
-                direction LR
-                ML_Demand["Demand Forecasting Engine (Linear Regression & XGBoost)"]
-                ML_Fraud["Fraud Detection Engine (Isolation Forest Anomaly Scoring)"]
-                SVC_Inv["Inventory & Stock Service (Replenishment & Buffer Alerts)"]
-                SVC_Ben["Beneficiary Registry Service (Card Types & Quota Rules)"]
-                SVC_Rep["Analytical Export Service (OpenPyXL Dynamic Excel)"]
-            end
-        end
-
-        subgraph MongoContainer ["Database Container: smart_pds_mongo (MongoDB 6.0, Port 27017)"]
-            %% 4. PERSISTENCE LAYER
-            subgraph Tier4 ["4. MongoDB Persistence Layer (Database: smart_pds_db)"]
-                direction LR
-                DB_Users["users"]
-                DB_Shops["ration_shops"]
-                DB_Commodities["commodities"]
-                DB_Beneficiaries["beneficiaries"]
-                DB_Inventory["inventory"]
-                DB_Transactions["transactions"]
-                DB_Fraud["fraud_alerts"]
-                DB_Predictions["predictions"]
-            end
-
-            DB_Volume[("Named Storage Volume: mongo_data")]
-        end
-    end
+    L4["<b>4. Database Layer – MongoDB</b><br>Users · Beneficiaries · Inventory · Transactions · Predictions · Fraud Alerts · Commodities · Ration Shops"]
 
     %% ========================================================
-    %% DATA FLOW (HTTP PROTOCOL)
+    %% DEPLOYMENT & STORAGE FOOTER
     %% ========================================================
-    UI_Admin -->|HTTP / JSON Requests| API_Gateway
-    UI_Officer -->|HTTP / JSON Requests| API_Gateway
-    UI_Dealer -->|HTTP / JSON Requests| API_Gateway
-
-    API_Gateway --> API_Auth
-    API_Auth --> API_Lock
-
-    API_Lock --> ML_Demand
-    API_Lock --> ML_Fraud
-    API_Lock --> SVC_Inv
-    API_Lock --> SVC_Ben
-    API_Lock --> SVC_Rep
-
-    ML_Demand -->|Store Forecasts| DB_Predictions
-    ML_Fraud -->|Log Flagged Anomalies| DB_Fraud
-    SVC_Inv -->|Atomic Decrement with gte Filter| DB_Inventory
-    SVC_Inv -->|Record Grain Dispatches| DB_Transactions
-    SVC_Ben -->|Validate Card & Quota| DB_Beneficiaries
-    SVC_Ben -->|User Account Query| DB_Users
-    SVC_Ben -->|FPS Shop Mapping| DB_Shops
-    SVC_Inv -->|Catalog Pricing Query| DB_Commodities
-
-    DB_Inventory -.->|Persistent Storage| DB_Volume
-    DB_Transactions -.->|Persistent Storage| DB_Volume
+    L5["Persistent Storage – Docker Volume (mongo_data)<br>Deployment Environment: Docker Compose"]
 
     %% ========================================================
-    %% MINIMAL PROFESSIONAL COLOR PALETTE
+    %% FLOW ARROWS (TOP-TO-BOTTOM)
     %% ========================================================
-    classDef uiStyle fill:#F8FAFC,stroke:#0284C7,stroke-width:1.5px,color:#0F172A;
-    classDef beStyle fill:#F8FAFC,stroke:#6366F1,stroke-width:1.5px,color:#0F172A;
-    classDef prStyle fill:#F8FAFC,stroke:#0D9488,stroke-width:1.5px,color:#0F172A;
-    classDef dbStyle fill:#F8FAFC,stroke:#D97706,stroke-width:1.5px,color:#0F172A;
-    classDef volStyle fill:#F1F5F9,stroke:#475569,stroke-width:1.5px,color:#0F172A;
+    L1 -->|HTTP / REST API Requests| L2
+    L2 --> L3
+    L3 --> L4
+    L4 --> L5
 
-    class UI_Admin,UI_Officer,UI_Dealer uiStyle;
-    class API_Gateway,API_Auth,API_Lock beStyle;
-    class ML_Demand,ML_Fraud,SVC_Inv,SVC_Ben,SVC_Rep prStyle;
-    class DB_Users,DB_Shops,DB_Commodities,DB_Beneficiaries,DB_Inventory,DB_Transactions,DB_Fraud,DB_Predictions dbStyle;
-    class DB_Volume volStyle;
+    %% ========================================================
+    %% VISUAL STYLING MATCHING REFERENCE ARCHITECTURE
+    %% ========================================================
+    classDef l1Style fill:#1d4e89,stroke:#2563eb,stroke-width:1.5px,color:#ffffff;
+    classDef l2Style fill:#235347,stroke:#10b981,stroke-width:1.5px,color:#ffffff;
+    classDef l3Card fill:#ffffff,stroke:#cbd5e1,stroke-width:1.5px,color:#1e3a8a,font-weight:600;
+    classDef l4Style fill:#683b24,stroke:#9a532d,stroke-width:1.5px,color:#ffffff;
+    classDef l5Style fill:none,stroke:none,color:#64748b;
+
+    class L1 l1Style;
+    class L2 l2Style;
+    class ML1,ML2,ML3,ML4,ML5 l3Card;
+    class L4 l4Style;
+    class L5 l5Style;
+
+    style L3 fill:#5a451e,stroke:#855a18,stroke-width:1.5px,color:#ffffff;
 ```
 
 ### Architectural Layer Breakdown
