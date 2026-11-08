@@ -95,8 +95,7 @@
               <div class="card-icon" style="color: #60a5fa;"><i class="fa-solid fa-id-card"></i></div>
             </div>
             <div class="card-value" id="kpi-beneficiaries">--</div>
-            <div class="card-meta"><span class="meta-up"><i class="fa-solid fa-circle-check"></i> Active</span> Across <span id="kpi-districts-count">5</span>
-              Districts</div>
+            <div class="card-meta" id="kpi-ben-meta"><span class="meta-up"><i class="fa-solid fa-circle-check"></i> Active</span> <span id="kpi-ben-subtext">Across <span id="kpi-districts-count">5</span> Districts (Demo Baseline)</span></div>
           </div>
 
           <!-- Total Stock -->
@@ -121,8 +120,8 @@
               on historical food-demand data</div>
           </div>
 
-          <!-- Recommended Procurement -->
-          <div class="stat-card" style="--card-accent: #f59e0b;">
+          <!-- Recommended Procurement / Shortage -->
+          <div class="stat-card" style="--card-accent: #f59e0b;" id="card-shortage-procurement">
             <div class="card-top">
               <span>Shortage / Procurement</span>
               <div class="card-icon" style="color: #fbbf24;"><i class="fa-solid fa-cart-flatbed"></i></div>
@@ -150,7 +149,7 @@
               <div class="card-icon" style="color: #22d3ee;"><i class="fa-solid fa-clock-rotate-left"></i></div>
             </div>
             <div class="card-value" id="kpi-txns">--</div>
-            <div class="card-meta"><span class="meta-up"><i class="fa-solid fa-lock"></i> Thread-Safe</span> Atomic
+            <div class="card-meta" id="kpi-txns-meta"><span class="meta-up"><i class="fa-solid fa-lock"></i> Thread-Safe</span> Atomic
               Deductions</div>
           </div>
         </div>
@@ -187,7 +186,7 @@
           <div class="panel-header">
             <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
               <h3><i class="fa-solid fa-list-check" style="color: var(--accent-cyan);"></i> Recent Distribution Operations</h3>
-              <span class="badge badge-info" style="font-size: 0.72rem; padding: 0.2rem 0.5rem;"><i class="fa-solid fa-database"></i> Synthetic Demonstration Ledger</span>
+              <span class="badge badge-info" style="font-size: 0.72rem; padding: 0.2rem 0.5rem;"><i class="fa-solid fa-database"></i> Live Ledger &amp; Demo Baseline</span>
             </div>
             <div class="panel-actions">
               <button class="btn btn-secondary btn-sm" onclick="window.location.href='transactions.html'">

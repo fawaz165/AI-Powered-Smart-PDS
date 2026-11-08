@@ -148,13 +148,16 @@ def test_forecast_history_and_reliable_confidence_range(client):
     assert res_pred.status_code == 200
     data = res_pred.get_json()["data"]
 
-    # Verify confidence range
+    # Verify confidence range dynamically derived from benchmark RMSE
     assert "confidence_range" in data
     cr = data["confidence_range"]
     assert cr["confidence_level"] == "95%"
     assert cr["lower_bound_kg"] < data["predicted_demand"]
     assert cr["upper_bound_kg"] > data["predicted_demand"]
-    assert cr["margin_of_error_kg"] == 799.2  # 1.96 * 407.78
+    assert cr["margin_of_error_kg"] > 0
+    from backend.services.ml_service import MLService
+    bench_rmse = MLService.get_model_metrics().get("evaluation_metrics", {}).get("Linear Regression", {}).get("RMSE", 556.76)
+    assert cr["margin_of_error_kg"] == round(1.96 * bench_rmse, 1)
     assert "formatted_range" in cr
 
     # Verify actual demand comparison structure

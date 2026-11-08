@@ -60,22 +60,22 @@
           <div class="stat-card" style="--card-accent: #3b82f6;">
             <div class="card-top"><span>Total Stock</span><i class="fa-solid fa-boxes-stacked" style="color: #60a5fa;"></i></div>
             <div class="card-value" id="inv-total-stock">-- <span style="font-size:0.95rem;">kg</span></div>
-            <div class="card-meta">All 5 districts combined</div>
+            <div class="card-meta" id="inv-total-stock-meta">All 5 districts combined</div>
           </div>
           <div class="stat-card" style="--card-accent: #ef4444;">
             <div class="card-top"><span>Shortages</span><i class="fa-solid fa-triangle-exclamation" style="color: #f87171;"></i></div>
             <div class="card-value" id="inv-shortage-count" style="color: #f87171;">--</div>
-            <div class="card-meta">Depots below demand</div>
+            <div class="card-meta" id="inv-shortage-meta">Depots below demand</div>
           </div>
-          <div class="stat-card" style="--card-accent: #3b82f6;">
+          <div class="stat-card" style="--card-accent: #3b82f6;" title="Replenishment procurement required to satisfy predicted demand">
             <div class="card-top"><span>Procurement Required</span><i class="fa-solid fa-truck-ramp-box" style="color: #60a5fa;"></i></div>
             <div class="card-value" id="inv-total-procurement">-- <span style="font-size:0.95rem;">kg</span></div>
-            <div class="card-meta">Replenishment deficit</div>
+            <div class="card-meta" id="inv-procurement-meta">Replenishment deficit</div>
           </div>
           <div class="stat-card" style="--card-accent: #10b981;">
             <div class="card-top"><span>Sufficient Stock</span><i class="fa-solid fa-circle-check" style="color: #34d399;"></i></div>
             <div class="card-value" id="inv-sufficient-count" style="color: #34d399;">--</div>
-            <div class="card-meta">Depots with adequate stock</div>
+            <div class="card-meta" id="inv-sufficient-meta">Depots with adequate stock</div>
           </div>
         </div>
 
@@ -109,9 +109,9 @@
                   <th>District</th>
                   <th class="text-right">Current Stock</th>
                   <th class="text-right">Predicted Demand</th>
-                  <th class="text-right">Difference</th>
+                  <th class="text-right" title="Current Stock minus Predicted Demand">Difference</th>
                   <th class="text-center">Status</th>
-                  <th class="text-right">Procurement</th>
+                  <th class="text-right" title="Procurement quantity required to meet predicted demand">Procurement</th>
                   <th class="text-center">Actions</th>
                 </tr>
               </thead>
@@ -156,7 +156,8 @@
           </div>
           <div class="form-group">
             <label class="form-label" for="adjust-new-stock">New Stock Level (kg)</label>
-            <input type="number" step="1" min="0" id="adjust-new-stock" class="form-control" placeholder="e.g. 4500" required>
+            <input type="number" step="any" min="0" id="adjust-new-stock" class="form-control" placeholder="e.g. 4500" required>
+            <small style="color: var(--text-muted); font-size: 0.8rem; margin-top: 0.25rem; display: block;">Enter a non-negative warehouse quantity in kilograms.</small>
           </div>
         </div>
         <div class="modal-footer">

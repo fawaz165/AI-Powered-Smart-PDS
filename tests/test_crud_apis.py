@@ -82,10 +82,10 @@ def test_commodity_catalog_retrieval_and_rate_distinction(client):
     assert wheat["rate_type"] == "OFFICIAL_NFSA"
     assert wheat["is_verified"] is True
     assert wheat["is_demonstration"] is False
-    assert wheat["subsidized_price"] == 2.0
+    assert wheat["subsidized_price"] == 0.0
     assert wheat["market_price"] == 34.0
-    assert wheat["subsidy_amount"] == 32.0
-    assert wheat["subsidy_percentage"] == 94.12
+    assert wheat["subsidy_amount"] == 34.0
+    assert wheat["subsidy_percentage"] == 100.0
 
     sugar = comms["COM-SUG"]
     assert sugar["rate_type"] == "OFFICIAL_NFSA"
@@ -95,25 +95,29 @@ def test_commodity_catalog_retrieval_and_rate_distinction(client):
     assert sugar["market_price"] == 45.0
     assert sugar["subsidy_amount"] == 31.5
     assert sugar["subsidy_percentage"] == 70.0
+    assert sugar["category_pricing"]["AAY"] == 13.5
+    assert sugar["category_pricing"]["PHH"] == 25.0
+    assert sugar["category_pricing"]["NPHH"] == 25.0
 
-    # Synthetic demonstration rate (never labeled official)
+    # Tamil Nadu Special PDS subsidized pulse scheme
     dal = comms["COM-DAL"]
-    assert dal["rate_type"] == "DEMONSTRATION"
-    assert dal["is_verified"] is False
-    assert dal["is_demonstration"] is True
+    assert dal["rate_type"] == "STATE_SUBSIDY"
+    assert dal["is_verified"] is True
+    assert dal["is_demonstration"] is False
     assert dal["subsidized_price"] == 30.0
-    assert dal["market_price"] == 130.0
-    assert dal["subsidy_amount"] == 100.0
-    assert dal["subsidy_percentage"] == 76.92
+    assert dal["market_price"] == 140.0
+    assert dal["subsidy_amount"] == 110.0
+    assert dal["subsidy_percentage"] == 78.57
+    assert "Special PDS" in dal["official_source"]
 
     # Verify summary statistics and clearly defined averaging method
     assert "summary" in data
     summary = data["summary"]
     assert summary["total_count"] == 4
-    assert summary["official_count"] == 3
-    assert summary["demo_count"] == 1
+    assert summary["official_count"] == 4
+    assert summary["demo_count"] == 0
     assert summary["benchmarked_count"] == 4
-    assert summary["average_subsidy_discount"] == 85.3
+    assert summary["average_subsidy_discount"] == 87.1
     assert summary["averaging_method"] == "arithmetic_mean_of_valid_benchmark_discounts"
 
 

@@ -138,7 +138,8 @@ def detect_anomaly_endpoint():
 @ml_bp.route("/model-metrics", methods=["GET"])
 def get_metrics_endpoint():
     """Returns comparative model benchmark evaluation metrics (MAE, MSE, RMSE, R²)."""
-    metrics = MLService.get_model_metrics()
+    dynamic = request.args.get("dynamic", "false").lower() in ("true", "1", "yes")
+    metrics = MLService.get_model_metrics(dynamic=dynamic)
     return jsonify({
         "status": "success",
         "data": metrics

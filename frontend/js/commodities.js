@@ -227,8 +227,12 @@ function updateCommodityKPIs(commodities, summary) {
   let benchmarkedCount = 0;
 
   commodities.forEach(c => {
-    // Only verified official NFSA rates within statutory limits are counted as official
-    const isOfficialVerified = Boolean(c.rate_type === 'OFFICIAL_NFSA' && c.is_verified && !c.is_demonstration);
+    // Verified official schemes include statutory NFSA and Tamil Nadu State Welfare Subsidies (e.g. Special PDS)
+    const isOfficialVerified = Boolean(
+      (c.rate_type === 'OFFICIAL_NFSA' || c.rate_type === 'STATE_SUBSIDY') &&
+      c.is_verified &&
+      !c.is_demonstration
+    );
     if (isOfficialVerified) {
       officialCount++;
     } else {
@@ -276,7 +280,8 @@ function filterCommodities() {
     const matchSearch = !term ||
       (c.commodity_code && c.commodity_code.toLowerCase().includes(term)) ||
       (c.name && c.name.toLowerCase().includes(term)) ||
-      (c.description && c.description.toLowerCase().includes(term));
+      (c.description && c.description.toLowerCase().includes(term)) ||
+      (c.official_source && c.official_source.toLowerCase().includes(term));
 
     let matchType = true;
     if (selectedType === 'OFFICIAL_NFSA') {
@@ -310,10 +315,10 @@ function renderCommoditiesTable(items) {
     const isStateSubsidy = Boolean(c.rate_type === 'STATE_SUBSIDY');
 
     let rateBadgeHtml = '';
-    if (isOfficial) {
-      rateBadgeHtml = '<span class="badge badge-success" title="Verified statutory NFSA rate within central legal caps"><i class="fa-solid fa-certificate"></i> Verified Official NFSA</span>';
-    } else if (isStateSubsidy) {
-      rateBadgeHtml = '<span class="badge badge-purple" title="State welfare special initiative rate"><i class="fa-solid fa-landmark"></i> State Welfare Subsidy</span>';
+    if (c.commodity_code === 'COM-DAL' || isStateSubsidy) {
+      rateBadgeHtml = '<span class="badge badge-purple" title="Tamil Nadu Special Public Distribution System (Special PDS Scheme)"><i class="fa-solid fa-landmark"></i> Tamil Nadu Special PDS</span>';
+    } else if (isOfficial) {
+      rateBadgeHtml = '<span class="badge badge-success" title="Verified statutory NFSA / State Universal PDS entitlement"><i class="fa-solid fa-certificate"></i> Verified Official NFSA</span>';
     } else {
       rateBadgeHtml = '<span class="badge badge-warning" title="Synthetic simulation value - Not statutory official rate"><i class="fa-solid fa-flask"></i> Synthetic Demo Rate</span>';
     }
@@ -321,12 +326,23 @@ function renderCommoditiesTable(items) {
     const unitStr = escapeHtml(c.unit || 'kg');
     const subPriceVal = Number(c.subsidized_price || 0);
 
-    // Subsidized Price Display
-    const subPriceDisplay = subPriceVal === 0 
-      ? `<strong style="color: var(--accent-emerald);">₹ 0.00 / ${unitStr}</strong> <span class="badge badge-success" style="font-size:0.7rem; padding: 1px 5px;">Free Entitlement</span>` 
-      : `<strong style="color: var(--accent-emerald);">₹ ${subPriceVal.toFixed(2)} / ${unitStr}</strong>`;
+    // Subsidized Price Display (Supports Category-Based Sugar Pricing & Free Entitlements)
+    let subPriceDisplay = '';
+    if (c.commodity_code === 'COM-SUG' || c.category_pricing) {
+      const cp = c.category_pricing || { AAY: 13.50, PHH: 25.00, NPHH: 25.00 };
+      subPriceDisplay = `
+        <div style="display:flex; flex-direction:column; gap:2px;">
+          <div><span class="badge badge-purple" style="font-size:0.65rem; padding:1px 4px;">AAY</span> <strong style="color:var(--accent-emerald);">₹ ${Number(cp.AAY || 13.50).toFixed(2)} / ${unitStr}</strong></div>
+          <div style="font-size:0.75rem; color:var(--text-secondary);"><span class="badge badge-info" style="font-size:0.65rem; padding:1px 4px;">PHH/NPHH</span> ₹ ${Number(cp.PHH || 25.00).toFixed(2)} / ${unitStr}</div>
+        </div>
+      `;
+    } else if (subPriceVal === 0) {
+      subPriceDisplay = `<strong style="color: var(--accent-emerald);">₹ 0.00 / ${unitStr}</strong> <span class="badge badge-success" style="font-size:0.7rem; padding: 1px 5px;">Free Entitlement</span>`;
+    } else {
+      subPriceDisplay = `<strong style="color: var(--accent-emerald);">₹ ${subPriceVal.toFixed(2)} / ${unitStr}</strong>`;
+    }
 
-    // Market Benchmark & Subsidy Calculation Display
+    // Reference Open Market Benchmark & Subsidy Calculation Display
     let marketHtml = '<span style="color: var(--text-muted);">-</span>';
     if (c.market_price && c.market_price > 0) {
       const mktPriceVal = Number(c.market_price);
@@ -337,15 +353,21 @@ function renderCommoditiesTable(items) {
         ? Math.round(Number(c.subsidy_percentage))
         : Math.round((diffAmount / mktPriceVal) * 100);
       const savingsBadge = discountPct >= 100 
-        ? '<span class="badge badge-success" style="font-size:0.7rem; padding: 2px 6px;">100% Free</span>'
+        ? '<span class="badge badge-success" style="font-size:0.7rem; padding: 2px 6px;">100% Free Entitlement</span>'
         : `<span class="badge badge-info" style="font-size:0.7rem; padding: 2px 6px;">Save ₹${diffAmount.toFixed(2)} (-${discountPct}%)</span>`;
       marketHtml = `
         <div style="display:flex; flex-direction:column; gap:2px;">
           <span style="font-weight: 500;">₹ ${mktPriceVal.toFixed(2)} / ${unitStr}</span>
+          <span style="font-size:0.68rem; color:var(--text-muted);">Ref. Open Market Benchmark</span>
           <div>${savingsBadge}</div>
         </div>
       `;
     }
+
+    // Official Scheme Source Subtitle
+    const sourceHtml = c.official_source 
+      ? `<div style="font-size:0.7rem; color:var(--text-muted); margin-top:3px;"><i class="fa-solid fa-shield-halved" style="color:var(--accent-cyan); font-size:0.65rem;"></i> ${escapeHtml(c.official_source)}</div>`
+      : '';
 
     // Operational Linkages Badges
     const invCount = c.linked_inventory_count || 0;
@@ -358,6 +380,33 @@ function renderCommoditiesTable(items) {
         <i class="fa-solid fa-receipt"></i> ${txnCount} Txns
       </span>
     </div>`;
+
+    return `
+      <tr>
+        <td><code>${escapeHtml(c.commodity_code)}</code></td>
+        <td>
+          <strong style="color:var(--text-primary);">${escapeHtml(c.name)}</strong>
+          ${sourceHtml}
+        </td>
+        <td>${unitStr}</td>
+        <td>${subPriceDisplay}</td>
+        <td>${marketHtml}</td>
+        <td>${rateBadgeHtml}</td>
+        <td>${linkageHtml}</td>
+        <td>
+          <div style="display:flex; gap:6px; align-items:center;">
+            <button class="btn btn-secondary btn-sm" onclick="openEditCommodityModal('${escapeHtml(c.commodity_code)}')" title="Configure Subsidized Pricing">
+              <i class="fa-solid fa-sliders"></i>
+            </button>
+            <button class="btn btn-secondary btn-sm" onclick="promptDeleteCommodity('${escapeHtml(c.commodity_code)}', '${escapeHtml(c.name)}', ${invCount}, ${txnCount})" title="Delete Commodity" style="color:var(--accent-rose);">
+              <i class="fa-solid fa-trash-can"></i>
+            </button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
 
     return `
       <tr>

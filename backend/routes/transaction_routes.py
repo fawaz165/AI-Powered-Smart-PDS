@@ -73,10 +73,28 @@ def create_transaction():
         return jsonify({"status": "error", "message": "; ".join(errors), "errors": errors}), 400
 
     beneficiary_id = data["beneficiary_id"].strip().upper()
-    commodity = (data.get("commodity") or data.get("commodity_code", "")).strip()
+    commodity_raw = (data.get("commodity") or data.get("commodity_code", "")).strip()
     quantity = float(data["quantity"])
     ration_shop_id = data.get("ration_shop_id", "FPS-CHN-001").strip()
     region = data.get("region", "Chennai").strip()
+
+    # Canonical commodity resolution
+    comm_upper = commodity_raw.upper()
+    if comm_upper in ["COM-RIC", "RICE"]:
+        resolved_comm = "Rice"
+        commodity_code = "COM-RIC"
+    elif comm_upper in ["COM-WHT", "WHEAT"]:
+        resolved_comm = "Wheat"
+        commodity_code = "COM-WHT"
+    elif comm_upper in ["COM-SUG", "SUGAR"]:
+        resolved_comm = "Sugar"
+        commodity_code = "COM-SUG"
+    elif comm_upper in ["COM-DAL", "DAL"]:
+        resolved_comm = "Dal"
+        commodity_code = "COM-DAL"
+    else:
+        resolved_comm = commodity_raw.capitalize()
+        commodity_code = f"COM-{commodity_raw[:3].upper()}"
 
     user = getattr(request, "user", {})
     if user.get("role") == "dealer" and user.get("region"):
@@ -96,26 +114,52 @@ def create_transaction():
             "message": f"Beneficiary '{beneficiary_id}' not found in the registry. Please verify the ID."
         }), 404
 
-    family_size = ben.get("family_size", 4)
+    family_size = int(ben.get("family_size", 4))
     card_type = ben.get("ration_card_type", "Priority (PHH)")
 
-    # --- Step 2: Monthly entitlement quota check ---
-    monthly_quota = ben.get("monthly_quota", {})
-    entitled_qty = monthly_quota.get(commodity)
+    # --- Step 2: Monthly entitlement and remaining quota calculation ---
+    from backend.models.beneficiary import BeneficiaryModel
+    monthly_quota = ben.get("monthly_quota")
+    if not monthly_quota:
+        monthly_quota = BeneficiaryModel.calculate_monthly_quota(card_type, family_size)
+    entitled_qty = float(monthly_quota.get(resolved_comm, 0.0))
+
+    # Calculate already-distributed quantity for current calendar month
+    now = datetime.utcnow()
+    start_of_month = datetime(now.year, now.month, 1)
+    past_month_txns = list(db.transactions.find({
+        "beneficiary_id": beneficiary_id,
+        "$or": [
+            {"commodity": resolved_comm},
+            {"commodity_code": commodity_code}
+        ],
+        "timestamp": {"$gte": start_of_month}
+    }))
+    already_drawn = round(sum(float(t.get("quantity", 0.0)) for t in past_month_txns), 2)
+    remaining_entitlement = max(0.0, round(entitled_qty - already_drawn, 2))
+
     entitlement_warning = None
-    if entitled_qty is not None and quantity > entitled_qty:
-        entitlement_warning = (
-            f"Requested {quantity} kg exceeds monthly entitlement of {entitled_qty} kg "
-            f"for {commodity} (card type: {card_type}). "
-            f"Transaction will proceed but may be flagged."
-        )
-        logger.warning(f"[Entitlement] {beneficiary_id}: {entitlement_warning}")
+    if quantity > remaining_entitlement:
+        if remaining_entitlement == 0.0:
+            entitlement_warning = (
+                f"Beneficiary {beneficiary_id} has already exhausted the monthly {resolved_comm} quota "
+                f"({already_drawn} kg / {entitled_qty} kg drawn). Distribution exceeds monthly entitlement."
+            )
+        else:
+            entitlement_warning = (
+                f"Requested {quantity} kg exceeds monthly entitlement ({remaining_entitlement} kg remaining of {entitled_qty} kg quota, "
+                f"{already_drawn} kg already collected this month)."
+            )
+        logger.warning(f"[Entitlement Warning] {beneficiary_id}: {entitlement_warning}")
 
     # --- Step 3: Duplicate submission guard (same beneficiary + commodity + region within 60s) ---
     recent_cutoff = datetime.utcnow() - timedelta(seconds=60)
     recent_dup = db.transactions.find_one({
         "beneficiary_id": beneficiary_id,
-        "commodity": commodity,
+        "$or": [
+            {"commodity": resolved_comm},
+            {"commodity_code": commodity_code}
+        ],
         "region": region,
         "timestamp": {"$gte": recent_cutoff}
     })
@@ -123,7 +167,7 @@ def create_transaction():
         return jsonify({
             "status": "error",
             "message": (
-                f"Duplicate submission detected. A transaction for {commodity} was already "
+                f"Duplicate submission detected. A transaction for {resolved_comm} was already "
                 f"processed for {beneficiary_id} at this location within the last 60 seconds "
                 f"(Txn: {recent_dup.get('transaction_id')}). Please wait before retrying."
             )
@@ -133,21 +177,39 @@ def create_transaction():
     anomaly_result = MLService.detect_anomaly({
         "beneficiary_id": beneficiary_id,
         "ration_shop_id": ration_shop_id,
-        "commodity": commodity,
+        "commodity": resolved_comm,
+        "commodity_code": commodity_code,
         "quantity": quantity,
         "family_size": family_size,
         "card_type": card_type,
-        "region": region
+        "region": region,
+        "entitled_quota": entitled_qty,
+        "remaining_entitlement": remaining_entitlement,
+        "already_distributed": already_drawn
     })
+
+    # If quantity exceeds remaining entitlement, ensure clear anomaly explanation
+    if quantity > remaining_entitlement and anomaly_result.get("status") == "NORMAL":
+        anomaly_result["status"] = "SUSPICIOUS"
+        anomaly_result["risk_level"] = "MEDIUM" if quantity <= (entitled_qty * 1.5) else "HIGH"
+        anomaly_result["reason"] = (
+            f"Quantity ({quantity} kg) exceeds remaining monthly entitlement ({remaining_entitlement} kg) "
+            f"by {round(quantity - remaining_entitlement, 1)} kg (Monthly quota: {entitled_qty} kg, already drawn: {already_drawn} kg)"
+        )
 
     # --- Step 5: Thread-safe inventory deduction ---
     distribution_result = InventoryService.process_transaction_distribution(
-        commodity=commodity,
+        commodity=resolved_comm,
         region=region,
         quantity=quantity,
         beneficiary_id=beneficiary_id,
         ration_shop_id=ration_shop_id,
-        anomaly_info=anomaly_result
+        anomaly_info=anomaly_result,
+        entitlement_info={
+            "entitled_quota": entitled_qty,
+            "already_distributed": already_drawn,
+            "remaining_entitlement": remaining_entitlement
+        }
     )
 
     if not distribution_result.get("success"):
@@ -161,7 +223,12 @@ def create_transaction():
         "status": "success",
         "message": "Transaction distributed and recorded successfully",
         "data": distribution_result,
-        "anomaly_analysis": anomaly_result
+        "anomaly_analysis": anomaly_result,
+        "entitlement_info": {
+            "monthly_quota": entitled_qty,
+            "already_distributed": already_drawn,
+            "remaining_entitlement": remaining_entitlement
+        }
     }
     if entitlement_warning:
         response_data["entitlement_warning"] = entitlement_warning
@@ -201,22 +268,50 @@ def list_fraud_alerts():
 
     alerts = list(db.fraud_alerts.find(filter_query, {"_id": 0}).sort("created_at", -1))
     
-    # Enrich score interpretations if not already stored
+    # Enrich score interpretations and verify detection reasons against actual transaction & beneficiary entitlements
     for a in alerts:
-        score = a.get("anomaly_score", 0.0)
-        if not a.get("score_interpretation"):
-            if score >= 0.05:
-                a["score_interpretation"] = "Strong Inlier: Within normative cardholder distribution behavior."
-                a["score_badge"] = "NORMAL_INLIER"
-            elif score >= 0.0:
-                a["score_interpretation"] = "Moderate Inlier: Conforms to expected distribution profile near baseline."
-                a["score_badge"] = "BORDERLINE_NORMAL"
-            elif score >= -0.10:
-                a["score_interpretation"] = "Mild Outlier: Noticeable statistical deviation in draw quantity or frequency."
-                a["score_badge"] = "MILD_ANOMALY"
-            else:
-                a["score_interpretation"] = "Severe Outlier: Short isolation path in tree ensemble indicating extreme deviation."
-                a["score_badge"] = "SEVERE_ANOMALY"
+        score = float(a.get("anomaly_score", 0.0))
+        if score < 0:
+            a["score_interpretation"] = (
+                f"Statistical Outlier ({score:.4f} < 0): Shorter tree isolation path indicating distribution deviation. "
+                f"(Algorithmic distance measure, NOT a probability of fraud)."
+            )
+            a["score_badge"] = "SEVERE_ANOMALY" if score < -0.10 else "MILD_ANOMALY"
+        else:
+            a["score_interpretation"] = f"Normal Inlier ({score:.4f} >= 0): Conforms to expected distribution cluster."
+            a["score_badge"] = "NORMAL_INLIER"
+
+        # Verify detection reasons against beneficiary profile & entitlements if missing
+        bid = a.get("beneficiary_id")
+        comm = a.get("commodity", "Rice")
+        qty = float(a.get("quantity", 0.0))
+        if not a.get("entitled_quota") and bid:
+            try:
+                ben = db.beneficiaries.find_one({"beneficiary_id": bid})
+                if ben:
+                    quota = ben.get("monthly_quota", {}).get(comm)
+                    if quota:
+                        a["entitled_quota"] = float(quota)
+                        a["quantity_to_quota_ratio"] = round(qty / float(quota), 2)
+                        if not a.get("reason") or "exceeds" not in str(a.get("reason", "")).lower():
+                            a["reason"] = f"Quantity ({qty} kg) exceeds monthly {comm} entitlement ({quota} kg) by {a['quantity_to_quota_ratio']}x"
+            except Exception:
+                pass
+
+        # Format timestamps safely for frontend tables
+        if "created_at" in a:
+            if isinstance(a["created_at"], datetime):
+                a["created_at_formatted"] = a["created_at"].strftime("%Y-%m-%d %H:%M")
+                a["created_at"] = a["created_at"].isoformat()
+            elif isinstance(a["created_at"], str):
+                a["created_at_formatted"] = a["created_at"][:16].replace("T", " ")
+
+        if "reviewed_at" in a and a["reviewed_at"]:
+            if isinstance(a["reviewed_at"], datetime):
+                a["reviewed_at_formatted"] = a["reviewed_at"].strftime("%Y-%m-%d %H:%M")
+                a["reviewed_at"] = a["reviewed_at"].isoformat()
+            elif isinstance(a["reviewed_at"], str):
+                a["reviewed_at_formatted"] = a["reviewed_at"][:16].replace("T", " ")
 
     pending_alerts = [a for a in alerts if a.get("status", "PENDING_REVIEW") == "PENDING_REVIEW"]
     
@@ -235,7 +330,7 @@ def list_fraud_alerts():
 def review_fraud_alert(transaction_id):
     """
     Submits an official auditable review decision by an authorized officer.
-    Records officer ID, timestamp, decision, and audit reason without altering original transaction metrics.
+    Records officer ID, timestamp, decision, and audit reason/comments without altering original transaction metrics.
     Review statuses: Pending Review, Verified Legitimate, and Confirmed Irregularity.
     """
     db = get_db()
@@ -254,11 +349,12 @@ def review_fraud_alert(transaction_id):
         }), 400
 
     decision = str(data.get("decision") or "").strip().upper()
-    reason = str(data.get("reason") or "").strip()
+    reason = str(data.get("reason") or data.get("comments") or "").strip()
 
     valid_decisions = [
         "VERIFIED_LEGITIMATE",
         "CONFIRMED_IRREGULARITY",
+        "PENDING_REVIEW",
         "APPROVED_GENUINE",
         "FLAGGED_FRAUD",
         "DISMISSED_FALSE_POSITIVE",
@@ -281,6 +377,8 @@ def review_fraud_alert(transaction_id):
         standard_status = "VERIFIED_LEGITIMATE"
     elif decision in ["CONFIRMED_IRREGULARITY", "FLAGGED_FRAUD"]:
         standard_status = "CONFIRMED_IRREGULARITY"
+    elif decision == "PENDING_REVIEW":
+        standard_status = "PENDING_REVIEW"
     elif decision == "REQUIRES_INSPECTION":
         standard_status = "REQUIRES_INSPECTION"
     else:
@@ -292,7 +390,9 @@ def review_fraud_alert(transaction_id):
         "decision": decision,
         "standard_status": standard_status,
         "reason": reason,
+        "comments": reason,
         "reviewed_at": reviewed_at,
+        "reviewed_at_iso": reviewed_at.isoformat(),
         "previous_status": alert.get("status", "PENDING_REVIEW")
     }
 
@@ -304,6 +404,7 @@ def review_fraud_alert(transaction_id):
                 "status": standard_status,
                 "review_decision": decision,
                 "review_reason": reason,
+                "comments": reason,
                 "reviewed_by": officer_id,
                 "reviewed_at": reviewed_at
             },
@@ -321,7 +422,9 @@ def review_fraud_alert(transaction_id):
                 "review_status": standard_status,
                 "review_decision": decision,
                 "reviewed_by": officer_id,
-                "reviewed_at": reviewed_at
+                "reviewed_at": reviewed_at,
+                "review_reason": reason,
+                "review_comments": reason
             },
             "$push": {
                 "audit_trail": {
@@ -330,7 +433,10 @@ def review_fraud_alert(transaction_id):
                     "decision": decision,
                     "standard_status": standard_status,
                     "reason": reason,
-                    "timestamp": reviewed_at
+                    "comments": reason,
+                    "timestamp": reviewed_at,
+                    "preserved_quantity": alert.get("quantity"),
+                    "preserved_anomaly_score": alert.get("anomaly_score")
                 }
             }
         }
@@ -347,7 +453,8 @@ def review_fraud_alert(transaction_id):
             "status": standard_status,
             "officer_id": officer_id,
             "reviewed_at": reviewed_at.isoformat(),
-            "reason": reason
+            "reason": reason,
+            "comments": reason
         }
     }), 200
 

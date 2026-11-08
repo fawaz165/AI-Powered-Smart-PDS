@@ -184,8 +184,8 @@ const API = {
     });
   },
 
-  getModelMetrics() {
-    return this.request('/model-metrics');
+  getModelMetrics(dynamic = false) {
+    return this.request('/model-metrics' + (dynamic ? '?dynamic=true' : ''));
   },
 
   getAnomalyMetrics() {
@@ -304,40 +304,9 @@ document.addEventListener('DOMContentLoaded', () => {
       roleElem.textContent = roleLabel;
     }
 
-    // Mount User Header Pill & Logout Button in Topbar
-    const headerRight = document.querySelector('.header-right') || document.querySelector('.nav-actions');
-    if (headerRight && !document.getElementById('header-user-badge')) {
-      const userBox = document.createElement('div');
-      userBox.id = 'header-user-badge';
-      userBox.style.display = 'inline-flex';
-      userBox.style.alignItems = 'center';
-      userBox.style.gap = '8px';
-      userBox.style.marginLeft = '8px';
-      userBox.style.padding = '4px 10px';
-      userBox.style.background = 'rgba(255,255,255,0.03)';
-      userBox.style.borderRadius = '20px';
-      userBox.style.border = '1px solid rgba(255,255,255,0.08)';
-      userBox.style.fontSize = '0.78rem';
-
-      let rolePillClass = 'badge-primary';
-      let roleText = 'Admin';
-      if (role === 'officer') {
-        rolePillClass = 'badge-info';
-        roleText = 'District Officer';
-      } else if (role === 'dealer') {
-        rolePillClass = 'badge-warning';
-        roleText = 'FPS Dealer';
-      }
-
-      userBox.innerHTML = `
-        <span style="color:var(--text-secondary);"><i class="fa-regular fa-circle-user" style="color:var(--primary);"></i> ${user.full_name || user.username}</span>
-        <span class="badge ${rolePillClass}" style="font-size:0.65rem; padding:2px 7px;">${roleText}</span>
-        <button onclick="handleLogout()" class="btn btn-secondary btn-sm" style="padding:2px 8px; font-size:0.72rem; border-radius:12px; margin-left:4px;" title="Sign Out">
-          <i class="fa-solid fa-power-off" style="color:#ef4444;"></i>
-        </button>
-      `;
-      headerRight.appendChild(userBox);
-    }
+    // Ensure any header user badge is removed
+    const headerUserBadge = document.getElementById('header-user-badge');
+    if (headerUserBadge) headerUserBadge.remove();
   }
 });
 

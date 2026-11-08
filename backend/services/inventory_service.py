@@ -25,7 +25,15 @@ class InventoryService:
 
     @classmethod
     def update_stock(cls, commodity: str, region: str, new_stock: float):
-        """Direct administrative update of stock level."""
+        """Direct administrative update of stock level with validation preventing negative values."""
+        try:
+            new_stock = float(new_stock)
+        except (ValueError, TypeError):
+            raise ValueError("Inventory stock level must be numeric.")
+
+        if new_stock < 0:
+            raise ValueError("Inventory stock level cannot be negative.")
+
         with cls._lock:
             db = get_db()
             inv = db.inventory.find_one({
@@ -38,17 +46,18 @@ class InventoryService:
             if inv:
                 db.inventory.update_one(
                     {"_id": inv["_id"]},
-                    {"$set": {"current_stock": float(new_stock), "last_updated": datetime.utcnow()}}
+                    {"$set": {"current_stock": round(new_stock, 2), "last_updated": datetime.utcnow()}}
                 )
             else:
-                doc = InventoryModel.create_doc(commodity=commodity, region=region, current_stock=new_stock)
+                doc = InventoryModel.create_doc(commodity=commodity, region=region, current_stock=round(new_stock, 2))
                 db.inventory.insert_one(doc)
             return True
 
     @classmethod
     def process_transaction_distribution(cls, commodity: str, region: str, quantity: float,
                                          beneficiary_id: str, ration_shop_id: str,
-                                         anomaly_info: dict = None) -> dict:
+                                         anomaly_info: dict = None,
+                                         entitlement_info: dict = None) -> dict:
         """
         Thread-safely deducts grain quantity from inventory and logs transaction.
         Enforces:
@@ -160,6 +169,11 @@ class InventoryService:
                 }
             ]
 
+            entitlement_info = entitlement_info or {}
+            entitled_quota = entitlement_info.get("entitled_quota")
+            already_distributed = entitlement_info.get("already_distributed")
+            remaining_entitlement = entitlement_info.get("remaining_entitlement")
+
             txn_doc = TransactionModel.create_doc(
                 transaction_id=txn_id,
                 beneficiary_id=beneficiary_id,
@@ -176,6 +190,9 @@ class InventoryService:
                 processing_status="COMPLETED",
                 previous_stock=current_stock,
                 remaining_stock=new_stock,
+                entitled_quota=entitled_quota,
+                already_distributed=already_distributed,
+                remaining_entitlement=remaining_entitlement,
                 audit_trail=audit_events
             )
 
@@ -203,7 +220,9 @@ class InventoryService:
                         "anomaly_score": anomaly_score,
                         "score_interpretation": anomaly_info.get("score_interpretation"),
                         "score_badge": anomaly_info.get("score_badge"),
-                        "entitled_quota": anomaly_info.get("entitled_quota"),
+                        "entitled_quota": entitled_quota if entitled_quota is not None else anomaly_info.get("entitled_quota"),
+                        "remaining_entitlement": remaining_entitlement,
+                        "already_distributed": already_distributed,
                         "quantity_to_quota_ratio": anomaly_info.get("quantity_to_quota_ratio"),
                         "status": "PENDING_REVIEW",
                         "review_decision": None,
@@ -230,22 +249,37 @@ class InventoryService:
                 "quantity_distributed": quantity,
                 "previous_stock": current_stock,
                 "remaining_stock": new_stock,
+                "entitled_quota": entitled_quota,
+                "already_distributed": already_distributed,
+                "remaining_entitlement": remaining_entitlement,
                 "status": status,
                 "risk_level": risk_level,
                 "reason": reason
             }
 
     @classmethod
-    def calculate_inventory_alerts(cls, predicted_demand_map: dict = None) -> list:
+    def calculate_inventory_alerts(cls, predicted_demand_map: dict = None, include_safety_stock: bool = False,
+                                   region: str = None, commodity: str = None) -> list:
         """
         Compares current stock with buffer stock and predicted demand.
         Detects:
         - Critical shortages (stock < buffer or stock < predicted demand)
+        - Recommended procurement quantity (satisfies demand; incorporates safety stock only when configured)
         - Excess stock (stock > 1.5x predicted demand)
-        - Recommended procurement quantity
+        - Supports optional district (region) and commodity filtering.
         """
         db = get_db()
-        items = list(db.inventory.find({}, {"_id": 0}))
+        query = {}
+        if region and region.strip().upper() != "ALL":
+            query["region"] = {"$regex": f"^{re.escape(region.strip())}$", "$options": "i"}
+        if commodity and commodity.strip().upper() != "ALL":
+            comm_clean = commodity.strip()
+            query["$or"] = [
+                {"commodity": {"$regex": f"^{re.escape(comm_clean)}$", "$options": "i"}},
+                {"commodity_code": comm_clean.upper()}
+            ]
+
+        items = list(db.inventory.find(query, {"_id": 0}))
         alerts = []
 
         predicted_demand_map = predicted_demand_map or {}
@@ -256,12 +290,12 @@ class InventoryService:
             if not commodity_code:
                 code_map = {"Rice": "COM-RIC", "Wheat": "COM-WHT", "Sugar": "COM-SUG", "Dal": "COM-DAL"}
                 commodity_code = code_map.get(commodity, f"COM-{commodity[:3].upper()}")
-            region = item.get("region")
+            region_name = item.get("region")
             stock = float(item.get("current_stock", 0))
             buffer = float(item.get("buffer_stock", 500))
 
             # Look up predicted demand from explicit map or compute via MLService
-            pred_key = f"{commodity}_{region}"
+            pred_key = f"{commodity}_{region_name}"
             predicted_demand = predicted_demand_map.get(pred_key)
             if predicted_demand is None:
                 try:
@@ -276,27 +310,39 @@ class InventoryService:
                     pred_output = MLService.predict_demand({
                         "commodity": commodity,
                         "commodity_code": commodity_code,
-                        "region": region,
+                        "region": region_name,
                         "current_stock": stock,
                         "previous_demand": prev_target
                     }, save_audit=False)
                     predicted_demand = float(pred_output.get("predicted_demand", 0.0))
                 except Exception:
-                    card_count = db.beneficiaries.count_documents({"region": region}) or 500
+                    card_count = db.beneficiaries.count_documents({"region": region_name}) or 500
                     default_quota = 5.0 if commodity == "Rice" else (3.0 if commodity == "Wheat" else 1.0)
                     predicted_demand = card_count * default_quota
 
             raw_shortage = round(predicted_demand - stock, 2)
-            if raw_shortage > 0:
-                shortage = raw_shortage
-                status = "SHORTAGE"
-                recommended_procurement = shortage
-                alert_level = "CRITICAL" if stock <= buffer else "WARNING"
-                msg = f"Potential shortage of {shortage} kg detected. Recommended procurement: {recommended_procurement} kg."
+            shortage = round(max(0.0, raw_shortage), 2)
+
+            # Consistent procurement calculation: include safety buffer only when configured
+            if include_safety_stock:
+                gross_target = round(predicted_demand + buffer, 2)
+                recommended_procurement = round(max(0.0, gross_target - stock), 2)
             else:
-                shortage = 0.0
-                recommended_procurement = 0.0
-                if stock > (predicted_demand * 1.5):
+                recommended_procurement = shortage
+
+            if shortage > 0:
+                status = "SHORTAGE"
+                alert_level = "CRITICAL" if stock <= buffer else "WARNING"
+                if include_safety_stock and buffer > 0:
+                    msg = f"Potential shortage of {shortage} kg detected. Recommended procurement: {recommended_procurement} kg (satisfies demand + {buffer} kg safety buffer)."
+                else:
+                    msg = f"Potential shortage of {shortage} kg detected. Recommended procurement: {recommended_procurement} kg."
+            else:
+                if include_safety_stock and stock < (predicted_demand + buffer):
+                    status = "SHORTAGE" if recommended_procurement > 0 else "SUFFICIENT"
+                    alert_level = "WARNING"
+                    msg = f"Stock ({stock} kg) meets predicted demand ({predicted_demand} kg), but buffer deficit requires {recommended_procurement} kg replenishment."
+                elif stock > (predicted_demand * 1.5):
                     status = "EXCESS"
                     alert_level = "NOTICE"
                     excess_qty = round(stock - predicted_demand, 2)
@@ -309,12 +355,13 @@ class InventoryService:
             alerts.append({
                 "commodity": commodity,
                 "commodity_code": commodity_code,
-                "region": region,
+                "region": region_name,
                 "current_stock": round(stock, 2),
                 "predicted_demand": round(predicted_demand, 2),
                 "buffer_stock": round(buffer, 2),
                 "shortage": shortage,
                 "recommended_procurement": recommended_procurement,
+                "safety_stock_included": bool(include_safety_stock),
                 "status": status,
                 "alert_level": alert_level,
                 "message": msg

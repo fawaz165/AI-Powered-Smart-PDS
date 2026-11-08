@@ -84,11 +84,11 @@
           <div class="panel-header">
             <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
               <h3>Cardholder Directory</h3>
-              <span class="badge badge-info" style="font-size: 0.72rem; padding: 0.2rem 0.5rem;"><i class="fa-solid fa-database"></i> Synthetic Demonstration Registry</span>
+              <span class="badge badge-info" style="font-size: 0.72rem; padding: 0.2rem 0.5rem;"><i class="fa-solid fa-database"></i> Live Database Registry &amp; Demo Baseline</span>
             </div>
             <div class="panel-actions">
-              <input type="text" id="ben-search" class="form-control" placeholder="Search by name, ID, or card number..." style="width: 280px;" oninput="filterBeneficiaries()">
-              <select id="ben-filter-region" class="form-control" style="width: 170px;" onchange="filterBeneficiaries()">
+              <input type="text" id="ben-search" class="form-control" placeholder="Search by name, ID, or card number..." style="width: 280px;" oninput="onSearchOrFilterChange()">
+              <select id="ben-filter-region" class="form-control" style="width: 170px;" onchange="onSearchOrFilterChange()">
                 <option value="">All Regions</option>
                 <option value="Chennai">Chennai</option>
                 <option value="Coimbatore">Coimbatore</option>
@@ -119,6 +119,16 @@
                 <tr><td colspan="8" style="text-align: center; color: var(--text-muted);">Loading beneficiaries...</td></tr>
               </tbody>
             </table>
+          </div>
+
+          <!-- Pagination Bar -->
+          <div id="ben-pagination-container" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-top: 1px solid var(--border-subtle); flex-wrap: wrap; gap: 10px;">
+            <div style="font-size: 0.8rem; color: var(--text-muted);" id="ben-pagination-info">
+              Showing 0 to 0 of 0 cardholders
+            </div>
+            <div style="display: flex; gap: 6px; align-items: center;" id="ben-pagination-controls">
+              <!-- Dynamically populated buttons -->
+            </div>
           </div>
         </div>
       </div>
@@ -187,6 +197,74 @@
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" onclick="closeModal('add-beneficiary-modal')">Cancel</button>
           <button type="submit" class="btn btn-primary"><i class="fa-solid fa-save"></i> Save Beneficiary</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Edit Beneficiary -->
+  <div id="edit-beneficiary-modal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-user-pen" style="color: var(--accent-cyan);"></i> Edit Cardholder Beneficiary</h3>
+        <button class="modal-close" onclick="closeModal('edit-beneficiary-modal')">&times;</button>
+      </div>
+      <form id="edit-beneficiary-form">
+        <input type="hidden" id="edit-ben-id">
+        <div class="modal-body">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="edit-ben-id-display">Beneficiary ID</label>
+              <input type="text" id="edit-ben-id-display" class="form-control" disabled style="opacity: 0.7; cursor: not-allowed;">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="edit-ben-name">Full Name *</label>
+              <input type="text" id="edit-ben-name" class="form-control" placeholder="e.g. Ramesh Kumar" required minlength="2" maxlength="100">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="edit-ben-region">Region *</label>
+              <select id="edit-ben-region" class="form-control" required>
+                <option value="Chennai">Chennai</option>
+                <option value="Coimbatore">Coimbatore</option>
+                <option value="Madurai">Madurai</option>
+                <option value="Salem">Salem</option>
+                <option value="Tiruchirappalli">Tiruchirappalli</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="edit-ben-size">Family Size *</label>
+              <input type="number" id="edit-ben-size" class="form-control" min="1" max="25" required oninput="updateEditEntitlementPreview()">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="edit-ben-type">Ration Card Type *</label>
+              <select id="edit-ben-type" class="form-control" required onchange="updateEditEntitlementPreview()">
+                <option value="Priority (PHH)">Priority Household (PHH)</option>
+                <option value="Antyodaya Anna Yojana (AAY)">Antyodaya Anna Yojana (AAY)</option>
+                <option value="Non-Priority (NPHH)">Non-Priority (NPHH)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="edit-ben-card-num">Ration Card Number *</label>
+              <input type="text" id="edit-ben-card-num" class="form-control" required pattern="^[A-Za-z0-9\-_]{3,35}$">
+            </div>
+          </div>
+
+          <div class="form-group" style="background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.75rem 1rem; margin-top: 0.5rem;">
+            <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.25rem;">
+              <i class="fa-solid fa-calculator" style="color: var(--accent-cyan);"></i> Recomputed Monthly Entitlement Preview:
+            </div>
+            <div id="edit-entitlement-preview" style="font-size: 0.85rem; color: var(--text-primary); font-weight: 500;">
+              Rice: 20kg &bull; Wheat: 8kg &bull; Sugar: 1kg &bull; Dal: 1kg
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('edit-beneficiary-modal')">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="btn-save-edit-ben"><i class="fa-solid fa-check"></i> Save Changes</button>
         </div>
       </form>
     </div>

@@ -10,3 +10,6 @@ htmlcov/
 tests/
 reports/*.xlsx
 node_modules/
+unused_files_backup/
+scratch/
+backend/ml/backup_original/

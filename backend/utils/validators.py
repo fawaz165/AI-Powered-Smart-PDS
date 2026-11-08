@@ -141,6 +141,13 @@ def validate_inventory_payload(data):
             errors.append("current_stock cannot be negative")
     except (ValueError, TypeError):
         errors.append("current_stock must be a valid numeric value")
+    if "buffer_stock" in data and data["buffer_stock"] is not None:
+        try:
+            buf = float(data["buffer_stock"])
+            if buf < 0:
+                errors.append("buffer_stock cannot be negative")
+        except (ValueError, TypeError):
+            errors.append("buffer_stock must be a valid numeric value")
     return errors
 
 

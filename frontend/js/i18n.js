@@ -155,44 +155,13 @@ const I18n = {
     });
   },
 
-  updateTogglePill() {
-    const lang = this.getLanguage();
+  removeLanguageToggle() {
     const btn = document.getElementById('btn-i18n-toggle');
-    if (btn) {
-      if (lang === 'ta') {
-        btn.innerHTML = `<i class="fa-solid fa-language"></i> தமிழ் (TA)`;
-        btn.title = "Switch to English";
-      } else {
-        btn.innerHTML = `<i class="fa-solid fa-language"></i> English (EN)`;
-        btn.title = "தமிழுக்கு மாறுக";
-      }
-    }
-  },
-
-  mountLanguageToggle() {
-    if (document.getElementById('btn-i18n-toggle')) return;
-
-    // Look for top header or actions container
-    const target = document.querySelector('.header-right') || document.querySelector('.nav-actions') || document.querySelector('.top-nav');
-    if (!target) return;
-
-    const btn = document.createElement('button');
-    btn.id = 'btn-i18n-toggle';
-    btn.className = 'btn btn-secondary btn-sm';
-    btn.style.marginRight = '8px';
-    btn.style.fontSize = '0.78rem';
-    btn.style.padding = '6px 10px';
-    btn.style.display = 'inline-flex';
-    btn.style.alignItems = 'center';
-    btn.style.gap = '6px';
-    btn.onclick = () => this.toggleLanguage();
-
-    target.insertBefore(btn, target.firstChild);
-    this.updateTogglePill();
+    if (btn) btn.remove();
   },
 
   init() {
-    this.mountLanguageToggle();
+    this.removeLanguageToggle();
     this.applyTranslations();
   }
 };

@@ -4,6 +4,7 @@ FROM python:3.11-slim
 # Prevent Python from writing .pyc files to disk and buffering stdout/stderr
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
 ENV PORT=5000
 ENV FLASK_ENV=production
 ENV MONGO_URI=mongodb://mongo:27017/smart_pds_db
@@ -25,15 +26,22 @@ RUN pip install --no-cache-dir -r /app/backend/requirements.txt
 # Copy application source code
 COPY . /app/
 
-# Generate dataset, train models, and seed database (if artifacts don't exist)
+# Generate dataset, train models, and serialize artifacts
 RUN python backend/ml/data/generate_pds_data.py && \
     python backend/ml/train_demand_model.py && \
     python backend/ml/train_anomaly_model.py
 
+# Create non-root system user and configure file permissions
+RUN useradd -m -u 10001 -s /bin/bash pdsuser && \
+    chown -R pdsuser:pdsuser /app
+
+# Switch to non-root execution
+USER pdsuser
+
 # Expose server port
 EXPOSE 5000
 
-# Health check
+# Health check using installed curl
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD curl -f http://localhost:5000/api/health || exit 1
 

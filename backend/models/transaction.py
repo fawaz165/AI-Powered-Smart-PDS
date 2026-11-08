@@ -8,7 +8,8 @@ class TransactionModel:
                    region="Chennai", timestamp=None, status="NORMAL", risk_level="LOW",
                    anomaly_score=0.0, reason=None, commodity_code=None,
                    processing_status="COMPLETED", audit_trail=None,
-                   previous_stock=None, remaining_stock=None):
+                   previous_stock=None, remaining_stock=None,
+                   entitled_quota=None, already_distributed=None, remaining_entitlement=None):
         comm_name = commodity.strip()
         code = (commodity_code or (
             "COM-RIC" if comm_name.lower() == "rice" else (
@@ -22,6 +23,7 @@ class TransactionModel:
 
         now = timestamp or datetime.utcnow()
         default_audit = [{
+            "step": 1,
             "action": "TRANSACTION_INITIALIZED",
             "timestamp": now.isoformat() if isinstance(now, datetime) else str(now),
             "status": processing_status,
@@ -45,5 +47,8 @@ class TransactionModel:
             "processing_status": processing_status,
             "previous_stock": previous_stock,
             "remaining_stock": remaining_stock,
+            "entitled_quota": float(entitled_quota) if entitled_quota is not None else None,
+            "already_distributed": float(already_distributed) if already_distributed is not None else None,
+            "remaining_entitlement": float(remaining_entitlement) if remaining_entitlement is not None else None,
             "audit_trail": audit_trail if audit_trail is not None else default_audit
         }

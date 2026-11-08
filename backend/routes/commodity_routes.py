@@ -46,11 +46,32 @@ def list_commodities():
             c["subsidy_percentage"] = 0.0
 
         if "rate_type" not in c:
-            c["rate_type"] = "OFFICIAL_NFSA" if ccode in ["COM-RIC", "COM-WHT", "COM-SUG"] else "DEMONSTRATION"
+            c["rate_type"] = "OFFICIAL_NFSA" if ccode in ["COM-RIC", "COM-WHT", "COM-SUG"] else ("STATE_SUBSIDY" if ccode == "COM-DAL" else "DEMONSTRATION")
 
-        is_official = (c["rate_type"] == "OFFICIAL_NFSA")
-        c["is_verified"] = bool(is_official and (ccode in ["COM-RIC", "COM-WHT", "COM-SUG"] or sub_price <= 13.5) and not c.get("is_demonstration", False))
+        is_official = (c["rate_type"] in ["OFFICIAL_NFSA", "STATE_SUBSIDY"])
+        c["is_verified"] = bool(is_official and not c.get("is_demonstration", False) and (
+            ccode in ["COM-RIC", "COM-WHT", "COM-SUG", "COM-DAL"] or sub_price <= 30.0
+        ))
         c["is_demonstration"] = bool(c.get("is_demonstration", False) or c["rate_type"] == "DEMONSTRATION")
+
+        # Category-based pricing fallback
+        if not c.get("category_pricing"):
+            if ccode == "COM-SUG":
+                c["category_pricing"] = {"AAY": 13.50, "PHH": 25.00, "NPHH": 25.00}
+            elif ccode in ["COM-RIC", "COM-WHT"]:
+                c["category_pricing"] = {"AAY": 0.0, "PHH": 0.0, "NPHH": 0.0}
+            elif ccode == "COM-DAL":
+                c["category_pricing"] = {"AAY": 30.0, "PHH": 30.0, "NPHH": 30.0}
+
+        # Official scheme source fallback
+        if not c.get("official_source"):
+            source_map = {
+                "COM-RIC": "Tamil Nadu Universal PDS & NFSA (Free Rice Scheme)",
+                "COM-WHT": "Tamil Nadu PDS & PMGKAY (Free Entitlement for eligible cardholders)",
+                "COM-SUG": "Central AAY Scheme (₹13.50/kg) & TNPDS State Order (₹25.00/kg for other cards)",
+                "COM-DAL": "Tamil Nadu Special Public Distribution System (Special PDS Scheme, ₹30.00/kg)"
+            }
+            c["official_source"] = source_map.get(ccode, "National Food Security Act (NFSA)" if c["rate_type"] == "OFFICIAL_NFSA" else "Tamil Nadu State Welfare Order")
 
     # Dynamic summary statistics across valid catalog records
     valid_benchmark_discounts = []
@@ -122,9 +143,26 @@ def get_commodity(commodity_code):
         com["subsidy_amount"] = 0.0
         com["subsidy_percentage"] = 0.0
 
-    is_official = (com.get("rate_type") == "OFFICIAL_NFSA")
-    com["is_verified"] = bool(is_official and (ccode in ["COM-RIC", "COM-WHT", "COM-SUG"] or sub_price <= 13.5) and not com.get("is_demonstration", False))
+    is_official = (com.get("rate_type") in ["OFFICIAL_NFSA", "STATE_SUBSIDY"])
+    com["is_verified"] = bool(is_official and (ccode in ["COM-RIC", "COM-WHT", "COM-SUG", "COM-DAL"] or sub_price <= 30.0) and not com.get("is_demonstration", False))
     com["is_demonstration"] = bool(com.get("is_demonstration", False) or com.get("rate_type") == "DEMONSTRATION")
+
+    if not com.get("category_pricing"):
+        if ccode == "COM-SUG":
+            com["category_pricing"] = {"AAY": 13.50, "PHH": 25.00, "NPHH": 25.00}
+        elif ccode in ["COM-RIC", "COM-WHT"]:
+            com["category_pricing"] = {"AAY": 0.0, "PHH": 0.0, "NPHH": 0.0}
+        elif ccode == "COM-DAL":
+            com["category_pricing"] = {"AAY": 30.0, "PHH": 30.0, "NPHH": 30.0}
+
+    if not com.get("official_source"):
+        source_map = {
+            "COM-RIC": "Tamil Nadu Universal PDS & NFSA (Free Rice Scheme)",
+            "COM-WHT": "Tamil Nadu PDS & PMGKAY (Free Entitlement for eligible cardholders)",
+            "COM-SUG": "Central AAY Scheme (₹13.50/kg) & TNPDS State Order (₹25.00/kg for other cards)",
+            "COM-DAL": "Tamil Nadu Special Public Distribution System (Special PDS Scheme, ₹30.00/kg)"
+        }
+        com["official_source"] = source_map.get(ccode, "National Food Security Act (NFSA)" if com.get("rate_type") == "OFFICIAL_NFSA" else "Tamil Nadu State Welfare Order")
 
     return jsonify({"status": "success", "data": com}), 200
 
@@ -227,10 +265,15 @@ def update_commodity(commodity_code):
         update_fields["subsidy_amount"] = round(max(0.0, eff_mkt - eff_sub), 2)
         update_fields["subsidy_percentage"] = round(min(100.0, max(0.0, ((eff_mkt - eff_sub) / eff_mkt) * 100)), 2) if eff_mkt > 0 else 0.0
 
-    is_official = (eff_rate == "OFFICIAL_NFSA")
-    is_verified = bool(is_official and (code in ["COM-RIC", "COM-WHT", "COM-SUG"] or eff_sub <= 13.5))
+    is_official = (eff_rate in ["OFFICIAL_NFSA", "STATE_SUBSIDY"])
+    is_verified = bool(is_official and (code in ["COM-RIC", "COM-WHT", "COM-SUG", "COM-DAL"] or eff_sub <= 30.0))
     update_fields["is_verified"] = is_verified
     update_fields["is_demonstration"] = bool(eff_rate == "DEMONSTRATION")
+
+    if "category_pricing" in data and isinstance(data["category_pricing"], dict):
+        update_fields["category_pricing"] = data["category_pricing"]
+    if "official_source" in data and data["official_source"]:
+        update_fields["official_source"] = data["official_source"].strip()
 
     if "description" in data:
         update_fields["description"] = data["description"].strip()

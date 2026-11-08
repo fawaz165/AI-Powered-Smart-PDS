@@ -56,13 +56,53 @@
       <div class="content-body">
         
         <!-- Ethical AI & Administrative Notice Banner -->
-        <div class="alert-banner" style="background: linear-gradient(90deg, rgba(59, 130, 246, 0.15), rgba(139, 92, 246, 0.15)); border-color: rgba(59, 130, 246, 0.4); margin-bottom: 20px;">
+        <div class="alert-banner" style="background: linear-gradient(90deg, rgba(59, 130, 246, 0.15), rgba(139, 92, 246, 0.15)); border-color: rgba(59, 130, 246, 0.4); margin-bottom: 16px;">
           <div class="alert-banner-left">
             <i class="fa-solid fa-scale-balanced alert-icon-large" style="color: #60a5fa;"></i>
             <div class="alert-text">
-              <h4 style="color: #bfdbfe;">Administrative Audit & Fair Allocation Principle</h4>
+              <h4 style="color: #bfdbfe;">Administrative Audit &amp; Fair Allocation Principle</h4>
               <p style="color: #93c5fd;">
                 Statistical anomalies flagged by the Isolation Forest are mathematical deviations, <strong>NOT unilateral proof of fraud</strong>. All flagged transactions remain in review state until an authorized officer logs an official decision with written audit rationale. Original transaction records and ML anomaly scores are permanently preserved.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Anomaly Score & Explainability Guide -->
+        <div class="explainability-guide-card">
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+            <div style="font-size: 0.84rem; font-weight: 700; color: #fff;">
+              <i class="fa-solid fa-circle-question" style="color: var(--accent-cyan); margin-right: 6px;"></i>
+              Understanding Isolation Forest Anomaly Scores &bull; <span style="color: var(--accent-amber); font-weight: 600;">Continuous Distance, NOT Fraud Probability</span>
+            </div>
+            <span class="badge badge-info" style="font-size: 0.68rem;"><i class="fa-solid fa-microchip"></i> Unsupervised Isolation Forest (100 Trees)</span>
+          </div>
+          <div class="explainability-guide-grid">
+            <div class="explainability-guide-item">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                <strong style="color: var(--accent-rose); font-size: 0.78rem;"><i class="fa-solid fa-arrow-down"></i> Score &lt; 0 (Negative)</strong>
+                <span class="badge badge-danger" style="font-size: 0.64rem;">Statistical Outlier</span>
+              </div>
+              <p style="font-size: 0.73rem; color: var(--text-secondary); line-height: 1.4; margin: 0;">
+                Points isolated with <strong>fewer tree splits (shorter path lengths)</strong> in the ensemble. Indicates abnormal quantity, off-hours timing, or irregular draw frequency.
+              </p>
+            </div>
+            <div class="explainability-guide-item">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                <strong style="color: var(--accent-emerald); font-size: 0.78rem;"><i class="fa-solid fa-arrow-up"></i> Score &ge; 0 (Positive)</strong>
+                <span class="badge badge-success" style="font-size: 0.64rem;">Normal Inlier</span>
+              </div>
+              <p style="font-size: 0.73rem; color: var(--text-secondary); line-height: 1.4; margin: 0;">
+                Points requiring <strong>deep tree partitioning (longer path lengths)</strong>. Conforms to standard registered cardholder quotas, operating hours, and standard distribution cadence.
+              </p>
+            </div>
+            <div class="explainability-guide-item">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                <strong style="color: #60a5fa; font-size: 0.78rem;"><i class="fa-solid fa-shield-halved"></i> Ethical AI Compliance</strong>
+                <span class="badge badge-info" style="font-size: 0.64rem;">Human In The Loop</span>
+              </div>
+              <p style="font-size: 0.73rem; color: var(--text-secondary); line-height: 1.4; margin: 0;">
+                <strong>Never treat score as a fraud percentage:</strong> A score of -0.38 is a geometric distance offset, NOT a 38% probability. Human verification with written comments is mandatory.
               </p>
             </div>
           </div>
@@ -74,7 +114,7 @@
             <div>
               <h3 style="font-size: 1.05rem;">Flagged Transactions Requiring Administrative Review</h3>
               <p style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 2px;">
-                Filter and review flagged food-grain distributions against commodity entitlements.
+                Review flagged distributions against card entitlements, timestamps, and model scores.
               </p>
             </div>
             <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
@@ -123,18 +163,18 @@
           </div>
 
           <div class="table-responsive">
-            <table class="custom-table" style="min-width: 900px;">
+            <table class="fraud-console-table">
               <thead>
                 <tr>
-                  <th>Transaction ID</th>
+                  <th>Transaction ID &amp; Time</th>
                   <th>Beneficiary ID</th>
-                  <th>Commodity &amp; Quantity</th>
-                  <th>Depot Region</th>
+                  <th>Commodity &amp; Draw</th>
+                  <th>District</th>
                   <th>Risk Level</th>
-                  <th>Anomaly Score &amp; Status</th>
+                  <th>Isolation Forest Score</th>
                   <th>Explainable Detection Reasons</th>
-                  <th>Official Review Decision</th>
-                  <th>Audit Actions</th>
+                  <th>Review Decision &amp; Status</th>
+                  <th class="col-actions">Audit Actions</th>
                 </tr>
               </thead>
               <tbody id="fraud-alerts-tbody">
@@ -162,16 +202,26 @@
           <!-- Summary Context Box -->
           <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 16px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-              <span style="font-weight: 700; color: #fff;" id="rev-modal-txn-title">TXN-0000</span>
+              <span style="font-weight: 700; color: #fff; font-family: monospace;" id="rev-modal-txn-title">TXN-0000</span>
               <span id="rev-modal-risk-badge" class="badge badge-danger">HIGH RISK</span>
             </div>
             <div style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.45;">
-              <div>Beneficiary: <strong style="color: var(--text-primary);" id="rev-modal-ben">BEN000</strong> &bull; Region: <strong style="color: var(--text-primary);" id="rev-modal-region">Chennai</strong></div>
-              <div>Commodity: <strong style="color: var(--accent-cyan);" id="rev-modal-commodity">Rice</strong> &bull; Quantity: <strong style="color: var(--accent-rose);" id="rev-modal-quantity">95 kg</strong> (Entitlement: <span id="rev-modal-quota">20 kg</span>)</div>
-              <div>Isolation Forest Score: <code id="rev-modal-score" style="color: var(--accent-amber);">-0.3800</code> &bull; <span id="rev-modal-score-interp" style="color: var(--text-muted);">Severe Outlier</span></div>
+              <div>Beneficiary: <strong style="color: var(--text-primary); font-family: monospace;" id="rev-modal-ben">BEN000</strong> &bull; Region: <strong style="color: var(--text-primary);" id="rev-modal-region">Chennai</strong> &bull; Timestamp: <span id="rev-modal-time" style="color: var(--text-muted);">2026-11-07</span></div>
+              <div>Commodity: <strong style="color: var(--accent-cyan);" id="rev-modal-commodity">Rice</strong> &bull; Quantity: <strong style="color: var(--accent-rose);" id="rev-modal-quantity">95 kg</strong> &bull; Entitlement Cap: <strong id="rev-modal-quota" style="color: var(--text-primary);">20 kg</strong></div>
             </div>
-            <div style="font-size: 0.76rem; color: #fca5a5; margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--border-subtle);" id="rev-modal-reason">
-              Reason: Unusually high quantity exceeding normal family distribution cap
+            
+            <!-- Score Explainability Callout -->
+            <div style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: var(--radius-sm); padding: 8px 12px; margin-top: 8px;">
+              <div style="font-size: 0.74rem; color: #7dd3fc; font-weight: 600;">
+                <i class="fa-solid fa-microchip"></i> Isolation Forest Decision Score: <code id="rev-modal-score" style="color: #38bdf8; font-weight: 700;">-0.3800</code> &bull; <span id="rev-modal-score-interp">Severe Outlier</span>
+              </div>
+              <div style="font-size: 0.70rem; color: var(--text-muted); margin-top: 2px;">
+                Negative values (&lt;0) indicate shorter tree isolation paths (fewer splits required). This is an unsupervised deviation measure, <strong>NOT a fraud probability</strong>.
+              </div>
+            </div>
+
+            <div style="font-size: 0.76rem; color: #fca5a5; margin-top: 8px; padding-top: 6px; border-top: 1px dashed var(--border-subtle);" id="rev-modal-reason">
+              Detection Reason: Unusually high quantity exceeding normal family distribution cap
             </div>
           </div>
 
@@ -183,20 +233,30 @@
             <div class="form-group">
               <label class="form-label" for="rev-decision">Official Review Decision *</label>
               <select id="rev-decision" class="form-control" required>
-                <option value="VERIFIED_LEGITIMATE">Verified Legitimate (Authorized distribution / valid exception)</option>
+                <option value="VERIFIED_LEGITIMATE" selected>Verified Legitimate (Authorized distribution / valid exception)</option>
                 <option value="CONFIRMED_IRREGULARITY">Confirmed Irregularity (Unauthorized diversion / fraudulent activity)</option>
-                <option value="APPROVED_GENUINE">Approved Genuine (Special need / advance quota verified)</option>
+                <option value="PENDING_REVIEW">Pending Review (Keep under active investigation)</option>
+                <option value="APPROVED_GENUINE">Approved Genuine (Special emergency / festival quota authorized)</option>
                 <option value="DISMISSED_FALSE_POSITIVE">Dismissed False Positive (Model outlier, valid distribution)</option>
-                <option value="FLAGGED_FRAUD">Flagged as Fraud (Confirmed diversion / unauthorized card use)</option>
-                <option value="REQUIRES_INSPECTION">Requires Field Inspection (Dispatched for physical verification)</option>
+                <option value="REQUIRES_INSPECTION">Requires Field Inspection (Dispatched for store verification)</option>
               </select>
             </div>
           </div>
 
           <div class="form-group" style="margin-bottom: 0;">
-            <label class="form-label" for="rev-reason">Mandatory Audit Justification / Written Findings *</label>
-            <textarea id="rev-reason" class="form-control" rows="3" placeholder="Provide detailed administrative justification for this review decision..." required></textarea>
-            <span style="font-size: 0.7rem; color: var(--text-muted); margin-top: 2px;">This rationale is permanently logged in the transaction audit trail.</span>
+            <label class="form-label" for="rev-reason">Official Review Comments / Audit Justification *</label>
+            <textarea id="rev-reason" class="form-control" rows="3" placeholder="Provide detailed administrative justification and comments for this review decision..." required></textarea>
+            <span style="font-size: 0.7rem; color: var(--text-muted); margin-top: 2px;">This rationale is permanently logged in the transaction and alert audit trail.</span>
+          </div>
+
+          <!-- Past Audit History Trail Box -->
+          <div id="rev-modal-history-container" style="display: none; margin-top: 14px; background: rgba(0,0,0,0.25); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 10px 12px;">
+            <h4 style="font-size: 0.74rem; text-transform: uppercase; color: var(--accent-cyan); margin-bottom: 6px;">
+              <i class="fa-solid fa-clock-rotate-left"></i> Previous Audit Trail History
+            </h4>
+            <div id="rev-modal-history-list" style="font-size: 0.74rem; color: var(--text-secondary); max-height: 110px; overflow-y: auto;">
+              <!-- Dynamically populated review history items -->
+            </div>
           </div>
 
         </div>

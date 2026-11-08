@@ -58,13 +58,21 @@
           <div class="panel-header">
             <h3>Distribution Logs</h3>
             <div class="panel-actions">
-              <input type="text" id="txn-search" class="form-control" placeholder="Search Txn or Beneficiary ID..." style="width: 250px;" oninput="filterTransactions()">
-              <select id="txn-filter-status" class="form-control" style="width: 170px;" onchange="filterTransactions()">
+              <input type="text" id="txn-search" class="form-control" placeholder="Search Txn or Beneficiary..." style="width: 220px;" oninput="filterTransactions()">
+              <select id="txn-filter-region" class="form-control" style="width: 150px;" onchange="filterTransactions()">
+                <option value="">All Districts</option>
+                <option value="Chennai">Chennai</option>
+                <option value="Coimbatore">Coimbatore</option>
+                <option value="Madurai">Madurai</option>
+                <option value="Salem">Salem</option>
+                <option value="Tiruchirappalli">Tiruchirappalli</option>
+              </select>
+              <select id="txn-filter-status" class="form-control" style="width: 140px;" onchange="filterTransactions()">
                 <option value="">All Statuses</option>
                 <option value="NORMAL">Normal</option>
                 <option value="SUSPICIOUS">Suspicious</option>
               </select>
-              <select id="txn-filter-commodity" class="form-control" style="width: 150px;" onchange="filterTransactions()">
+              <select id="txn-filter-commodity" class="form-control" style="width: 130px;" onchange="filterTransactions()">
                 <option value="">All Grains</option>
                 <option value="Rice">Rice</option>
                 <option value="Wheat">Wheat</option>
@@ -139,6 +147,10 @@
               <label class="form-label" for="txn-qty">Quantity to Distribute (kg)</label>
               <input type="number" step="0.5" min="0.5" max="200" id="txn-qty" class="form-control" placeholder="e.g. 20" required>
             </div>
+          </div>
+
+          <div id="txn-quota-info" style="display:none; background: rgba(59,130,246,0.1); border:1px solid rgba(59,130,246,0.25); padding:8px 12px; border-radius: var(--radius-sm); font-size:0.8rem; color:#93c5fd; margin-top:8px;">
+            <i class="fa-solid fa-circle-info"></i> <span id="txn-quota-text"></span>
           </div>
 
           <div id="txn-error-box" style="display:none; background: rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); padding:10px 14px; border-radius: var(--radius-sm); font-size:0.82rem; color:#f87171; margin-top:8px;">

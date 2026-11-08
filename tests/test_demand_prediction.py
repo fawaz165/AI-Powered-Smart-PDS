@@ -245,12 +245,87 @@ def test_scenario_vs_database_data_source_flag(client):
     res2 = client.post("/api/predict-demand", json={
         "commodity": "Rice",
         "region": "Chennai",
-        "beneficiary_count": 12500,
+        "beneficiary_count": 5,
         "previous_demand": 4200,
         "current_stock": 3800,
         "is_custom_scenario": False
     })
     assert res2.status_code == 200
     assert res2.get_json()["data"]["data_source"] == "DATABASE_BACKED"
+
+
+def test_confidence_interval_calculation_and_keys(client):
+    """Verifies that confidence_range contains non-null lower_bound, upper_bound, and formatted strings."""
+    res = client.post("/api/predict-demand", json={
+        "commodity": "Rice",
+        "region": "Chennai",
+        "beneficiary_count": 12500,
+        "previous_demand": 4200,
+        "current_stock": 3800,
+        "month": 11
+    })
+    assert res.status_code == 200
+    pred = res.get_json()["data"]
+    assert "confidence_range" in pred
+    cr = pred["confidence_range"]
+    assert cr["available"] is True
+    assert "lower_bound" in cr and "upper_bound" in cr
+    assert "lower_bound_kg" in cr and "upper_bound_kg" in cr
+    assert cr["lower_bound"] <= pred["predicted_demand"] <= cr["upper_bound"]
+    assert "formatted_range" in cr and "kg" in cr["formatted_range"]
+    assert cr["margin_of_error_kg"] > 0
+
+
+def test_dynamic_metrics_evaluation_and_zero_leakage(client):
+    """Verifies dynamic evaluation of all 4 regression models with data leakage assertion."""
+    res = client.get("/api/model-metrics?dynamic=true")
+    assert res.status_code == 200
+    data = res.get_json()["data"]
+
+    assert "evaluation_metrics" in data
+    eval_metrics = data["evaluation_metrics"]
+    for model_name in ["Linear Regression", "Decision Tree", "Random Forest", "XGBoost Regressor"]:
+        assert model_name in eval_metrics
+        m = eval_metrics[model_name]
+        assert m["MAE"] > 0
+        assert m["MSE"] > 0
+        assert m["RMSE"] > 0
+        assert 0.5 <= m["R2"] <= 1.0
+
+    assert "leakage_check" in data
+    assert "PASSED" in data["leakage_check"]
+    assert "test_partition" in data and "20%" in data["test_partition"]
+
+
+def test_forecast_audit_history_persistence_and_retrieval(client):
+    """Verifies that predicting demand records an audit document in MongoDB and is retrieved via /api/predictions/history."""
+    # Run a prediction
+    pred_res = client.post("/api/predict-demand", json={
+        "commodity": "Rice",
+        "region": "Chennai",
+        "beneficiary_count": 12500,
+        "previous_demand": 4200,
+        "current_stock": 3800,
+        "safety_stock": 500,
+        "month": 11,
+        "year": 2026
+    })
+    assert pred_res.status_code == 200
+    predicted_val = pred_res.get_json()["data"]["predicted_demand"]
+
+    # Retrieve history
+    hist_res = client.get("/api/predictions/history?limit=5")
+    assert hist_res.status_code == 200
+    history = hist_res.get_json()["data"]
+    assert len(history) > 0
+
+    latest = history[0]
+    assert latest["commodity"] == "Rice"
+    assert latest["region"] == "Chennai"
+    assert "predicted_demand" in latest
+    assert "confidence_range" in latest
+    assert "lower_bound" in latest["confidence_range"] or "lower_bound_kg" in latest["confidence_range"]
+    assert "recommended_procurement" in latest
+
 
 

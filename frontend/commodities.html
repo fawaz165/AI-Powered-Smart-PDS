@@ -62,19 +62,19 @@
             <div class="card-meta"><span class="meta-up"><i class="fa-solid fa-database"></i> Database Catalog</span> Linked to Inventory</div>
           </div>
           <div class="stat-card" style="--card-accent: #10b981;">
-            <div class="card-top"><span>Verified Official NFSA</span><i class="fa-solid fa-certificate" style="color: #34d399;"></i></div>
+            <div class="card-top"><span>Verified Official Schemes</span><i class="fa-solid fa-certificate" style="color: #34d399;"></i></div>
             <div class="card-value" id="com-kpi-official" style="color: #34d399;">--</div>
-            <div class="card-meta">Statutory Central Subsidies</div>
+            <div class="card-meta">NFSA &amp; Special PDS Schemes</div>
           </div>
           <div class="stat-card" style="--card-accent: #f59e0b;">
-            <div class="card-top"><span>Synthetic Demo Rates</span><i class="fa-solid fa-flask" style="color: #fbbf24;"></i></div>
+            <div class="card-top"><span>Demo / Custom Rates</span><i class="fa-solid fa-flask" style="color: #fbbf24;"></i></div>
             <div class="card-value" id="com-kpi-demo" style="color: #fbbf24;">--</div>
-            <div class="card-meta">State Welfare Simulation</div>
+            <div class="card-meta">Simulation &amp; Custom Additions</div>
           </div>
           <div class="stat-card" style="--card-accent: #8b5cf6;">
             <div class="card-top"><span>Avg Subsidy Discount</span><i class="fa-solid fa-percent" style="color: #a78bfa;"></i></div>
             <div class="card-value" id="com-kpi-discount" style="color: #a78bfa;">--%</div>
-            <div class="card-meta" title="Arithmetic mean of individual commodity discounts across valid benchmarked catalog items">Mean vs. Open Market Benchmark</div>
+            <div class="card-meta" title="Arithmetic mean of individual commodity discounts across valid benchmarked catalog items">Mean vs. Reference Retail Benchmarks</div>
           </div>
         </div>
 
@@ -88,11 +88,11 @@
             </div>
             <div class="panel-actions">
               <input type="text" id="com-search" class="form-control" placeholder="Search by code, name, or desc..." style="width: 250px;" oninput="filterCommodities()">
-              <select id="com-filter-rate" class="form-control" style="width: 220px;" onchange="filterCommodities()">
+              <select id="com-filter-rate" class="form-control" style="width: 240px;" onchange="filterCommodities()">
                 <option value="">All Classifications</option>
                 <option value="OFFICIAL_NFSA">Verified Official NFSA Rates</option>
+                <option value="STATE_SUBSIDY">Tamil Nadu State Welfare Subsidies</option>
                 <option value="DEMONSTRATION">Synthetic Demo Rates</option>
-                <option value="STATE_SUBSIDY">State Welfare Subsidies</option>
               </select>
               <button class="btn btn-secondary btn-sm" id="btn-refresh-commodities" onclick="refreshCommodities()" title="Refresh Catalog">
                 <i class="fa-solid fa-arrows-rotate"></i> Refresh
@@ -107,7 +107,7 @@
                   <th>Commodity Name</th>
                   <th>Unit</th>
                   <th>Subsidized Price (₹)</th>
-                  <th>Market Benchmark</th>
+                  <th>Market Benchmark (Reference Value)</th>
                   <th>Rate Classification</th>
                   <th>Operational Linkage</th>
                   <th>Actions</th>

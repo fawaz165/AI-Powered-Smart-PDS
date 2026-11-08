@@ -126,29 +126,38 @@ async function loadFraudAlerts() {
         }
 
         const scoreBadgeClass = a.score_badge === 'SEVERE_ANOMALY' ? 'badge-danger' : (a.score_badge === 'MILD_ANOMALY' ? 'badge-warning' : 'badge-secondary');
-        const scoreInterp = a.score_interpretation || (score < -0.1 ? 'Severe Outlier' : 'Statistical Deviation');
+        const scoreInterp = a.score_interpretation || (Number(score) < 0 ? 'Statistical Outlier (<0)' : 'Normal Inlier (>=0)');
+        const dtStr = a.created_at_formatted || (a.created_at ? new Date(a.created_at).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' }) : '');
 
         return `
           <tr>
-            <td><strong style="color:#fff;">${escapeHtml(a.transaction_id)}</strong></td>
-            <td><code>${escapeHtml(a.beneficiary_id)}</code></td>
+            <td>
+              <span class="txn-code-pill">${escapeHtml(a.transaction_id)}</span>
+              ${dtStr ? `<div style="font-size:0.68rem; color:var(--text-muted); margin-top:2px;"><i class="fa-regular fa-clock"></i> ${escapeHtml(dtStr)}</div>` : ''}
+            </td>
+            <td>
+              <span class="ben-code-pill">${escapeHtml(a.beneficiary_id)}</span>
+            </td>
             <td>
               <span class="badge badge-info">${escapeHtml(a.commodity)}</span>
-              <strong style="margin-left:4px;">${escapeHtml(a.quantity)} kg</strong>
+              <strong style="margin-left:4px; color:#fff; font-size:0.85rem;">${escapeHtml(a.quantity)} kg</strong>
+              ${a.entitled_quota ? `<div style="font-size:0.68rem; color:var(--text-muted); margin-top:1px;">Quota: ${a.entitled_quota} kg ${a.quantity_to_quota_ratio ? `(${a.quantity_to_quota_ratio}x)` : ''}</div>` : ''}
             </td>
             <td>${escapeHtml(a.region || 'Chennai')}</td>
             <td><span class="badge ${isHigh ? 'badge-danger' : 'badge-warning'}">${escapeHtml(a.risk_level)}</span></td>
             <td>
-              <div style="font-family:monospace; font-weight:700; color:${Number(score) < -0.1 ? 'var(--accent-rose)' : 'var(--accent-amber)'};">${score}</div>
-              <span class="badge ${scoreBadgeClass}" style="font-size:0.65rem; margin-top:2px;">${escapeHtml(scoreInterp.split(':')[0])}</span>
+              <div style="font-family:monospace; font-weight:700; color:${Number(score) < 0 ? 'var(--accent-rose)' : 'var(--accent-emerald)'}; font-size:0.86rem;">${score}</div>
+              <span class="badge ${scoreBadgeClass}" style="font-size:0.65rem; margin-top:2px;" title="${escapeHtml(scoreInterp)}">
+                ${Number(score) < 0 ? '<i class="fa-solid fa-triangle-exclamation"></i> Outlier (&lt;0)' : '<i class="fa-solid fa-check"></i> Inlier (&ge;0)'}
+              </span>
             </td>
-            <td style="max-width: 260px; font-size: 0.78rem; color: #fecdd3; line-height:1.35;">${escapeHtml(a.reason)}</td>
+            <td style="max-width: 260px; font-size: 0.76rem; color: #fecdd3; line-height:1.35;">${escapeHtml(a.reason)}</td>
             <td>
               ${decisionBadge}
-              ${a.reviewed_by ? `<div style="font-size:0.68rem; color:var(--text-muted); margin-top:2px;">By: ${escapeHtml(a.reviewed_by)}</div>` : ''}
+              ${a.reviewed_by ? `<div style="font-size:0.68rem; color:var(--text-muted); margin-top:2px;"><i class="fa-solid fa-user-check"></i> ${escapeHtml(a.reviewed_by)}</div>` : ''}
             </td>
-            <td>
-              <button class="btn btn-secondary btn-sm" onclick="openReviewModal('${escapeHtml(a.transaction_id)}')">
+            <td class="col-actions">
+              <button class="btn btn-secondary btn-sm" onclick="openReviewModal('${escapeHtml(a.transaction_id)}')" style="white-space:nowrap; padding:5px 10px; font-size:0.75rem;">
                 <i class="fa-solid fa-gavel"></i> ${isPending ? 'Audit &amp; Review' : 'Update Review'}
               </button>
             </td>
@@ -183,15 +192,48 @@ function openReviewModal(txnId) {
   document.getElementById('rev-modal-quantity').textContent = `${alert.quantity} kg`;
   document.getElementById('rev-modal-quota').textContent = alert.entitled_quota ? `${alert.entitled_quota} kg` : 'N/A';
   
+  const timeEl = document.getElementById('rev-modal-time');
+  if (timeEl) {
+    timeEl.textContent = alert.created_at_formatted || (alert.created_at ? new Date(alert.created_at).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' }) : 'Recorded Alert');
+  }
+
   const scoreVal = typeof alert.anomaly_score === 'number' ? alert.anomaly_score.toFixed(4) : (alert.anomaly_score || '-0.2500');
   document.getElementById('rev-modal-score').textContent = scoreVal;
-  document.getElementById('rev-modal-score-interp').textContent = alert.score_interpretation || 'Statistical Outlier';
+  document.getElementById('rev-modal-score-interp').textContent = alert.score_interpretation || (Number(scoreVal) < 0 ? 'Statistical Outlier (Short tree isolation path)' : 'Normal Inlier');
   document.getElementById('rev-modal-reason').textContent = `ML Flag: ${alert.reason}`;
 
   // Default values
-  document.getElementById('rev-officer-id').value = alert.reviewed_by || 'OFFICER-CHN-01';
-  document.getElementById('rev-decision').value = alert.review_decision || 'APPROVED_GENUINE';
-  document.getElementById('rev-reason').value = alert.review_reason || '';
+  const storedUser = sessionStorage.getItem('user_name') || 'OFFICER-CHN-01';
+  document.getElementById('rev-officer-id').value = alert.reviewed_by || storedUser;
+  document.getElementById('rev-decision').value = alert.review_decision || alert.status || 'VERIFIED_LEGITIMATE';
+  document.getElementById('rev-reason').value = alert.review_reason || alert.comments || '';
+
+  // Render past review audit history trail
+  const histContainer = document.getElementById('rev-modal-history-container');
+  const histList = document.getElementById('rev-modal-history-list');
+  if (histContainer && histList) {
+    const history = alert.review_history || [];
+    if (history.length > 0) {
+      histContainer.style.display = 'block';
+      histList.innerHTML = history.map(h => {
+        const hTime = h.reviewed_at ? new Date(h.reviewed_at).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' }) : 'Logged';
+        return `
+          <div style="padding: 4px 0; border-bottom: 1px dashed rgba(255,255,255,0.08);">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <strong style="color:var(--accent-amber);">${escapeHtml(h.decision)}</strong>
+              <span style="font-size:0.68rem; color:var(--text-muted);">${escapeHtml(hTime)}</span>
+            </div>
+            <div style="font-size:0.71rem; color:var(--text-secondary); margin-top:1px;">
+              Officer: <code>${escapeHtml(h.officer_id)}</code> &bull; <em>"${escapeHtml(h.reason || h.comments || 'No comments')}"</em>
+            </div>
+          </div>
+        `;
+      }).join('');
+    } else {
+      histContainer.style.display = 'none';
+      histList.innerHTML = '';
+    }
+  }
 
   openModal('review-fraud-modal');
 }
@@ -208,6 +250,39 @@ async function submitOfficialReview() {
     return;
   }
   if (!reason || reason.length < 3) {
+    showToast('Please provide an official audit reason / written comments (min 3 chars).', 'error');
+    return;
+  }
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Recording Decision...';
+  }
+
+  try {
+    const res = await API.reviewFraudAlert(txnId, {
+      officer_id: officerId,
+      decision: decision,
+      reason: reason,
+      comments: reason
+    });
+
+    if (res && res.status === 'success') {
+      showToast(`Audit decision recorded for ${txnId}: ${decision}`, 'success');
+      closeModal('review-fraud-modal');
+      await loadFraudAlerts();
+    } else {
+      showToast(res.message || 'Failed to submit review', 'error');
+    }
+  } catch (err) {
+    showToast(err.message || 'Error recording audit review decision', 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-stamp"></i> Record Official Decision';
+    }
+  }
+}
     showToast('Please provide an official audit reason (min 3 chars).', 'error');
     return;
   }

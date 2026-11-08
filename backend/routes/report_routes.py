@@ -60,6 +60,7 @@ def download_fraud_report():
     """Generates and triggers download for the Fraud/Anomaly Review Excel report with optional filters."""
     try:
         region = request.args.get("region", "").strip()
+        commodity = request.args.get("commodity", "").strip()
         risk_level = request.args.get("risk_level", "").strip()
         status = request.args.get("status", "").strip()
         start_date = request.args.get("start_date", "").strip()
@@ -67,6 +68,7 @@ def download_fraud_report():
 
         filepath = ReportService.generate_fraud_report(
             region=region,
+            commodity=commodity,
             risk_level=risk_level,
             status=status,
             start_date=start_date,

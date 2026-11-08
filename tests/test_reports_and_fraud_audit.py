@@ -336,3 +336,163 @@ def test_backward_compatible_resolve_endpoint(client):
     assert res.status_code == 200
     data = res.get_json()
     assert data["status"] == "success"
+
+
+def test_all_reports_reflect_live_database_modifications(client):
+    """
+    Verifies that modifying database records immediately reflects in all 4 freshly generated XLSX files:
+    1. Updating inventory stock changes the exported inventory numbers.
+    2. Inserting a transaction adds the record to distribution export.
+    3. Updating a fraud alert decision/comments reflects in fraud audit export.
+    4. Inserting a prediction audit record reflects in demand forecast export.
+    """
+    db = get_db()
+
+    # 1. Test live inventory reflection: update Rice stock in ReportTestRegion to 999.5 kg
+    db.inventory.update_one(
+        {"region": "ReportTestRegion", "commodity": "Rice"},
+        {"$set": {"current_stock": 999.5, "buffer_stock": 80.0}}
+    )
+    res_inv = client.get("/api/reports/inventory?region=ReportTestRegion&commodity=Rice")
+    assert res_inv.status_code == 200
+    wb_inv = openpyxl.load_workbook(io.BytesIO(res_inv.data))
+    ws_inv = wb_inv["Warehouse Inventory"]
+    inv_rows = list(ws_inv.iter_rows(values_only=True))
+    assert len(inv_rows) == 2  # Header + Rice row
+    # Current Warehouse Stock is col index 2 (3rd column)
+    assert inv_rows[1][2] == 999.5
+    assert inv_rows[1][3] == 80.0
+
+    # 2. Test live transaction reflection: insert a fresh transaction
+    fresh_txn_id = "TXN-REP-FRESH-999"
+    db.transactions.insert_one({
+        "transaction_id": fresh_txn_id,
+        "beneficiary_id": "BEN-TEST-REP-02",
+        "commodity": "Wheat",
+        "quantity": 10.0,
+        "region": "ReportTestRegion",
+        "ration_shop_id": "FPS-REP-002",
+        "timestamp": datetime.utcnow(),
+        "processing_status": "COMPLETED",
+        "risk_level": "LOW",
+        "anomaly_score": 0.05,
+        "review_status": "PENDING_REVIEW"
+    })
+    res_dist = client.get("/api/reports/distribution?region=ReportTestRegion&commodity=Wheat")
+    assert res_dist.status_code == 200
+    wb_dist = openpyxl.load_workbook(io.BytesIO(res_dist.data))
+    ws_dist = wb_dist["Transactions Ledger"]
+    dist_rows = list(ws_dist.iter_rows(values_only=True))
+    tx_ids = [r[0] for r in dist_rows[1:]]
+    assert fresh_txn_id in tx_ids
+
+    # 3. Test live fraud alert reflection: review the alert with comments
+    db.fraud_alerts.update_one(
+        {"transaction_id": "TXN-REP-TEST-002"},
+        {"$set": {
+            "status": "VERIFIED_LEGITIMATE",
+            "review_decision": "APPROVED_GENUINE",
+            "reviewed_by": "CHIEF-OFFICER-TAMIL",
+            "review_reason": "Approved family festival quota under special government order.",
+            "reviewed_at": datetime.utcnow()
+        }}
+    )
+    res_fraud = client.get("/api/reports/fraud?region=ReportTestRegion&commodity=Sugar")
+    assert res_fraud.status_code == 200
+    wb_fraud = openpyxl.load_workbook(io.BytesIO(res_fraud.data))
+    ws_fraud = wb_fraud["Flagged Anomalies"]
+    fraud_rows = list(ws_fraud.iter_rows(values_only=True))
+    assert len(fraud_rows) >= 2
+    f_headers = [c for c in fraud_rows[0]]
+    decision_idx = f_headers.index("Official Officer Decision")
+    officer_idx = f_headers.index("Reviewing Officer ID")
+    reason_idx = f_headers.index("Officer Audit Justification")
+    status_idx = f_headers.index("Audit Review Status")
+
+    assert fraud_rows[1][decision_idx] == "APPROVED_GENUINE"
+    assert fraud_rows[1][officer_idx] == "CHIEF-OFFICER-TAMIL"
+    assert "special government order" in fraud_rows[1][reason_idx]
+    assert fraud_rows[1][status_idx] == "VERIFIED_LEGITIMATE"
+
+    # 4. Test live prediction reflection: save a prediction into db.predictions
+    test_pred_doc = {
+        "commodity": "Dal",
+        "commodity_code": "COM-DAL",
+        "region": "ReportTestRegion",
+        "month": 12,
+        "year": 2026,
+        "beneficiary_count": 8500,
+        "predicted_demand": 1250.0,
+        "current_stock": 900.0,
+        "safety_stock": 200.0,
+        "shortage": 350.0,
+        "status": "SHORTAGE",
+        "recommended_procurement": 550.0,
+        "confidence_range": {
+            "available": True,
+            "formatted_range": "1,150.0 kg – 1,350.0 kg"
+        },
+        "calculation_breakdown": {
+            "baseline_demand": 1100.0,
+            "seasonal_multiplier": 1.14,
+            "gross_requirement": 1450.0,
+            "procurement_formula": "max(0, (Demand + Buffer) - Stock)"
+        },
+        "model_used": "Gradient Boosting Regressor",
+        "data_source": "DATABASE_BACKED",
+        "created_at": datetime.utcnow()
+    }
+    db.predictions.insert_one(test_pred_doc)
+    res_pred = client.get("/api/reports/predictions?region=ReportTestRegion&commodity=Dal")
+    assert res_pred.status_code == 200
+    wb_pred = openpyxl.load_workbook(io.BytesIO(res_pred.data))
+    ws_pred = wb_pred["Demand Forecast"]
+    pred_rows = list(ws_pred.iter_rows(values_only=True))
+    assert len(pred_rows) >= 2
+    p_headers = [c for c in pred_rows[0]]
+    assert "Commodity" in p_headers
+    assert "Net Detected Shortage (kg)" in p_headers
+    assert "Recommended Procurement (kg)" in p_headers
+    assert "95% Confidence Interval" in p_headers
+
+    row_data = pred_rows[1]
+    assert row_data[p_headers.index("Commodity")] == "Dal"
+    assert row_data[p_headers.index("Predicted Monthly Demand (kg)")] == 1250.0
+    assert row_data[p_headers.index("Net Detected Shortage (kg)")] == 350.0
+    assert row_data[p_headers.index("Recommended Procurement (kg)")] == 550.0
+    assert row_data[p_headers.index("95% Confidence Interval")] == "1,150.0 kg – 1,350.0 kg"
+    assert row_data[p_headers.index("Production ML Model")] == "Gradient Boosting Regressor"
+
+    # Clean up test prediction
+    db.predictions.delete_many({"region": "ReportTestRegion"})
+
+
+def test_empty_results_and_filters_handling(client):
+    """Verifies that non-matching filters return a formatted, valid empty spreadsheet without errors."""
+    # Query with non-existent district
+    res_inv = client.get("/api/reports/inventory?region=NonExistentDistrict")
+    assert res_inv.status_code == 200
+    wb = openpyxl.load_workbook(io.BytesIO(res_inv.data))
+    assert "Warehouse Inventory" in wb.sheetnames
+    ws = wb["Warehouse Inventory"]
+    rows = list(ws.iter_rows(values_only=True))
+    assert len(rows) == 1  # Only headers, no data crash
+
+    res_dist = client.get("/api/reports/distribution?region=NonExistentDistrict")
+    assert res_dist.status_code == 200
+    wb_dist = openpyxl.load_workbook(io.BytesIO(res_dist.data))
+    assert "Transactions Ledger" in wb_dist.sheetnames
+    assert len(list(wb_dist["Transactions Ledger"].iter_rows(values_only=True))) == 1
+
+    res_fraud = client.get("/api/reports/fraud?region=NonExistentDistrict")
+    assert res_fraud.status_code == 200
+    wb_fraud = openpyxl.load_workbook(io.BytesIO(res_fraud.data))
+    assert "Flagged Anomalies" in wb_fraud.sheetnames
+    assert len(list(wb_fraud["Flagged Anomalies"].iter_rows(values_only=True))) == 1
+
+    res_pred = client.get("/api/reports/predictions?region=NonExistentDistrict")
+    assert res_pred.status_code == 200
+    wb_pred = openpyxl.load_workbook(io.BytesIO(res_pred.data))
+    assert "Demand Forecast" in wb_pred.sheetnames
+    assert len(list(wb_pred["Demand Forecast"].iter_rows(values_only=True))) == 1
+

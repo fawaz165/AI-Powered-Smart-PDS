@@ -35,11 +35,35 @@ def get_inventory_alerts():
     """
     Computes intelligent inventory alerts, compares current stock with predicted demand,
     and returns shortage and recommended procurement figures.
+    Supports optional region, commodity, and include_safety_stock filters.
     """
-    alerts = InventoryService.calculate_inventory_alerts()
+    include_safety = request.args.get("include_safety_stock", "false").lower() in ("true", "1", "yes")
+    region = (request.args.get("region") or "").strip() or None
+    commodity = (request.args.get("commodity") or "").strip() or None
+
+    alerts = InventoryService.calculate_inventory_alerts(
+        include_safety_stock=include_safety,
+        region=region,
+        commodity=commodity
+    )
+
+    total_stock = round(sum(a.get("current_stock", 0.0) for a in alerts), 2)
+    total_demand = round(sum(a.get("predicted_demand", 0.0) for a in alerts), 2)
+    total_shortage = round(sum(a.get("shortage", 0.0) for a in alerts), 2)
+    total_procurement = round(sum(a.get("recommended_procurement", 0.0) for a in alerts), 2)
+    shortage_count = sum(1 for a in alerts if a.get("shortage", 0.0) > 0 or a.get("status") == "SHORTAGE")
+    sufficient_count = len(alerts) - shortage_count
+
     return jsonify({
         "status": "success",
         "count": len(alerts),
+        "total_stock": total_stock,
+        "total_demand": total_demand,
+        "total_shortage": total_shortage,
+        "total_procurement": total_procurement,
+        "shortage_count": shortage_count,
+        "sufficient_count": sufficient_count,
+        "safety_stock_included": include_safety,
         "data": alerts
     }), 200
 
@@ -104,12 +128,16 @@ def update_stock_level():
         stock = float(stock)
         if stock < 0:
             return jsonify({"status": "error", "message": "current_stock cannot be negative"}), 400
-    except ValueError:
-        return jsonify({"status": "error", "message": "current_stock must be numeric"}), 400
+    except (ValueError, TypeError):
+        return jsonify({"status": "error", "message": "current_stock must be a valid non-negative number"}), 400
 
-    InventoryService.update_stock(commodity, region, stock)
+    try:
+        InventoryService.update_stock(commodity, region, stock)
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+
     return jsonify({
         "status": "success",
-        "message": f"Stock level updated to {stock} kg",
+        "message": f"Stock level updated to {stock:,.1f} kg",
         "data": {"commodity": commodity, "region": region, "current_stock": stock}
     }), 200

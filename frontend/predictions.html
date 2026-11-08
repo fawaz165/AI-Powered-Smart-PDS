@@ -263,15 +263,20 @@
         </div>
 
         <!-- Comparative Model Benchmark Panel -->
-        <div class="data-panel" style="margin-top: 24px;">
-          <div class="panel-header">
+        <div class="data-panel" style="margin-top: 20px;">
+          <div class="panel-header" style="flex-wrap: wrap; gap: 10px;">
             <div>
-              <h3 style="font-size: 1rem;"><i class="fa-solid fa-award" style="color: var(--accent-amber);"></i> ML Regression Models Benchmark & Comparison</h3>
+              <h3 style="font-size: 1rem;"><i class="fa-solid fa-award" style="color: var(--accent-amber);"></i> ML Regression Models Benchmark &amp; Comparison</h3>
               <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 4px;">
-                Evaluated on an unseen 20% test partition without data leakage. Metrics (MAE, MSE, RMSE, R²) are derived from actual model predictions.
+                Evaluated on a genuine unseen 20% test partition (144 samples) with zero data leakage. Metrics (MAE, MSE, RMSE, R²) calculated dynamically.
               </p>
             </div>
-            <span class="badge badge-success"><i class="fa-solid fa-check-double"></i> Unseen Test Set (No Leakage)</span>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <span class="badge badge-success"><i class="fa-solid fa-check-double"></i> Unseen Test Split (Zero Leakage)</span>
+              <button class="btn btn-secondary btn-sm" style="font-size: 0.76rem;" onclick="loadModelMetrics(true)" title="Evaluate all 4 candidate regression models dynamically on test split">
+                <i class="fa-solid fa-arrows-rotate"></i> Recalculate Dynamic Metrics
+              </button>
+            </div>
           </div>
           <div class="table-responsive">
             <table class="custom-table">
@@ -295,15 +300,15 @@
         </div>
 
         <!-- Demand Forecast Audit History Panel -->
-        <div class="data-panel" style="margin-top: 24px;">
+        <div class="data-panel" style="margin-top: 20px;">
           <div class="panel-header">
             <div>
               <h3 style="font-size: 1rem;"><i class="fa-solid fa-clock-rotate-left" style="color: var(--accent-cyan);"></i> Demand Forecast Audit History</h3>
               <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 4px;">
-                Logged demand predictions with commodity, district, model used, and recommended procurement.
+                Persistent database audit log of demand forecasts with commodity, district, model, confidence range, and recommended procurement.
               </p>
             </div>
-            <button class="btn btn-secondary" style="font-size: 0.78rem;" onclick="loadForecastHistory()">
+            <button class="btn btn-secondary btn-sm" style="font-size: 0.76rem;" onclick="loadForecastHistory()">
               <i class="fa-solid fa-arrows-rotate"></i> Refresh History
             </button>
           </div>

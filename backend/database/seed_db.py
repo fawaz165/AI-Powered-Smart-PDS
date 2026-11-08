@@ -66,12 +66,52 @@ def seed_database():
         else:
             logger.info(f"User {u['username']} already exists.")
 
-    # 2. Seed Commodities with Configured Subsidized Prices & Official vs Demo Rates
+    # 2. Seed Commodities with Configured Subsidized Prices & Verified Tamil Nadu PDS Scheme Rates
     commodities = [
-        {"commodity_code": "COM-RIC", "name": "Rice", "unit": "kg", "subsidized_price": 0.0, "market_price": 42.0, "rate_type": "OFFICIAL_NFSA", "description": "Fortified raw & boiled rice under NFSA entitlement"},
-        {"commodity_code": "COM-WHT", "name": "Wheat", "unit": "kg", "subsidized_price": 2.0, "market_price": 34.0, "rate_type": "OFFICIAL_NFSA", "description": "Whole grain milled wheat flour"},
-        {"commodity_code": "COM-SUG", "name": "Sugar", "unit": "kg", "subsidized_price": 13.5, "market_price": 45.0, "rate_type": "OFFICIAL_NFSA", "description": "Refined crystal sugar under AAY distribution"},
-        {"commodity_code": "COM-DAL", "name": "Dal", "unit": "kg", "subsidized_price": 30.0, "market_price": 130.0, "rate_type": "DEMONSTRATION", "description": "Toor / Chana pulses under state welfare distribution"}
+        {
+            "commodity_code": "COM-RIC",
+            "name": "Rice",
+            "unit": "kg",
+            "subsidized_price": 0.0,
+            "market_price": 42.0,
+            "rate_type": "OFFICIAL_NFSA",
+            "category_pricing": {"AAY": 0.0, "PHH": 0.0, "NPHH": 0.0},
+            "official_source": "Tamil Nadu Universal PDS & NFSA (Free Rice Scheme)",
+            "description": "Fortified raw & boiled rice under Tamil Nadu Universal PDS and NFSA free distribution"
+        },
+        {
+            "commodity_code": "COM-WHT",
+            "name": "Wheat",
+            "unit": "kg",
+            "subsidized_price": 0.0,
+            "market_price": 34.0,
+            "rate_type": "OFFICIAL_NFSA",
+            "category_pricing": {"AAY": 0.0, "PHH": 0.0, "NPHH": 0.0},
+            "official_source": "Tamil Nadu PDS & PMGKAY (Free Entitlement for eligible cardholders)",
+            "description": "Whole grain milled wheat flour supplied free of cost to eligible cardholders"
+        },
+        {
+            "commodity_code": "COM-SUG",
+            "name": "Sugar",
+            "unit": "kg",
+            "subsidized_price": 13.5,
+            "market_price": 45.0,
+            "rate_type": "OFFICIAL_NFSA",
+            "category_pricing": {"AAY": 13.50, "PHH": 25.00, "NPHH": 25.00},
+            "official_source": "Central AAY Scheme (₹13.50/kg) & TNPDS State Order (₹25.00/kg for other cards)",
+            "description": "Refined crystal sugar: AAY ₹13.50/kg, PHH/NPHH ₹25.00/kg"
+        },
+        {
+            "commodity_code": "COM-DAL",
+            "name": "Dal",
+            "unit": "kg",
+            "subsidized_price": 30.0,
+            "market_price": 140.0,
+            "rate_type": "STATE_SUBSIDY",
+            "category_pricing": {"AAY": 30.0, "PHH": 30.0, "NPHH": 30.0},
+            "official_source": "Tamil Nadu Special Public Distribution System (Special PDS Scheme)",
+            "description": "Subsidized Tur Dal under Tamil Nadu Special PDS Scheme at ₹30.00/kg"
+        }
     ]
     for c in commodities:
         db.commodities.update_one(
@@ -83,11 +123,13 @@ def seed_database():
                 subsidized_price=c["subsidized_price"],
                 description=c["description"],
                 rate_type=c["rate_type"],
-                market_price=c["market_price"]
+                market_price=c["market_price"],
+                category_pricing=c.get("category_pricing"),
+                official_source=c.get("official_source")
             )},
             upsert=True
         )
-    logger.info("Seeded 4 core commodities with verified official and demonstration rates")
+    logger.info("Seeded 4 core commodities with verified Tamil Nadu PDS statutory and Special PDS rates")
 
     # 3. Seed Ration Shops
     ration_shops = [

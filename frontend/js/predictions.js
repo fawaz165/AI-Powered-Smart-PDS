@@ -85,8 +85,8 @@ async function syncDatabaseValues() {
     // 2. Fetch live beneficiary count from Beneficiaries API
     const benRes = await API.getBeneficiaries({ region, limit: 1000 });
     if (benRes && benRes.status === 'success') {
-      const rawCount = benRes.total !== undefined ? benRes.total : (benRes.data ? benRes.data.length : 12500);
-      liveDbBenCount = rawCount >= 100 ? rawCount : 12500;
+      const rawCount = benRes.total !== undefined ? benRes.total : (benRes.data ? benRes.data.length : 0);
+      liveDbBenCount = rawCount;
       document.getElementById('pred-beneficiaries').value = liveDbBenCount;
 
       const benBadge = document.getElementById('badge-ben');
@@ -97,9 +97,7 @@ async function syncDatabaseValues() {
 
       const benLabel = document.getElementById('ben-source-label');
       if (benLabel) {
-        benLabel.innerHTML = rawCount < 100 
-          ? `<span style="color:var(--accent-cyan);">${rawCount} sample cards in DB &bull; Operational depot scale: 12,500</span>`
-          : `<span style="color:var(--accent-cyan);">Live registered cardholders in ${escapeHtml(region)}</span>`;
+        benLabel.innerHTML = `<span style="color:var(--accent-cyan);"><i class="fa-solid fa-circle-check"></i> Registered cardholders in database: <strong>${liveDbBenCount.toLocaleString()}</strong> (${escapeHtml(region)})</span>`;
       }
     }
 
@@ -125,12 +123,12 @@ function onFieldManualEdit(fieldName) {
     const b = document.getElementById('badge-ben');
     if (b) { b.className = 'badge badge-warning'; b.innerHTML = '<i class="fa-solid fa-pen"></i> Scenario Value'; }
     const lbl = document.getElementById('ben-source-label');
-    if (lbl) lbl.innerHTML = '<span style="color:var(--accent-amber);">Manually customized scenario count</span>';
+    if (lbl) lbl.innerHTML = '<span style="color:var(--accent-amber);"><i class="fa-solid fa-pen"></i> Manually customized scenario cardholder count</span>';
   } else if (fieldName === 'stock') {
     const b = document.getElementById('badge-stock');
     if (b) { b.className = 'badge badge-warning'; b.innerHTML = '<i class="fa-solid fa-pen"></i> Scenario Value'; }
     const lbl = document.getElementById('stock-source-label');
-    if (lbl) lbl.innerHTML = '<span style="color:var(--accent-amber);">Manually customized warehouse balance</span>';
+    if (lbl) lbl.innerHTML = '<span style="color:var(--accent-amber);"><i class="fa-solid fa-pen"></i> Manually customized warehouse balance</span>';
   } else if (fieldName === 'safety-stock') {
     const b = document.getElementById('badge-safety-stock');
     if (b) { b.className = 'badge badge-warning'; b.innerHTML = '<i class="fa-solid fa-pen"></i> Scenario Value'; }
@@ -147,17 +145,17 @@ function updateSourceBadges(isCustom) {
   if (formBadge) {
     if (isCustom) {
       formBadge.className = 'badge badge-warning';
-      formBadge.innerHTML = '<i class="fa-solid fa-pen-to-square"></i> Manual Scenario Values';
+      formBadge.innerHTML = '<i class="fa-solid fa-flask"></i> Simulation Scenario Values';
     } else {
       formBadge.className = 'badge badge-info';
-      formBadge.innerHTML = '<i class="fa-solid fa-database"></i> Live Database Values';
+      formBadge.innerHTML = `<i class="fa-solid fa-database"></i> Live Database Values (${liveDbBenCount} cards)`;
     }
   }
 
   if (resBadge) {
     if (isCustom) {
       resBadge.className = 'badge badge-warning';
-      resBadge.innerHTML = '<i class="fa-solid fa-pen-to-square"></i> Manual Scenario';
+      resBadge.innerHTML = '<i class="fa-solid fa-flask"></i> Simulation Scenario';
     } else {
       resBadge.className = 'badge badge-info';
       resBadge.innerHTML = '<i class="fa-solid fa-database"></i> Live DB Values';
@@ -165,9 +163,9 @@ function updateSourceBadges(isCustom) {
   }
 }
 
-async function loadModelMetrics() {
+async function loadModelMetrics(dynamic = false) {
   try {
-    const res = await API.getModelMetrics();
+    const res = await API.getModelMetrics(dynamic);
     const tbody = document.getElementById('metrics-tbody');
     if (!tbody) return;
 
@@ -246,8 +244,15 @@ async function executeDemandForecast() {
       // Confidence Interval Display
       const conf = d.confidence_range;
       const confRangeEl = document.getElementById('res-confidence-range');
-      if (confRangeEl && conf) {
-        confRangeEl.textContent = `${Math.round(conf.lower_bound).toLocaleString()} kg – ${Math.round(conf.upper_bound).toLocaleString()} kg (±${Math.round(conf.margin_of_error_kg || 799)} kg)`;
+      if (confRangeEl) {
+        const low = conf?.lower_bound ?? conf?.lower_bound_kg;
+        const high = conf?.upper_bound ?? conf?.upper_bound_kg;
+        const margin = conf?.margin_of_error_kg;
+        if (conf && conf.available !== false && typeof low === 'number' && typeof high === 'number' && !isNaN(low) && !isNaN(high)) {
+          confRangeEl.textContent = `${Math.round(low).toLocaleString()} kg – ${Math.round(high).toLocaleString()} kg (±${Math.round(margin || 0).toLocaleString()} kg)`;
+        } else {
+          confRangeEl.textContent = 'Not Available';
+        }
       }
 
       // Actual vs Predicted Comparison
@@ -255,10 +260,14 @@ async function executeDemandForecast() {
       const actContainer = document.getElementById('res-actual-container');
       const actText = document.getElementById('res-actual-text');
       if (actContainer && actText) {
-        if (act && act.available) {
+        const hasActual = act && (act.available === true || act.has_actual_data === true) && act.actual_demand_kg !== null && act.actual_demand_kg !== undefined;
+        if (hasActual) {
           actContainer.style.display = 'block';
-          const diffSign = act.variance_kg >= 0 ? '+' : '';
-          actText.innerHTML = `Actual Ledger: <strong>${Math.round(act.actual_demand_kg).toLocaleString()} kg</strong> &bull; Variance: <strong>${diffSign}${Math.round(act.variance_kg).toLocaleString()} kg (${diffSign}${act.variance_pct}%)</strong> &bull; <em>${escapeHtml(act.interpretation)}</em>`;
+          const diffVal = act.variance_kg ?? act.difference_kg ?? 0;
+          const diffSign = diffVal >= 0 ? '+' : '';
+          const varPct = act.variance_pct ?? act.variance_percentage ?? 0;
+          const interpretation = act.interpretation || (diffVal >= 0 ? 'Demand higher than historical ledger' : 'Offtake within capacity');
+          actText.innerHTML = `Actual Ledger: <strong>${Math.round(act.actual_demand_kg).toLocaleString()} kg</strong> &bull; Variance: <strong>${diffSign}${Math.round(diffVal).toLocaleString()} kg (${diffSign}${varPct}%)</strong> &bull; <em>${escapeHtml(interpretation)}</em>`;
         } else {
           actContainer.style.display = 'none';
         }
@@ -310,11 +319,10 @@ async function executeDemandForecast() {
       if (breakdownEl) {
         const rawPred = Math.round(bd.raw_pipeline_prediction || d.predicted_demand).toLocaleString();
         const finalDemand = Math.round(d.predicted_demand).toLocaleString();
-        const baseDemand = Math.round(bd.baseline_demand || 4200).toLocaleString();
-        const baseMom = Math.round(bd.baseline_momentum_kg || (bd.baseline_demand * 0.9927)).toLocaleString();
+        const baseDemand = Math.round(bd.baseline_demand || prevDemand).toLocaleString();
         const stockVal = Math.round(d.current_stock).toLocaleString();
         const bufferVal = Math.round(d.safety_stock || 0).toLocaleString();
-        const grossVal = Math.round((d.predicted_demand || 0) + (d.safety_stock || 0)).toLocaleString();
+        const grossVal = Math.round(bd.gross_requirement || ((d.predicted_demand || 0) + (d.safety_stock || 0))).toLocaleString();
         const shortageVal = Math.round(d.shortage).toLocaleString();
         const procureVal = Math.round(d.recommended_procurement).toLocaleString();
         const seasonalIdx = (bd.seasonal_multiplier || 1.0).toFixed(2);
@@ -322,13 +330,13 @@ async function executeDemandForecast() {
         const trendText = bd.annual_trend_factor > 1.0 ? ` &times; ${bd.annual_trend_factor.toFixed(2)} (${d.year} forward trend)` : '';
 
         breakdownEl.innerHTML = `
-          <div style="margin-bottom:3px;">&bull; <strong>1. Baseline Momentum:</strong> Historical baseline ${baseDemand} kg &rarr; quota &amp; consumption scaling &asymp; <strong style="color:var(--text-primary);">${baseMom} kg</strong></div>
-          <div style="margin-bottom:3px;">&bull; <strong>2. Seasonal &amp; Calendar Multiplier:</strong> ${seasonalIdx}x (${escapeHtml(seasonalLbl)}) applied to festival/climatic demand profile</div>
-          <div style="margin-bottom:3px;">&bull; <strong>3. Pipeline Inference &rarr; Base Model:</strong> Demographics + Lag + Seasonal features &rarr; <strong style="color:var(--accent-cyan);">${rawPred} kg</strong></div>
+          <div style="margin-bottom:3px;">&bull; <strong>1. Input Scale:</strong> ${d.beneficiary_count.toLocaleString()} cardholder families (${isCustomScenario ? 'Simulated Scale' : 'Live DB'}) &bull; Baseline momentum: ${baseDemand} kg</div>
+          <div style="margin-bottom:3px;">&bull; <strong>2. Seasonal Multiplier:</strong> ${seasonalIdx}x (${escapeHtml(seasonalLbl)}) applied to festival/climatic seasonal curve</div>
+          <div style="margin-bottom:3px;">&bull; <strong>3. ML Regression Model:</strong> Pipeline preprocessor &rarr; ${escapeHtml(d.model_used || 'Linear Regression')} &rarr; <strong style="color:var(--accent-cyan);">${rawPred} kg</strong></div>
           <div style="margin-bottom:3px;">&bull; <strong>4. Final Predicted Demand:</strong> Base Prediction (${rawPred} kg)${trendText} &rarr; <strong style="color:#fff; font-size:0.82rem;">${finalDemand} kg</strong></div>
           <div style="margin-bottom:3px;">&bull; <strong>5. Gross Requirement:</strong> Predicted Demand (${finalDemand} kg) + Safety Buffer (${bufferVal} kg) = <strong style="color:var(--accent-cyan);">${grossVal} kg</strong></div>
-          <div style="margin-bottom:3px;">&bull; <strong>6. Net Shortage:</strong> max(0, Demand [${finalDemand}] &minus; Warehouse Stock [${stockVal}]) = <strong style="color:var(--accent-rose);">${shortageVal} kg</strong></div>
-          <div>&bull; <strong>7. Procurement Recommended:</strong> max(0, Gross Need [${grossVal}] &minus; Warehouse Stock [${stockVal}]) = <strong style="color:var(--accent-amber); font-weight:700;">${procureVal} kg</strong></div>
+          <div style="margin-bottom:3px;">&bull; <strong>6. Net Shortage:</strong> max(0, Demand [${finalDemand}] &minus; Depot Stock [${stockVal}]) = <strong style="color:var(--accent-rose);">${shortageVal} kg</strong></div>
+          <div>&bull; <strong>7. Procurement Recommended:</strong> max(0, Gross Need [${grossVal}] &minus; Depot Stock [${stockVal}]) = <strong style="color:var(--accent-amber); font-weight:700;">${procureVal} kg</strong></div>
         `;
       }
 
@@ -356,15 +364,24 @@ async function loadForecastHistory() {
     const res = await API.getForecastHistory({ limit: 10 });
     if (res && res.status === 'success' && Array.isArray(res.data) && res.data.length > 0) {
       tbody.innerHTML = res.data.map(h => {
-        const dt = h.created_at ? new Date(h.created_at).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' }) : 'Recent';
-        const confStr = h.confidence_range ? `${Math.round(h.confidence_range.lower_bound).toLocaleString()} – ${Math.round(h.confidence_range.upper_bound).toLocaleString()} kg` : '±799 kg';
+        const dt = h.created_at_formatted || (h.created_at ? new Date(h.created_at).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' }) : 'Recent');
+        const conf = h.confidence_range;
+        const low = conf?.lower_bound ?? conf?.lower_bound_kg;
+        const high = conf?.upper_bound ?? conf?.upper_bound_kg;
+        const confStr = (conf && conf.available !== false && typeof low === 'number' && typeof high === 'number' && !isNaN(low) && !isNaN(high))
+          ? `${Math.round(low).toLocaleString()} – ${Math.round(high).toLocaleString()} kg`
+          : 'Not Available';
+        const isSim = h.data_source === 'USER_SCENARIO' || h.data_source === 'SIMULATION_SCENARIO' || (h.beneficiary_count && h.beneficiary_count >= 1000);
         return `
           <tr>
             <td style="font-size:0.78rem; color:var(--text-muted);">${escapeHtml(dt)}</td>
             <td><span class="badge badge-info">${escapeHtml(h.commodity)}</span></td>
             <td><strong>${escapeHtml(h.region || h.district || 'Chennai')}</strong></td>
             <td>${escapeHtml(h.month || '')}/${escapeHtml(h.year || '')}</td>
-            <td><span class="badge badge-secondary" style="font-size:0.72rem;">${escapeHtml(h.model_used || 'Linear Regression')}</span></td>
+            <td>
+              <span class="badge badge-secondary" style="font-size:0.72rem;">${escapeHtml(h.model_used || 'Linear Regression')}</span>
+              <span class="badge ${isSim ? 'badge-warning' : 'badge-info'}" style="font-size:0.62rem; margin-left:4px;">${isSim ? 'Simulated' : 'Live DB'}</span>
+            </td>
             <td><strong style="color:#fff;">${Math.round(h.predicted_demand).toLocaleString()} kg</strong></td>
             <td style="font-family:monospace; font-size:0.76rem; color:var(--accent-cyan);">${confStr}</td>
             <td><strong style="color:var(--accent-amber);">${Math.round(h.recommended_procurement || 0).toLocaleString()} kg</strong></td>
@@ -394,7 +411,10 @@ function fillProjectExample() {
   updateSourceBadges(true);
 
   const bBen = document.getElementById('badge-ben');
-  if (bBen) { bBen.className = 'badge badge-warning'; bBen.innerHTML = '<i class="fa-solid fa-pen"></i> Scenario (12,500)'; }
+  if (bBen) { bBen.className = 'badge badge-warning'; bBen.innerHTML = '<i class="fa-solid fa-flask"></i> Simulated Scale (12,500)'; }
+  const lblBen = document.getElementById('ben-source-label');
+  if (lblBen) { lblBen.innerHTML = '<span style="color:var(--accent-amber);"><i class="fa-solid fa-flask"></i> Operational depot simulation scale (12,500 cardholders)</span>'; }
+
   const bStock = document.getElementById('badge-stock');
   if (bStock) { bStock.className = 'badge badge-warning'; bStock.innerHTML = '<i class="fa-solid fa-pen"></i> Scenario (3,800 kg)'; }
 
