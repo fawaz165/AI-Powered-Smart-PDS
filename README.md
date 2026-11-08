@@ -8,48 +8,129 @@
 [![Pytest 9.1](https://img.shields.io/badge/Tests-75%20Passed%20(100%25)-brightgreen.svg)](https://pytest.org/)
 [![Docker Ready](https://img.shields.io/badge/Docker-Non--Root%20Security-2496ED.svg)](https://www.docker.com/)
 
-An enterprise-grade, full-stack predictive distribution intelligence system replacing legacy manual estimation in the Public Distribution System (PDS) under the **National Food Security Act (NFSA)** and **Targeted Public Distribution System (TPDS)** framework.
+An AI-powered web application designed to improve the efficiency, transparency, and reliability of India's Public Distribution System (PDS).
+
+The system integrates machine learning-based demand forecasting, transaction anomaly detection, inventory management, and automated alerts to support data-driven food-grain distribution.
+
+It provides role-based access for administrators, district officers, and Fair Price Shop dealers through a web-based dashboard.
+
+The application uses Flask, MongoDB, Python-based machine learning models, and Docker for deployment.
 
 ---
 
 ## 1. System Architecture & Core Capabilities
 
+The AI-Powered Smart Public Distribution System follows a **5-tier vertically layered architecture**, establishing strict separation of concerns, modular maintainability, and end-to-end data integrity from the presentation portals down to the persistent database and container orchestration layer.
+
 ```mermaid
 flowchart TD
-    subgraph Frontend["Glassmorphic Dark UI (Vanilla JS & HTML5)"]
-        UI1["Operational Dashboard"]
-        UI2["Beneficiary Registry"]
-        UI3["Commodity Master"]
-        UI4["Inventory Stock Depots"]
-        UI5["Distribution Ledger"]
-        UI6["Demand Forecast Workbench"]
-        UI7["Fraud Audit Console"]
-        UI8["OpenPyXL Export Engine"]
+    %% ========================================================
+    %% 1. USER INTERFACE LAYER
+    %% ========================================================
+    subgraph Layer1 ["1. User Interface Layer"]
+        direction LR
+        UI_Admin["Admin Dashboard"]
+        UI_Officer["Officer Portal"]
+        UI_Dealer["Dealer Portal"]
     end
 
-    subgraph Backend["Flask REST API Backend (Python 3.11)"]
-        Auth["JWT & RBAC Guards<br>(Admin / Officer / Dealer)"]
-        MLService["MLService Engine<br>(Demand Regressor & Isolation Forest)"]
-        InvService["Thread-Safe Inventory Service<br>(Atomic $gte Deductions)"]
-        ReportService["Analytical Export Service<br>(Dynamic XLSX)"]
+    %% ========================================================
+    %% 2. BACKEND LAYER
+    %% ========================================================
+    subgraph Layer2 ["2. Backend Layer"]
+        direction LR
+        BE_API["Flask REST API"]
+        BE_Auth["Authentication"]
+        BE_Req["Request Handling"]
+        BE_Logic["Business Logic"]
     end
 
-    subgraph DataStore["MongoDB Storage Engine (Port 27017)"]
-        DB1[("users")]
-        DB2[("beneficiaries")]
-        DB3[("commodities")]
-        DB4[("inventory")]
-        DB5[("transactions")]
-        DB6[("predictions")]
-        DB7[("fraud_alerts")]
+    %% ========================================================
+    %% 3. PROCESSING LAYER
+    %% ========================================================
+    subgraph Layer3 ["3. Processing Layer"]
+        direction LR
+        PR_ML["Demand Forecasting and Fraud Detection (Machine Learning)"]
+        PR_Inv["Inventory Management"]
+        PR_Ben["Beneficiary Management"]
+        PR_Rep["Alerts and Reports"]
     end
 
-    UI1 & UI2 & UI3 & UI4 & UI5 & UI6 & UI7 & UI8 --> Auth
-    Auth --> MLService & InvService & ReportService
-    InvService --> DB4 & DB5
-    MLService --> DB6 & DB7
-    ReportService --> DB2 & DB4 & DB5 & DB7
+    %% ========================================================
+    %% 4. DATABASE LAYER
+    %% ========================================================
+    subgraph Layer4 ["4. Database Layer (MongoDB)"]
+        direction LR
+        DB_Pred["Predictions"]
+        DB_Fraud["Fraud Alerts"]
+        DB_Inv["Inventory"]
+        DB_Txn["Transactions"]
+        DB_Ben["Beneficiaries"]
+        DB_Users["Users"]
+    end
+
+    %% ========================================================
+    %% 5. DEPLOYMENT LAYER
+    %% ========================================================
+    subgraph Layer5 ["5. Deployment Layer"]
+        direction LR
+        DEP_Docker["Docker"]
+        DEP_Compose["Docker Compose"]
+    end
+
+    %% ========================================================
+    %% DATA FLOW (TOP-TO-BOTTOM STRICT HIERARCHY)
+    %% ========================================================
+    UI_Admin -->|HTTPS Requests| BE_API
+    UI_Officer -->|HTTPS Requests| BE_API
+    UI_Dealer -->|HTTPS Requests| BE_API
+
+    BE_API --> BE_Auth
+    BE_Auth --> BE_Req
+    BE_Req --> BE_Logic
+
+    BE_Logic --> PR_ML
+    BE_Logic --> PR_Inv
+    BE_Logic --> PR_Ben
+    BE_Logic --> PR_Rep
+
+    PR_ML --> DB_Pred
+    PR_ML --> DB_Fraud
+    PR_Inv --> DB_Inv
+    PR_Inv --> DB_Txn
+    PR_Ben --> DB_Ben
+    PR_Ben --> DB_Users
+    PR_Rep --> DB_Inv
+
+    DB_Inv -.->|Persistent Storage| DEP_Compose
+    DB_Txn -.->|Persistent Storage| DEP_Compose
+    DEP_Compose -->|Container Runtime| DEP_Docker
+
+    %% ========================================================
+    %% MINIMAL PROFESSIONAL COLOR PALETTE
+    %% ========================================================
+    classDef uiStyle fill:#F8FAFC,stroke:#0284C7,stroke-width:1.5px,color:#0F172A;
+    classDef beStyle fill:#F8FAFC,stroke:#6366F1,stroke-width:1.5px,color:#0F172A;
+    classDef prStyle fill:#F8FAFC,stroke:#0D9488,stroke-width:1.5px,color:#0F172A;
+    classDef dbStyle fill:#F8FAFC,stroke:#D97706,stroke-width:1.5px,color:#0F172A;
+    classDef depStyle fill:#F8FAFC,stroke:#475569,stroke-width:1.5px,color:#0F172A;
+
+    class UI_Admin,UI_Officer,UI_Dealer uiStyle;
+    class BE_API,BE_Auth,BE_Req,BE_Logic beStyle;
+    class PR_ML,PR_Inv,PR_Ben,PR_Rep prStyle;
+    class DB_Pred,DB_Fraud,DB_Inv,DB_Txn,DB_Ben,DB_Users dbStyle;
+    class DEP_Docker,DEP_Compose depStyle;
 ```
+
+### Architectural Layer Breakdown
+
+| Layer | Responsibility & Components | Codebase Implementation |
+| :--- | :--- | :--- |
+| **1. User Interface** | Dedicated role-tailored web interfaces for system administrators, district supply officers, and Fair Price Shop (FPS) dealers. | Glassmorphic HTML5/ES6 frontend with Chart.js visualization (`frontend/*.html`). |
+| **2. Backend Layer** | Central HTTP entrypoint, JWT authentication & RBAC guards, input validation, and business workflow orchestration. | Flask 3.1 application factory with blueprint modular routing (`backend/routes/`, `backend/app.py`). |
+| **3. Processing Layer** | Domain intelligence and transaction execution: ML demand forecasting, unsupervised fraud detection, thread-safe inventory deduction, beneficiary entitlement validation, and dynamic analytics. | Core service controllers (`backend/services/`) and Scikit-Learn/XGBoost pipelines (`backend/ml/`). |
+| **4. Database Layer** | High-performance document datastore housing operational collections (`Users`, `Beneficiaries`, `Inventory`, `Transactions`, `Predictions`, and `Fraud Alerts`). | MongoDB 6.0 with PyMongo, compound indexing, and atomic conditional queries (`backend/database/`). |
+| **5. Deployment Layer** | Production-ready containerization and multi-service orchestration with persistent storage volume mapping. | Multi-stage hardened `Dockerfile` (non-root `pdsuser`) and `docker-compose.yml` (`mongo_data` volume). |
 
 ### 1. Machine Learning Demand Forecasting
 - **Multi-Model Benchmark**: Evaluates **Linear Regression**, **Decision Tree**, **Random Forest**, and **XGBoost Regressor** on unseen test horizons.
