@@ -176,6 +176,8 @@ AI-Powered Smart PDS/
 ├── .github/workflows/ci-cd.yml     # GitHub Actions automated test & build pipeline
 ├── Dockerfile                      # Hardened container image (non-root pdsuser, curl healthcheck)
 ├── docker-compose.yml              # Multi-container orchestration (web + mongo:6.0)
+├── run.bat                         # One-click Windows Docker Compose launcher & browser opener
+├── run.ps1                         # Windows PowerShell native virtual environment runner
 ├── .dockerignore
 ├── .gitignore
 ├── .env.example
@@ -214,11 +216,68 @@ To evaluate model resilience independent of the statutory ration allocation ceil
 
 ## 5. Quick Start & Execution
 
-### Prerequisites
-- Python `3.11+`
-- MongoDB `6.0+` running on `localhost:27017`
+### Default System Credentials
+| Role | Username | Password | Jurisdiction / Shop ID |
+| :--- | :--- | :--- | :--- |
+| **System Administrator** | `admin` | `admin123` | Headquarters / Full System Control |
+| **District Supply Officer** | `officer_chennai` | `officer123` | Chennai District Operations |
+| **FPS Ration Dealer** | `dealer_001` | `dealer123` | Anna Nagar Depot (`FPS-CHN-001`) |
 
-### Local Native Execution
+---
+
+### Option A: One-Click Windows Launchers (Recommended)
+
+#### 1. Docker Compose Launcher (`run.bat`)
+Double-click `run.bat` or run from Windows Command Prompt:
+```cmd
+run.bat
+```
+- **Automated Engine Detection**: Validates Docker status and automatically starts Docker Desktop if not running.
+- **Service Orchestration**: Starts the multi-container stack (`smart_pds_app` and `smart_pds_mongo`).
+- **Health Verification**: Polls `/api/health` until the services report healthy.
+- **Browser Auto-Launch**: Automatically opens `http://localhost:5000` upon readiness.
+- **Persistent Storage**: Closing the launcher terminal keeps the containers running. To stop the services cleanly without data loss, run `docker compose stop`.
+
+#### 2. Native PowerShell Launcher (`run.ps1`)
+Right-click `run.ps1` and select **Run with PowerShell**, or execute:
+```powershell
+.\run.ps1
+```
+- Activates local virtual environment (`.venv`), validates native MongoDB connectivity on `127.0.0.1:27017`, launches `backend/app.py`, and triggers the browser.
+
+---
+
+### Option B: Docker & Docker Compose CLI (Cross-Platform)
+
+Deploy the multi-container stack with MongoDB 6.0:
+
+```bash
+# Build and start services in detached mode
+docker compose up -d --build
+
+# Inspect container status
+docker compose ps
+
+# View live application logs
+docker compose logs -f web
+
+# Gracefully stop containers (preserves mongo_data volume)
+docker compose stop
+```
+
+- **Application URL**: `http://localhost:5000`
+- **Health Endpoint**: `http://localhost:5000/api/health`
+- **ML Status Endpoint**: `http://localhost:5000/api/ml-status`
+- **Security Hardening**: Container runs as unprivileged non-root user `pdsuser` (UID `10001`).
+- **Storage Volume**: Named volume `mongo_data` guarantees permanent data persistence across restarts.
+
+---
+
+### Option C: Local Native Setup (Development)
+
+#### Prerequisites
+- Python `3.11+`
+- MongoDB `6.0+` active on `localhost:27017`
 
 1. **Clone the repository**:
    ```bash
@@ -237,44 +296,23 @@ To evaluate model resilience independent of the statutory ration allocation ceil
    pip install -r backend/requirements.txt
    ```
 
-3. **Generate datasets and train ML models**:
+3. **Generate synthetic benchmark data and train ML models**:
    ```bash
    python backend/ml/data/generate_pds_data.py
    python backend/ml/train_demand_model.py
    python backend/ml/train_anomaly_model.py
    ```
 
-4. **Seed the database**:
+4. **Seed initial administrative data and stock**:
    ```bash
    python backend/database/seed_db.py
    ```
 
-5. **Start the Flask application server**:
+5. **Start Flask application**:
    ```bash
    python backend/app.py
    ```
-   Open your browser at **`http://localhost:5000`**.
-
-6. **Default Test Credentials**:
-   | Role | Username | Password |
-   | :--- | :--- | :--- |
-   | **System Administrator** | `admin` | `admin123` |
-   | **District Officer** | `officer_chn` | `officer123` |
-   | **FPS Dealer** | `dealer_chn01` | `dealer123` |
-
----
-
-### Docker & Docker Compose Execution
-
-Deploy the full stack (Flask backend + MongoDB) using Docker Compose:
-
-```bash
-docker compose up --build
-```
-
-- Accessible at: **`http://localhost:5000`**
-- Health Probe: `http://localhost:5000/api/health`
-- The container runs as unprivileged user `pdsuser` (UID 10001) for container security.
+   Open `http://localhost:5000` in your browser.
 
 ---
 
