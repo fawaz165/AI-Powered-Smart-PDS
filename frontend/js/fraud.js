@@ -80,6 +80,79 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+/**
+ * Renders animated loading state inside fraud alerts table.
+ */
+function setFraudLoadingState() {
+  const tbody = document.getElementById('fraud-alerts-tbody');
+  if (tbody) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="9" style="text-align: center; color: var(--text-muted); padding: 2.5rem 1.5rem;">
+          <i class="fa-solid fa-circle-notch fa-spin" style="font-size: 1.8rem; color: var(--accent-rose); margin-bottom: 10px; display: block;"></i>
+          <div style="font-weight: 600; font-size: 0.92rem; color: var(--text-primary); margin-bottom: 3px;">Scanning flagged transactions...</div>
+          <div style="font-size: 0.78rem; color: var(--text-secondary);">Querying Isolation Forest statistical outliers and administrative review queue</div>
+        </td>
+      </tr>
+    `;
+  }
+}
+
+/**
+ * Renders error state with retry button inside fraud alerts table.
+ */
+function setFraudErrorState(errorMessage) {
+  const tbody = document.getElementById('fraud-alerts-tbody');
+  if (tbody) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="9" style="text-align: center; color: var(--accent-rose); padding: 2.5rem 1.5rem;">
+          <i class="fa-solid fa-triangle-exclamation" style="font-size: 2rem; margin-bottom: 10px; display: block;"></i>
+          <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 5px;">Failed to Load Flagged Transactions</div>
+          <div style="font-size: 0.8rem; color: var(--text-secondary); max-width: 480px; margin: 0 auto 14px auto;">
+            ${escapeHtml(errorMessage || 'Unable to retrieve fraud alerts from server or MongoDB database.')}
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="loadFraudAlerts()" style="padding: 6px 16px; font-size: 0.8rem;">
+            <i class="fa-solid fa-arrows-rotate"></i> Retry Transaction Scanner
+          </button>
+        </td>
+      </tr>
+    `;
+  }
+}
+
+/**
+ * Renders empty state for zero flagged transactions or no filter matches.
+ */
+function setFraudEmptyState(isFiltered = false) {
+  const tbody = document.getElementById('fraud-alerts-tbody');
+  if (!tbody) return;
+  if (isFiltered) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="9" style="text-align: center; color: var(--text-muted); padding: 2.5rem 1.5rem;">
+          <i class="fa-solid fa-filter-circle-xmark" style="font-size: 1.8rem; color: var(--text-muted); margin-bottom: 10px; display: block;"></i>
+          <div style="font-weight: 600; font-size: 0.92rem; color: var(--text-primary); margin-bottom: 3px;">No Flagged Transactions Matching Filters</div>
+          <div style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 12px;">No records match the selected district, risk level, or review status criteria.</div>
+          <button class="btn btn-secondary btn-sm" onclick="resetFraudFilters()" style="padding: 5px 14px; font-size: 0.78rem;">
+            <i class="fa-solid fa-rotate-left"></i> Reset Filter Criteria
+          </button>
+        </td>
+      </tr>
+    `;
+  } else {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="9" style="text-align: center; color: var(--accent-emerald); padding: 2.5rem 1.5rem;">
+          <i class="fa-solid fa-shield-check" style="font-size: 2rem; margin-bottom: 10px; display: block;"></i>
+          <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 3px;">Distribution Ledger In Order</div>
+          <div style="font-size: 0.78rem; color: var(--text-secondary);">No transactions currently flagged for administrative outlier review.</div>
+        </td>
+      </tr>
+    `;
+  }
+}
+
 async function loadFraudAlerts() {
   const region = document.getElementById('filter-fraud-region')?.value || 'ALL';
   const risk = document.getElementById('filter-fraud-risk')?.value || 'ALL';
@@ -90,6 +163,10 @@ async function loadFraudAlerts() {
   if (risk !== 'ALL') params.risk_level = risk;
   if (status !== 'ALL') params.status = status;
 
+  const isFiltered = (region !== 'ALL' || risk !== 'ALL' || status !== 'ALL');
+
+  setFraudLoadingState();
+
   try {
     const res = await API.getFraudAlerts(params);
     const tbody = document.getElementById('fraud-alerts-tbody');
@@ -99,11 +176,19 @@ async function loadFraudAlerts() {
 
     if (res && res.status === 'success') {
       currentAlerts = res.data || [];
-      if (totalBadge) totalBadge.textContent = `${res.total || currentAlerts.length} Total Records`;
-      if (pendingBadge) pendingBadge.textContent = `${res.pending_count || 0} Pending Review`;
+      
+      const totalOutliers = res.total_outliers !== undefined ? res.total_outliers : (res.total_records !== undefined ? res.total_records : (res.total || currentAlerts.length));
+      const pendingCount = res.total_pending !== undefined ? res.total_pending : (res.pending_count || 0);
+
+      if (pendingBadge) {
+        pendingBadge.textContent = `${pendingCount} Pending Review`;
+      }
+      if (totalBadge) {
+        totalBadge.textContent = `${totalOutliers} Total Outliers`;
+      }
 
       if (currentAlerts.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:24px;">No flagged transactions matching current filter criteria.</td></tr>';
+        setFraudEmptyState(isFiltered);
         return;
       }
 
@@ -112,17 +197,17 @@ async function loadFraudAlerts() {
         const isPending = a.status === 'PENDING_REVIEW' || !a.status;
         const score = typeof a.anomaly_score === 'number' ? a.anomaly_score.toFixed(4) : (a.anomaly_score || '-0.2500');
         
-        let decisionBadge = '<span class="badge badge-warning"><i class="fa-solid fa-clock"></i> Pending Review</span>';
+        let decisionBadge = '<span class="badge badge-warning" style="font-size:0.68rem; padding:2px 6px;"><i class="fa-solid fa-clock"></i> Pending Review</span>';
         if (a.review_decision === 'VERIFIED_LEGITIMATE' || a.status === 'VERIFIED_LEGITIMATE' || a.review_decision === 'APPROVED_GENUINE') {
-          decisionBadge = '<span class="badge badge-success"><i class="fa-solid fa-circle-check"></i> Verified Legitimate</span>';
+          decisionBadge = '<span class="badge badge-success" style="font-size:0.68rem; padding:2px 6px;"><i class="fa-solid fa-circle-check"></i> Verified Legitimate</span>';
         } else if (a.review_decision === 'CONFIRMED_IRREGULARITY' || a.status === 'CONFIRMED_IRREGULARITY' || a.review_decision === 'FLAGGED_FRAUD') {
-          decisionBadge = '<span class="badge badge-danger"><i class="fa-solid fa-ban"></i> Confirmed Irregularity</span>';
+          decisionBadge = '<span class="badge badge-danger" style="font-size:0.68rem; padding:2px 6px;"><i class="fa-solid fa-ban"></i> Confirmed Irregularity</span>';
         } else if (a.review_decision === 'DISMISSED_FALSE_POSITIVE') {
-          decisionBadge = '<span class="badge badge-secondary"><i class="fa-solid fa-circle-xmark"></i> False Positive</span>';
+          decisionBadge = '<span class="badge badge-secondary" style="font-size:0.68rem; padding:2px 6px;"><i class="fa-solid fa-circle-xmark"></i> False Positive</span>';
         } else if (a.review_decision === 'REQUIRES_INSPECTION') {
-          decisionBadge = '<span class="badge badge-purple"><i class="fa-solid fa-magnifying-glass"></i> Field Inspection</span>';
+          decisionBadge = '<span class="badge badge-purple" style="font-size:0.68rem; padding:2px 6px;"><i class="fa-solid fa-magnifying-glass"></i> Field Inspection</span>';
         } else if (a.status === 'RESOLVED') {
-          decisionBadge = '<span class="badge badge-success"><i class="fa-solid fa-check"></i> Resolved</span>';
+          decisionBadge = '<span class="badge badge-success" style="font-size:0.68rem; padding:2px 6px;"><i class="fa-solid fa-check"></i> Resolved</span>';
         }
 
         const scoreBadgeClass = a.score_badge === 'SEVERE_ANOMALY' ? 'badge-danger' : (a.score_badge === 'MILD_ANOMALY' ? 'badge-warning' : 'badge-secondary');
@@ -139,33 +224,36 @@ async function loadFraudAlerts() {
               <span class="ben-code-pill">${escapeHtml(a.beneficiary_id)}</span>
             </td>
             <td>
-              <span class="badge badge-info">${escapeHtml(a.commodity)}</span>
-              <strong style="margin-left:4px; color:#fff; font-size:0.85rem;">${escapeHtml(a.quantity)} kg</strong>
-              ${a.entitled_quota ? `<div style="font-size:0.68rem; color:var(--text-muted); margin-top:1px;">Quota: ${a.entitled_quota} kg ${a.quantity_to_quota_ratio ? `(${a.quantity_to_quota_ratio}x)` : ''}</div>` : ''}
+              <span class="badge badge-info" style="font-size:0.68rem; padding:1px 5px;">${escapeHtml(a.commodity)}</span>
+              <strong style="margin-left:3px; color:#fff; font-size:0.84rem; font-variant-numeric: tabular-nums;">${escapeHtml(a.quantity)} kg</strong>
+              ${a.entitled_quota ? `<div style="font-size:0.67rem; color:var(--text-muted); margin-top:1px;">Quota: ${a.entitled_quota} kg ${a.quantity_to_quota_ratio ? `(${a.quantity_to_quota_ratio}x)` : ''}</div>` : ''}
             </td>
-            <td>${escapeHtml(a.region || 'Chennai')}</td>
-            <td><span class="badge ${isHigh ? 'badge-danger' : 'badge-warning'}">${escapeHtml(a.risk_level)}</span></td>
+            <td><strong>${escapeHtml(a.region || 'Chennai')}</strong></td>
+            <td><span class="badge ${isHigh ? 'badge-danger' : 'badge-warning'}" style="font-size:0.67rem; padding:1px 6px;">${escapeHtml(a.risk_level)}</span></td>
             <td>
-              <div style="font-family:monospace; font-weight:700; color:${Number(score) < 0 ? 'var(--accent-rose)' : 'var(--accent-emerald)'}; font-size:0.86rem;">${score}</div>
-              <span class="badge ${scoreBadgeClass}" style="font-size:0.65rem; margin-top:2px;" title="${escapeHtml(scoreInterp)}">
+              <div style="font-family:monospace; font-weight:700; color:${Number(score) < 0 ? 'var(--accent-rose)' : 'var(--accent-emerald)'}; font-size:0.83rem;">${score}</div>
+              <span class="badge ${scoreBadgeClass}" style="font-size:0.62rem; padding:1px 5px; margin-top:1px;" title="${escapeHtml(scoreInterp)}">
                 ${Number(score) < 0 ? '<i class="fa-solid fa-triangle-exclamation"></i> Outlier (&lt;0)' : '<i class="fa-solid fa-check"></i> Inlier (&ge;0)'}
               </span>
             </td>
-            <td style="max-width: 260px; font-size: 0.76rem; color: #fecdd3; line-height:1.35;">${escapeHtml(a.reason)}</td>
+            <td style="max-width: 250px; font-size: 0.74rem; color: #fecdd3; line-height:1.3;">${escapeHtml(a.reason)}</td>
             <td>
               ${decisionBadge}
               ${a.reviewed_by ? `<div style="font-size:0.68rem; color:var(--text-muted); margin-top:2px;"><i class="fa-solid fa-user-check"></i> ${escapeHtml(a.reviewed_by)}</div>` : ''}
             </td>
             <td class="col-actions">
-              <button class="btn btn-secondary btn-sm" onclick="openReviewModal('${escapeHtml(a.transaction_id)}')" style="white-space:nowrap; padding:5px 10px; font-size:0.75rem;">
+              <button class="btn btn-secondary btn-sm" onclick="openReviewModal('${escapeHtml(a.transaction_id)}')" style="white-space:nowrap; padding:4px 9px; font-size:0.74rem;">
                 <i class="fa-solid fa-gavel"></i> ${isPending ? 'Audit &amp; Review' : 'Update Review'}
               </button>
             </td>
           </tr>
         `;
       }).join('');
+    } else {
+      setFraudErrorState(res ? res.message : 'Invalid response from server');
     }
   } catch (err) {
+    setFraudErrorState(err.message || 'Failed to load fraud alerts from server');
     showToast('Failed to load fraud alerts from server', 'error');
   }
 }
@@ -265,38 +353,6 @@ async function submitOfficialReview() {
       decision: decision,
       reason: reason,
       comments: reason
-    });
-
-    if (res && res.status === 'success') {
-      showToast(`Audit decision recorded for ${txnId}: ${decision}`, 'success');
-      closeModal('review-fraud-modal');
-      await loadFraudAlerts();
-    } else {
-      showToast(res.message || 'Failed to submit review', 'error');
-    }
-  } catch (err) {
-    showToast(err.message || 'Error recording audit review decision', 'error');
-  } finally {
-    if (btn) {
-      btn.disabled = false;
-      btn.innerHTML = '<i class="fa-solid fa-stamp"></i> Record Official Decision';
-    }
-  }
-}
-    showToast('Please provide an official audit reason (min 3 chars).', 'error');
-    return;
-  }
-
-  if (btn) {
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Recording Decision...';
-  }
-
-  try {
-    const res = await API.reviewFraudAlert(txnId, {
-      officer_id: officerId,
-      decision: decision,
-      reason: reason
     });
 
     if (res && res.status === 'success') {

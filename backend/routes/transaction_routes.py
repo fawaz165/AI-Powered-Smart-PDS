@@ -254,7 +254,11 @@ def list_fraud_alerts():
     if status_filter and status_filter.upper() != "ALL":
         sf = status_filter.upper()
         if sf == "PENDING_REVIEW":
-            filter_query["status"] = "PENDING_REVIEW"
+            filter_query["$or"] = [
+                {"status": "PENDING_REVIEW"},
+                {"status": {"$exists": False}},
+                {"status": None}
+            ]
         elif sf in ["VERIFIED_LEGITIMATE", "APPROVED_GENUINE"]:
             filter_query["status"] = {"$in": ["VERIFIED_LEGITIMATE", "APPROVED_GENUINE", "DISMISSED_FALSE_POSITIVE"]}
         elif sf in ["CONFIRMED_IRREGULARITY", "FLAGGED_FRAUD"]:
@@ -267,6 +271,30 @@ def list_fraud_alerts():
         filter_query["commodity"] = commodity
 
     alerts = list(db.fraud_alerts.find(filter_query, {"_id": 0}).sort("created_at", -1))
+    
+    # Calculate overall database totals (scoped by region/commodity if provided) for UI summary badges
+    base_scope = {}
+    if region:
+        base_scope["region"] = region
+    if commodity and commodity.upper() != "ALL":
+        base_scope["commodity"] = commodity
+
+    total_db_alerts = db.fraud_alerts.count_documents(base_scope)
+    total_db_pending = db.fraud_alerts.count_documents({
+        **base_scope,
+        "$or": [
+            {"status": "PENDING_REVIEW"},
+            {"status": {"$exists": False}},
+            {"status": None}
+        ]
+    })
+    total_db_outliers = db.fraud_alerts.count_documents({
+        **base_scope,
+        "$or": [
+            {"anomaly_score": {"$lt": 0}},
+            {"risk_level": "HIGH"}
+        ]
+    })
     
     # Enrich score interpretations and verify detection reasons against actual transaction & beneficiary entitlements
     for a in alerts:
@@ -320,6 +348,9 @@ def list_fraud_alerts():
         "total": len(alerts),
         "count": len(pending_alerts),
         "pending_count": len(pending_alerts),
+        "total_records": total_db_alerts,
+        "total_pending": total_db_pending,
+        "total_outliers": total_db_outliers if total_db_outliers > 0 else total_db_alerts,
         "data": alerts,
         "audit_principle": "Statistical anomalies alone do NOT constitute unilateral proof of fraud. Human officer verification required."
     }), 200

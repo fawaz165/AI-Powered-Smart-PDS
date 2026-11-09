@@ -53,15 +53,15 @@
         </div>
       </header>
 
-      <div class="content-body">
+      <div class="content-body fraud-content">
         
         <!-- Ethical AI & Administrative Notice Banner -->
-        <div class="alert-banner" style="background: linear-gradient(90deg, rgba(59, 130, 246, 0.15), rgba(139, 92, 246, 0.15)); border-color: rgba(59, 130, 246, 0.4); margin-bottom: 16px;">
+        <div class="fraud-notice-banner">
           <div class="alert-banner-left">
-            <i class="fa-solid fa-scale-balanced alert-icon-large" style="color: #60a5fa;"></i>
+            <i class="fa-solid fa-scale-balanced alert-icon-large"></i>
             <div class="alert-text">
-              <h4 style="color: #bfdbfe;">Administrative Audit &amp; Fair Allocation Principle</h4>
-              <p style="color: #93c5fd;">
+              <h4>Administrative Audit &amp; Fair Allocation Principle</h4>
+              <p>
                 Statistical anomalies flagged by the Isolation Forest are mathematical deviations, <strong>NOT unilateral proof of fraud</strong>. All flagged transactions remain in review state until an authorized officer logs an official decision with written audit rationale. Original transaction records and ML anomaly scores are permanently preserved.
               </p>
             </div>
@@ -71,7 +71,7 @@
         <!-- Anomaly Score & Explainability Guide -->
         <div class="explainability-guide-card">
           <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
-            <div style="font-size: 0.84rem; font-weight: 700; color: #fff;">
+            <div style="font-size: 0.82rem; font-weight: 700; color: #fff;">
               <i class="fa-solid fa-circle-question" style="color: var(--accent-cyan); margin-right: 6px;"></i>
               Understanding Isolation Forest Anomaly Scores &bull; <span style="color: var(--accent-amber); font-weight: 600;">Continuous Distance, NOT Fraud Probability</span>
             </div>
@@ -80,28 +80,28 @@
           <div class="explainability-guide-grid">
             <div class="explainability-guide-item">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                <strong style="color: var(--accent-rose); font-size: 0.78rem;"><i class="fa-solid fa-arrow-down"></i> Score &lt; 0 (Negative)</strong>
-                <span class="badge badge-danger" style="font-size: 0.64rem;">Statistical Outlier</span>
+                <strong style="color: var(--accent-rose); font-size: 0.76rem;"><i class="fa-solid fa-arrow-down"></i> Score &lt; 0 (Negative)</strong>
+                <span class="badge badge-danger" style="font-size: 0.62rem;">Statistical Outlier</span>
               </div>
-              <p style="font-size: 0.73rem; color: var(--text-secondary); line-height: 1.4; margin: 0;">
+              <p style="font-size: 0.72rem; color: var(--text-secondary); line-height: 1.35; margin: 0;">
                 Points isolated with <strong>fewer tree splits (shorter path lengths)</strong> in the ensemble. Indicates abnormal quantity, off-hours timing, or irregular draw frequency.
               </p>
             </div>
             <div class="explainability-guide-item">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                <strong style="color: var(--accent-emerald); font-size: 0.78rem;"><i class="fa-solid fa-arrow-up"></i> Score &ge; 0 (Positive)</strong>
-                <span class="badge badge-success" style="font-size: 0.64rem;">Normal Inlier</span>
+                <strong style="color: var(--accent-emerald); font-size: 0.76rem;"><i class="fa-solid fa-arrow-up"></i> Score &ge; 0 (Positive)</strong>
+                <span class="badge badge-success" style="font-size: 0.62rem;">Normal Inlier</span>
               </div>
-              <p style="font-size: 0.73rem; color: var(--text-secondary); line-height: 1.4; margin: 0;">
+              <p style="font-size: 0.72rem; color: var(--text-secondary); line-height: 1.35; margin: 0;">
                 Points requiring <strong>deep tree partitioning (longer path lengths)</strong>. Conforms to standard registered cardholder quotas, operating hours, and standard distribution cadence.
               </p>
             </div>
             <div class="explainability-guide-item">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                <strong style="color: #60a5fa; font-size: 0.78rem;"><i class="fa-solid fa-shield-halved"></i> Ethical AI Compliance</strong>
-                <span class="badge badge-info" style="font-size: 0.64rem;">Human In The Loop</span>
+                <strong style="color: #60a5fa; font-size: 0.76rem;"><i class="fa-solid fa-shield-halved"></i> Ethical AI Compliance</strong>
+                <span class="badge badge-info" style="font-size: 0.62rem;">Human In The Loop</span>
               </div>
-              <p style="font-size: 0.73rem; color: var(--text-secondary); line-height: 1.4; margin: 0;">
+              <p style="font-size: 0.72rem; color: var(--text-secondary); line-height: 1.35; margin: 0;">
                 <strong>Never treat score as a fraud percentage:</strong> A score of -0.38 is a geometric distance offset, NOT a 38% probability. Human verification with written comments is mandatory.
               </p>
             </div>
@@ -109,25 +109,25 @@
         </div>
 
         <!-- Fraud Alerts Table Panel -->
-        <div class="data-panel">
-          <div class="panel-header" style="flex-wrap: wrap; gap: 12px;">
+        <div class="data-panel compact-data-panel">
+          <div class="panel-header compact-panel-header" style="flex-wrap: wrap; gap: 8px;">
             <div>
-              <h3 style="font-size: 1.05rem;">Flagged Transactions Requiring Administrative Review</h3>
-              <p style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 2px;">
+              <h3 style="font-size: 0.95rem;">Flagged Transactions Requiring Administrative Review</h3>
+              <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">
                 Review flagged distributions against card entitlements, timestamps, and model scores.
               </p>
             </div>
-            <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-              <span class="badge badge-danger" id="fraud-pending-badge">0 Pending Review</span>
-              <span class="badge badge-info" id="fraud-total-badge">0 Total Outliers</span>
+            <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+              <span class="badge badge-danger" id="fraud-pending-badge" style="font-size: 0.72rem; padding: 2px 7px;">0 Pending Review</span>
+              <span class="badge badge-info" id="fraud-total-badge" style="font-size: 0.72rem; padding: 2px 7px;">0 Total Outliers</span>
             </div>
           </div>
 
           <!-- Filter Controls -->
-          <div style="padding: 14px 20px; background: rgba(255,255,255,0.015); border-bottom: 1px solid var(--border-subtle); display: flex; gap: 14px; flex-wrap: wrap; align-items: center;">
-            <div style="display: flex; align-items: center; gap: 6px;">
-              <label style="font-size: 0.78rem; color: var(--text-muted); font-weight: 600;" for="filter-fraud-region">Depot / District:</label>
-              <select id="filter-fraud-region" class="form-control" style="width: auto; padding: 6px 10px; font-size: 0.8rem;" onchange="loadFraudAlerts()">
+          <div class="fraud-filters-bar">
+            <div class="fraud-filter-item">
+              <label class="fraud-filter-label" for="filter-fraud-region">Depot / District:</label>
+              <select id="filter-fraud-region" class="fraud-filter-select" onchange="loadFraudAlerts()">
                 <option value="ALL">All Districts</option>
                 <option value="Chennai">Chennai</option>
                 <option value="Coimbatore">Coimbatore</option>
@@ -137,18 +137,18 @@
               </select>
             </div>
 
-            <div style="display: flex; align-items: center; gap: 6px;">
-              <label style="font-size: 0.78rem; color: var(--text-muted); font-weight: 600;" for="filter-fraud-risk">Risk Level:</label>
-              <select id="filter-fraud-risk" class="form-control" style="width: auto; padding: 6px 10px; font-size: 0.8rem;" onchange="loadFraudAlerts()">
+            <div class="fraud-filter-item">
+              <label class="fraud-filter-label" for="filter-fraud-risk">Risk Level:</label>
+              <select id="filter-fraud-risk" class="fraud-filter-select" onchange="loadFraudAlerts()">
                 <option value="ALL">All Risk Levels</option>
                 <option value="HIGH">High Risk</option>
                 <option value="MEDIUM">Medium Risk</option>
               </select>
             </div>
 
-            <div style="display: flex; align-items: center; gap: 6px;">
-              <label style="font-size: 0.78rem; color: var(--text-muted); font-weight: 600;" for="filter-fraud-status">Review Status:</label>
-              <select id="filter-fraud-status" class="form-control" style="width: auto; padding: 6px 10px; font-size: 0.8rem;" onchange="loadFraudAlerts()">
+            <div class="fraud-filter-item">
+              <label class="fraud-filter-label" for="filter-fraud-status">Review Status:</label>
+              <select id="filter-fraud-status" class="fraud-filter-select" onchange="loadFraudAlerts()">
                 <option value="ALL">All Records</option>
                 <option value="PENDING_REVIEW" selected>Pending Review</option>
                 <option value="VERIFIED_LEGITIMATE">Verified Legitimate</option>
@@ -157,7 +157,7 @@
               </select>
             </div>
 
-            <button class="btn btn-secondary btn-sm" onclick="resetFraudFilters()" style="margin-left: auto;">
+            <button class="btn btn-secondary btn-sm fraud-filter-reset-btn" onclick="resetFraudFilters()">
               <i class="fa-solid fa-rotate-left"></i> Reset Filters
             </button>
           </div>
@@ -166,15 +166,15 @@
             <table class="fraud-console-table">
               <thead>
                 <tr>
-                  <th>Transaction ID &amp; Time</th>
-                  <th>Beneficiary ID</th>
-                  <th>Commodity &amp; Draw</th>
-                  <th>District</th>
-                  <th>Risk Level</th>
-                  <th>Isolation Forest Score</th>
-                  <th>Explainable Detection Reasons</th>
-                  <th>Review Decision &amp; Status</th>
-                  <th class="col-actions">Audit Actions</th>
+                  <th style="min-width: 110px;">Transaction ID &amp; Time</th>
+                  <th style="min-width: 75px;">Beneficiary ID</th>
+                  <th style="min-width: 105px;">Commodity &amp; Draw</th>
+                  <th style="min-width: 75px;">District</th>
+                  <th style="min-width: 70px;">Risk Level</th>
+                  <th style="min-width: 85px;">Isolation Forest Score</th>
+                  <th style="min-width: 170px;">Explainable Detection Reasons</th>
+                  <th style="min-width: 120px;">Review Decision &amp; Status</th>
+                  <th class="col-actions" style="min-width: 95px;">Audit Actions</th>
                 </tr>
               </thead>
               <tbody id="fraud-alerts-tbody">
