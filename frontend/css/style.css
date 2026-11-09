@@ -522,7 +522,7 @@ h1, h2, h3, h4, h5, .brand-title {
 
 .custom-table {
   width: 100%;
-  min-width: 720px;
+  min-width: 680px;
   border-collapse: collapse;
   text-align: left;
   font-size: 0.85rem;
@@ -556,6 +556,91 @@ h1, h2, h3, h4, h5, .brand-title {
 
 .custom-table tbody tr:hover {
   background: rgba(255, 255, 255, 0.03);
+}
+
+.benchmark-table {
+  min-width: 660px;
+}
+
+.benchmark-table th,
+.benchmark-table td {
+  padding: 10px 14px;
+}
+
+.benchmark-table th:last-child,
+.benchmark-table td:last-child {
+  text-align: center;
+  min-width: 160px;
+}
+
+.audit-history-table {
+  min-width: 740px;
+}
+
+.audit-history-table th,
+.audit-history-table td {
+  padding: 10px 12px;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------- Explainability Factor Cards ---------------- */
+.factor-card-item {
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 78px;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.factor-card-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+.factor-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.factor-name {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.factor-badge {
+  font-size: 0.64rem !important;
+  padding: 1px 6px !important;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.factor-value {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--accent-cyan);
+  margin-bottom: 2px;
+  line-height: 1.2;
+}
+
+.factor-detail {
+  font-size: 0.71rem;
+  color: var(--text-secondary);
+  line-height: 1.35;
+  word-break: break-word;
 }
 
 /* ---------------- Fraud Console Table & Explainability ---------------- */

@@ -10,10 +10,8 @@ let liveDbBuffer = 500;
 document.addEventListener('DOMContentLoaded', async () => {
   await populateCommoditiesDropdown();
   await loadModelMetrics();
-  // Sync initial live DB values for default commodity & region
+  // Sync initial live DB values for default commodity & region (automatically triggers forecast)
   await syncDatabaseValues();
-  // Trigger initial forecast
-  await executeDemandForecast();
   // Load forecast audit history
   await loadForecastHistory();
 
@@ -101,9 +99,19 @@ async function syncDatabaseValues() {
       }
     }
 
+    // 3. Reset previous demand baseline badge
+    const prevBadge = document.getElementById('badge-prev-demand');
+    if (prevBadge) {
+      prevBadge.className = 'badge badge-secondary';
+      prevBadge.innerHTML = 'Historical Baseline';
+    }
+
     isCustomScenario = false;
     updateSourceBadges(false);
     showToast(`Synchronized live database values for ${commodity} in ${region}`, 'info');
+
+    // Automatically recalculate forecast so assessment card immediately reflects live values
+    await executeDemandForecast();
   } catch (err) {
     console.warn('Could not sync live DB values:', err);
   }
@@ -112,6 +120,8 @@ async function syncDatabaseValues() {
 function onParameterChange() {
   if (!isCustomScenario) {
     syncDatabaseValues();
+  } else {
+    executeDemandForecast();
   }
 }
 
@@ -145,10 +155,11 @@ function updateSourceBadges(isCustom) {
   if (formBadge) {
     if (isCustom) {
       formBadge.className = 'badge badge-warning';
-      formBadge.innerHTML = '<i class="fa-solid fa-flask"></i> Simulation Scenario Values';
+      formBadge.innerHTML = '<i class="fa-solid fa-flask"></i> Simulation Scenario';
     } else {
+      const curBen = document.getElementById('pred-beneficiaries')?.value || liveDbBenCount;
       formBadge.className = 'badge badge-info';
-      formBadge.innerHTML = `<i class="fa-solid fa-database"></i> Live Database Values (${liveDbBenCount} cards)`;
+      formBadge.innerHTML = `<i class="fa-solid fa-database"></i> Live Database Values (${Number(curBen).toLocaleString()} cards)`;
     }
   }
 
@@ -179,14 +190,14 @@ async function loadModelMetrics(dynamic = false) {
         return `
           <tr style="${isBest ? 'background: rgba(59, 130, 246, 0.08); font-weight: 600;' : ''}">
             <td>
-              <strong>${escapeHtml(name)}</strong>
-              ${isBest ? ' <span class="badge badge-success" style="font-size:0.68rem; margin-left:6px;"><i class="fa-solid fa-crown"></i> Benchmark Winner</span>' : ''}
+              <strong style="color: #fff;">${escapeHtml(name)}</strong>
+              ${isBest ? ' <span class="badge badge-success" style="font-size:0.68rem; margin-left:6px;"><i class="fa-solid fa-crown"></i> Winner</span>' : ''}
             </td>
-            <td>${Number(m.MAE).toFixed(2)} kg</td>
-            <td>${Number(m.MSE).toLocaleString()}</td>
-            <td>${Number(m.RMSE).toFixed(2)} kg</td>
-            <td><strong style="color:var(--accent-emerald); font-family:monospace;">${Number(m.R2).toFixed(4)}</strong></td>
-            <td>${isBest ? '<span class="badge badge-info">Active in Production</span>' : '<span class="badge badge-secondary" style="background:rgba(255,255,255,0.05); color:#94a3b8;">Benchmarked</span>'}</td>
+            <td style="font-variant-numeric: tabular-nums;">${Number(m.MAE).toFixed(2)} kg</td>
+            <td style="font-variant-numeric: tabular-nums;">${Number(m.MSE).toLocaleString()}</td>
+            <td style="font-variant-numeric: tabular-nums;">${Number(m.RMSE).toFixed(2)} kg</td>
+            <td><strong style="color:var(--accent-emerald); font-variant-numeric: tabular-nums; font-family:'Outfit',sans-serif;">${Number(m.R2).toFixed(4)}</strong></td>
+            <td style="text-align: center;">${isBest ? '<span class="badge badge-info" style="font-size:0.72rem; white-space:nowrap;"><i class="fa-solid fa-check"></i> Active in Production</span>' : '<span class="badge badge-secondary" style="background:rgba(255,255,255,0.05); color:#94a3b8; font-size:0.72rem; white-space:nowrap;">Benchmarked</span>'}</td>
           </tr>
         `;
       }).join('');
@@ -299,18 +310,26 @@ async function executeDemandForecast() {
 
       const factorsGrid = document.getElementById('res-factors-grid');
       if (factorsGrid && explanation.factors) {
-        factorsGrid.innerHTML = explanation.factors.map(f => `
-          <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 8px 10px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
-              <span style="font-size:0.75rem; font-weight:600; color:var(--text-primary);">${escapeHtml(f.name)}</span>
-              <span class="badge ${f.impact.includes('+') || f.impact === 'Primary (+)' ? 'badge-info' : (f.impact === 'Deficit' ? 'badge-danger' : 'badge-secondary')}" style="font-size:0.65rem; padding:2px 6px;">
-                ${escapeHtml(f.impact)}
-              </span>
+        factorsGrid.innerHTML = explanation.factors.map(f => {
+          let badgeClass = 'badge-secondary';
+          if (f.impact && (f.impact.includes('+') || f.impact === 'Primary (+)')) {
+            badgeClass = 'badge-info';
+          } else if (f.impact === 'Deficit') {
+            badgeClass = 'badge-danger';
+          } else if (f.impact === 'Adequate' || f.impact === 'Optimal') {
+            badgeClass = 'badge-success';
+          }
+          return `
+            <div class="factor-card-item">
+              <div class="factor-card-header">
+                <span class="factor-name" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</span>
+                <span class="badge ${badgeClass} factor-badge">${escapeHtml(f.impact)}</span>
+              </div>
+              <div class="factor-value">${escapeHtml(f.value)}</div>
+              <div class="factor-detail">${escapeHtml(f.detail)}</div>
             </div>
-            <div style="font-size:0.8rem; font-weight:600; color:var(--accent-cyan); margin-bottom:2px;">${escapeHtml(f.value)}</div>
-            <div style="font-size:0.72rem; color:var(--text-muted); line-height:1.3;">${escapeHtml(f.detail)}</div>
-          </div>
-        `).join('');
+          `;
+        }).join('');
       }
 
       // 5. Mathematical Calculation Breakdown
@@ -332,11 +351,11 @@ async function executeDemandForecast() {
         breakdownEl.innerHTML = `
           <div style="margin-bottom:3px;">&bull; <strong>1. Input Scale:</strong> ${d.beneficiary_count.toLocaleString()} cardholder families (${isCustomScenario ? 'Simulated Scale' : 'Live DB'}) &bull; Baseline momentum: ${baseDemand} kg</div>
           <div style="margin-bottom:3px;">&bull; <strong>2. Seasonal Multiplier:</strong> ${seasonalIdx}x (${escapeHtml(seasonalLbl)}) applied to festival/climatic seasonal curve</div>
-          <div style="margin-bottom:3px;">&bull; <strong>3. ML Regression Model:</strong> Pipeline preprocessor &rarr; ${escapeHtml(d.model_used || 'Linear Regression')} &rarr; <strong style="color:var(--accent-cyan);">${rawPred} kg</strong></div>
-          <div style="margin-bottom:3px;">&bull; <strong>4. Final Predicted Demand:</strong> Base Prediction (${rawPred} kg)${trendText} &rarr; <strong style="color:#fff; font-size:0.82rem;">${finalDemand} kg</strong></div>
-          <div style="margin-bottom:3px;">&bull; <strong>5. Gross Requirement:</strong> Predicted Demand (${finalDemand} kg) + Safety Buffer (${bufferVal} kg) = <strong style="color:var(--accent-cyan);">${grossVal} kg</strong></div>
-          <div style="margin-bottom:3px;">&bull; <strong>6. Net Shortage:</strong> max(0, Demand [${finalDemand}] &minus; Depot Stock [${stockVal}]) = <strong style="color:var(--accent-rose);">${shortageVal} kg</strong></div>
-          <div>&bull; <strong>7. Procurement Recommended:</strong> max(0, Gross Need [${grossVal}] &minus; Depot Stock [${stockVal}]) = <strong style="color:var(--accent-amber); font-weight:700;">${procureVal} kg</strong></div>
+          <div style="margin-bottom:3px;">&bull; <strong>3. ML Regression Model:</strong> Pipeline preprocessor &rarr; ${escapeHtml(d.model_used || 'Linear Regression')} &rarr; <strong style="color:var(--accent-cyan); font-variant-numeric: tabular-nums;">${rawPred} kg</strong></div>
+          <div style="margin-bottom:3px;">&bull; <strong>4. Final Predicted Demand:</strong> Base Prediction (${rawPred} kg)${trendText} &rarr; <strong style="color:#fff; font-size:0.82rem; font-variant-numeric: tabular-nums;">${finalDemand} kg</strong></div>
+          <div style="margin-bottom:3px;">&bull; <strong>5. Gross Requirement:</strong> Predicted Demand (${finalDemand} kg) + Safety Buffer (${bufferVal} kg) = <strong style="color:var(--accent-cyan); font-variant-numeric: tabular-nums;">${grossVal} kg</strong></div>
+          <div style="margin-bottom:3px;">&bull; <strong>6. Net Shortage:</strong> max(0, Demand [${finalDemand}] &minus; Depot Stock [${stockVal}]) = <strong style="color:var(--accent-rose); font-variant-numeric: tabular-nums;">${shortageVal} kg</strong></div>
+          <div>&bull; <strong>7. Procurement Recommended:</strong> max(0, Gross Need [${grossVal}] &minus; Depot Stock [${stockVal}]) = <strong style="color:var(--accent-amber); font-weight:700; font-variant-numeric: tabular-nums;">${procureVal} kg</strong></div>
         `;
       }
 
@@ -374,17 +393,17 @@ async function loadForecastHistory() {
         const isSim = h.data_source === 'USER_SCENARIO' || h.data_source === 'SIMULATION_SCENARIO' || (h.beneficiary_count && h.beneficiary_count >= 1000);
         return `
           <tr>
-            <td style="font-size:0.78rem; color:var(--text-muted);">${escapeHtml(dt)}</td>
+            <td style="font-size:0.78rem; color:var(--text-muted); white-space: nowrap;">${escapeHtml(dt)}</td>
             <td><span class="badge badge-info">${escapeHtml(h.commodity)}</span></td>
             <td><strong>${escapeHtml(h.region || h.district || 'Chennai')}</strong></td>
-            <td>${escapeHtml(h.month || '')}/${escapeHtml(h.year || '')}</td>
+            <td style="font-variant-numeric: tabular-nums;">${escapeHtml(h.month || '')}/${escapeHtml(h.year || '')}</td>
             <td>
               <span class="badge badge-secondary" style="font-size:0.72rem;">${escapeHtml(h.model_used || 'Linear Regression')}</span>
               <span class="badge ${isSim ? 'badge-warning' : 'badge-info'}" style="font-size:0.62rem; margin-left:4px;">${isSim ? 'Simulated' : 'Live DB'}</span>
             </td>
-            <td><strong style="color:#fff;">${Math.round(h.predicted_demand).toLocaleString()} kg</strong></td>
-            <td style="font-family:monospace; font-size:0.76rem; color:var(--accent-cyan);">${confStr}</td>
-            <td><strong style="color:var(--accent-amber);">${Math.round(h.recommended_procurement || 0).toLocaleString()} kg</strong></td>
+            <td><strong style="color:#fff; font-variant-numeric: tabular-nums;">${Math.round(h.predicted_demand).toLocaleString()} kg</strong></td>
+            <td style="font-variant-numeric: tabular-nums; font-size:0.78rem; font-weight: 600; color:var(--accent-cyan); white-space: nowrap;">${confStr}</td>
+            <td><strong style="color:var(--accent-amber); font-variant-numeric: tabular-nums;">${Math.round(h.recommended_procurement || 0).toLocaleString()} kg</strong></td>
           </tr>
         `;
       }).join('');
@@ -411,12 +430,20 @@ function fillProjectExample() {
   updateSourceBadges(true);
 
   const bBen = document.getElementById('badge-ben');
-  if (bBen) { bBen.className = 'badge badge-warning'; bBen.innerHTML = '<i class="fa-solid fa-flask"></i> Simulated Scale (12,500)'; }
+  if (bBen) { bBen.className = 'badge badge-warning'; bBen.innerHTML = '<i class="fa-solid fa-flask"></i> Simulated (12,500)'; }
   const lblBen = document.getElementById('ben-source-label');
   if (lblBen) { lblBen.innerHTML = '<span style="color:var(--accent-amber);"><i class="fa-solid fa-flask"></i> Operational depot simulation scale (12,500 cardholders)</span>'; }
 
   const bStock = document.getElementById('badge-stock');
-  if (bStock) { bStock.className = 'badge badge-warning'; bStock.innerHTML = '<i class="fa-solid fa-pen"></i> Scenario (3,800 kg)'; }
+  if (bStock) { bStock.className = 'badge badge-warning'; bStock.innerHTML = '<i class="fa-solid fa-flask"></i> Simulated (3,800 kg)'; }
+  const lblStock = document.getElementById('stock-source-label');
+  if (lblStock) { lblStock.innerHTML = '<span style="color:var(--accent-amber);"><i class="fa-solid fa-flask"></i> Simulated depot stock</span>'; }
+
+  const bPrev = document.getElementById('badge-prev-demand');
+  if (bPrev) { bPrev.className = 'badge badge-warning'; bPrev.innerHTML = '<i class="fa-solid fa-flask"></i> Simulated (4,200 kg)'; }
+
+  const bBuf = document.getElementById('badge-safety-stock');
+  if (bBuf) { bBuf.className = 'badge badge-secondary'; bBuf.innerHTML = 'Buffer (500 kg)'; }
 
   executeDemandForecast();
 }

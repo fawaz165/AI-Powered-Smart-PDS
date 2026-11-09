@@ -403,7 +403,7 @@ class MLService:
                     "name": "Warehouse Coverage",
                     "impact": "Deficit" if shortage > 0 else "Adequate",
                     "value": f"{coverage_pct:.1f}% covered",
-                    "detail": f"Stock: {current_stock:,.1f} kg | Safety buffer target: {safety_stock:,.1f} kg."
+                    "detail": f"Stock: {current_stock:,.0f} kg • Target buffer: {safety_stock:,.0f} kg"
                 }
             ]
         }
