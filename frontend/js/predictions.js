@@ -191,13 +191,13 @@ async function loadModelMetrics(dynamic = false) {
           <tr style="${isBest ? 'background: rgba(59, 130, 246, 0.08); font-weight: 600;' : ''}">
             <td>
               <strong style="color: #fff;">${escapeHtml(name)}</strong>
-              ${isBest ? ' <span class="badge badge-success" style="font-size:0.68rem; margin-left:6px;"><i class="fa-solid fa-crown"></i> Winner</span>' : ''}
+              ${isBest ? ' <span class="badge badge-success" style="font-size:0.65rem; padding:1px 5px; margin-left:4px;"><i class="fa-solid fa-crown"></i> Winner</span>' : ''}
             </td>
             <td style="font-variant-numeric: tabular-nums;">${Number(m.MAE).toFixed(2)} kg</td>
             <td style="font-variant-numeric: tabular-nums;">${Number(m.MSE).toLocaleString()}</td>
             <td style="font-variant-numeric: tabular-nums;">${Number(m.RMSE).toFixed(2)} kg</td>
             <td><strong style="color:var(--accent-emerald); font-variant-numeric: tabular-nums; font-family:'Outfit',sans-serif;">${Number(m.R2).toFixed(4)}</strong></td>
-            <td style="text-align: center;">${isBest ? '<span class="badge badge-info" style="font-size:0.72rem; white-space:nowrap;"><i class="fa-solid fa-check"></i> Active in Production</span>' : '<span class="badge badge-secondary" style="background:rgba(255,255,255,0.05); color:#94a3b8; font-size:0.72rem; white-space:nowrap;">Benchmarked</span>'}</td>
+            <td style="text-align: center;">${isBest ? '<span class="badge badge-info" style="font-size:0.68rem; padding:2px 7px; white-space:nowrap;"><i class="fa-solid fa-check"></i> Active in Production</span>' : '<span class="badge badge-secondary" style="background:rgba(255,255,255,0.05); color:#94a3b8; font-size:0.68rem; padding:2px 7px; white-space:nowrap;">Benchmarked</span>'}</td>
           </tr>
         `;
       }).join('');
@@ -349,13 +349,13 @@ async function executeDemandForecast() {
         const trendText = bd.annual_trend_factor > 1.0 ? ` &times; ${bd.annual_trend_factor.toFixed(2)} (${d.year} forward trend)` : '';
 
         breakdownEl.innerHTML = `
-          <div style="margin-bottom:3px;">&bull; <strong>1. Input Scale:</strong> ${d.beneficiary_count.toLocaleString()} cardholder families (${isCustomScenario ? 'Simulated Scale' : 'Live DB'}) &bull; Baseline momentum: ${baseDemand} kg</div>
-          <div style="margin-bottom:3px;">&bull; <strong>2. Seasonal Multiplier:</strong> ${seasonalIdx}x (${escapeHtml(seasonalLbl)}) applied to festival/climatic seasonal curve</div>
-          <div style="margin-bottom:3px;">&bull; <strong>3. ML Regression Model:</strong> Pipeline preprocessor &rarr; ${escapeHtml(d.model_used || 'Linear Regression')} &rarr; <strong style="color:var(--accent-cyan); font-variant-numeric: tabular-nums;">${rawPred} kg</strong></div>
-          <div style="margin-bottom:3px;">&bull; <strong>4. Final Predicted Demand:</strong> Base Prediction (${rawPred} kg)${trendText} &rarr; <strong style="color:#fff; font-size:0.82rem; font-variant-numeric: tabular-nums;">${finalDemand} kg</strong></div>
-          <div style="margin-bottom:3px;">&bull; <strong>5. Gross Requirement:</strong> Predicted Demand (${finalDemand} kg) + Safety Buffer (${bufferVal} kg) = <strong style="color:var(--accent-cyan); font-variant-numeric: tabular-nums;">${grossVal} kg</strong></div>
-          <div style="margin-bottom:3px;">&bull; <strong>6. Net Shortage:</strong> max(0, Demand [${finalDemand}] &minus; Depot Stock [${stockVal}]) = <strong style="color:var(--accent-rose); font-variant-numeric: tabular-nums;">${shortageVal} kg</strong></div>
-          <div>&bull; <strong>7. Procurement Recommended:</strong> max(0, Gross Need [${grossVal}] &minus; Depot Stock [${stockVal}]) = <strong style="color:var(--accent-amber); font-weight:700; font-variant-numeric: tabular-nums;">${procureVal} kg</strong></div>
+          <div>&bull; <strong>1. Input Scale:</strong> ${d.beneficiary_count.toLocaleString()} families (${isCustomScenario ? 'Simulated' : 'Live DB'}) &bull; Base: ${baseDemand} kg</div>
+          <div>&bull; <strong>4. Final Predicted Demand:</strong> Base (${rawPred} kg)${trendText} &rarr; <strong style="color:#fff; font-variant-numeric: tabular-nums;">${finalDemand} kg</strong></div>
+          <div>&bull; <strong>2. Seasonal Multiplier:</strong> ${seasonalIdx}x (${escapeHtml(seasonalLbl)})</div>
+          <div>&bull; <strong>5. Gross Requirement:</strong> ${finalDemand} kg + ${bufferVal} kg = <strong style="color:var(--accent-cyan); font-variant-numeric: tabular-nums;">${grossVal} kg</strong></div>
+          <div>&bull; <strong>3. ML Regression Model:</strong> ${escapeHtml(d.model_used || 'Linear Regression')} &rarr; <strong style="color:var(--accent-cyan); font-variant-numeric: tabular-nums;">${rawPred} kg</strong></div>
+          <div>&bull; <strong>6. Net Shortage:</strong> max(0, ${finalDemand} &minus; ${stockVal}) = <strong style="color:var(--accent-rose); font-variant-numeric: tabular-nums;">${shortageVal} kg</strong></div>
+          <div class="breakdown-full-col">&bull; <strong>7. Recommended Procurement:</strong> max(0, Gross Need [${grossVal}] &minus; Depot Stock [${stockVal}]) = <strong style="color:var(--accent-amber); font-weight:700; font-variant-numeric: tabular-nums;">${procureVal} kg</strong></div>
         `;
       }
 
@@ -393,26 +393,26 @@ async function loadForecastHistory() {
         const isSim = h.data_source === 'USER_SCENARIO' || h.data_source === 'SIMULATION_SCENARIO' || (h.beneficiary_count && h.beneficiary_count >= 1000);
         return `
           <tr>
-            <td style="font-size:0.78rem; color:var(--text-muted); white-space: nowrap;">${escapeHtml(dt)}</td>
-            <td><span class="badge badge-info">${escapeHtml(h.commodity)}</span></td>
+            <td style="font-size:0.75rem; color:var(--text-muted); white-space: nowrap;">${escapeHtml(dt)}</td>
+            <td><span class="badge badge-info" style="font-size:0.68rem; padding:1px 6px;">${escapeHtml(h.commodity)}</span></td>
             <td><strong>${escapeHtml(h.region || h.district || 'Chennai')}</strong></td>
             <td style="font-variant-numeric: tabular-nums;">${escapeHtml(h.month || '')}/${escapeHtml(h.year || '')}</td>
             <td>
-              <span class="badge badge-secondary" style="font-size:0.72rem;">${escapeHtml(h.model_used || 'Linear Regression')}</span>
-              <span class="badge ${isSim ? 'badge-warning' : 'badge-info'}" style="font-size:0.62rem; margin-left:4px;">${isSim ? 'Simulated' : 'Live DB'}</span>
+              <span class="badge badge-secondary" style="font-size:0.68rem; padding:1px 6px;">${escapeHtml(h.model_used || 'Linear Regression')}</span>
+              <span class="badge ${isSim ? 'badge-warning' : 'badge-info'}" style="font-size:0.62rem; padding:1px 5px; margin-left:2px;">${isSim ? 'Simulated' : 'Live DB'}</span>
             </td>
             <td><strong style="color:#fff; font-variant-numeric: tabular-nums;">${Math.round(h.predicted_demand).toLocaleString()} kg</strong></td>
-            <td style="font-variant-numeric: tabular-nums; font-size:0.78rem; font-weight: 600; color:var(--accent-cyan); white-space: nowrap;">${confStr}</td>
+            <td style="font-variant-numeric: tabular-nums; font-size:0.75rem; font-weight: 600; color:var(--accent-cyan); white-space: nowrap;">${confStr}</td>
             <td><strong style="color:var(--accent-amber); font-variant-numeric: tabular-nums;">${Math.round(h.recommended_procurement || 0).toLocaleString()} kg</strong></td>
           </tr>
         `;
       }).join('');
     } else {
-      tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 18px;">No forecast history records logged yet. Run a prediction to record an entry.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 14px;">No forecast history records logged yet. Run a prediction to record an entry.</td></tr>';
     }
   } catch (err) {
     console.warn('Could not load forecast history:', err);
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 18px;">History temporarily unavailable.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 14px;">History temporarily unavailable.</td></tr>';
   }
 }
 
