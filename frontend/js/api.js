@@ -37,8 +37,16 @@ const API = {
 
     options.headers = headers;
 
+    const timeoutMs = options.timeout || 12000;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    if (!options.signal) {
+      options.signal = controller.signal;
+    }
+
     try {
       const response = await fetch(`${API_BASE}${endpoint}`, options);
+      clearTimeout(timeoutId);
       
       // Auto-handle 401 Unauthorized
       if (response.status === 401 && !window.location.pathname.endsWith('index.html') && window.location.pathname !== '/') {
@@ -53,6 +61,10 @@ const API = {
       }
       return data;
     } catch (err) {
+      clearTimeout(timeoutId);
+      if (err.name === 'AbortError') {
+        throw new Error(`Request timed out after ${Math.round(timeoutMs / 1000)}s while connecting to database`);
+      }
       console.error(`API Error on ${endpoint}:`, err);
       throw err;
     }

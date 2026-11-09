@@ -180,18 +180,112 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 /**
+ * Displays full loading state in the table body.
+ */
+function setCommoditiesLoadingState() {
+  const tbody = document.getElementById('commodities-tbody');
+  if (tbody) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 3rem 1.5rem;">
+          <i class="fa-solid fa-circle-notch fa-spin" style="font-size: 1.8rem; color: var(--primary); margin-bottom: 12px; display: block;"></i>
+          <div style="font-weight: 600; font-size: 0.95rem; color: var(--text-primary); margin-bottom: 4px;">Loading food-grain catalog...</div>
+          <div style="font-size: 0.8rem; color: var(--text-secondary);">Connecting to MongoDB cluster and aggregating operational linkages</div>
+        </td>
+      </tr>
+    `;
+  }
+}
+
+/**
+ * Displays error state with retry button in the table body.
+ */
+function setCommoditiesErrorState(errorMessage) {
+  const tbody = document.getElementById('commodities-tbody');
+  if (tbody) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8" style="text-align: center; color: var(--accent-rose); padding: 3rem 1.5rem;">
+          <i class="fa-solid fa-triangle-exclamation" style="font-size: 2rem; margin-bottom: 12px; display: block;"></i>
+          <div style="font-weight: 700; font-size: 1rem; margin-bottom: 6px;">Failed to Load Commodity Catalog</div>
+          <div style="font-size: 0.82rem; color: var(--text-secondary); max-width: 500px; margin: 0 auto 16px auto;">
+            ${escapeHtml(errorMessage || 'Unable to retrieve commodity master records from MongoDB database.')}
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="loadCommodities()" style="padding: 8px 18px;">
+            <i class="fa-solid fa-arrows-rotate"></i> Retry Connection
+          </button>
+        </td>
+      </tr>
+    `;
+  }
+  // Keep KPI cards safely in fallback state
+  const elTotal = document.getElementById('com-kpi-total');
+  const elOfficial = document.getElementById('com-kpi-official');
+  const elDemo = document.getElementById('com-kpi-demo');
+  const elDiscount = document.getElementById('com-kpi-discount');
+  if (elTotal) elTotal.textContent = '--';
+  if (elOfficial) elOfficial.textContent = '--';
+  if (elDemo) elDemo.textContent = '--';
+  if (elDiscount) elDiscount.innerHTML = `--<span style="font-size:1.1rem; font-weight:600;">%</span>`;
+}
+
+/**
+ * Displays empty state for zero commodities or no filter match.
+ */
+function setCommoditiesEmptyState(isSearchOrFilter = false) {
+  const tbody = document.getElementById('commodities-tbody');
+  if (!tbody) return;
+  if (isSearchOrFilter) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2.5rem 1.5rem;">
+          <i class="fa-solid fa-magnifying-glass" style="font-size: 1.8rem; color: var(--text-muted); margin-bottom: 10px; display: block;"></i>
+          <div style="font-weight: 600; font-size: 0.95rem; color: var(--text-primary); margin-bottom: 4px;">No Matching Commodities Found</div>
+          <div style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 12px;">Try adjusting your keyword search or rate classification filter.</div>
+          <button class="btn btn-secondary btn-sm" onclick="resetCommodityFilters()">
+            <i class="fa-solid fa-filter-circle-xmark"></i> Reset Filters
+          </button>
+        </td>
+      </tr>
+    `;
+  } else {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2.5rem 1.5rem;">
+          <i class="fa-solid fa-boxes-stacked" style="font-size: 2rem; color: var(--text-muted); margin-bottom: 10px; display: block;"></i>
+          <div style="font-weight: 600; font-size: 0.95rem; color: var(--text-primary); margin-bottom: 4px;">No Commodities Registered in Database</div>
+          <div style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 14px;">The central catalog has no active records. Click below to add your first commodity.</div>
+          <button class="btn btn-primary btn-sm" onclick="openModal('add-commodity-modal')">
+            <i class="fa-solid fa-plus"></i> Add First Commodity
+          </button>
+        </td>
+      </tr>
+    `;
+  }
+}
+
+/**
  * Loads commodity records from backend database.
  */
 async function loadCommodities() {
+  setCommoditiesLoadingState();
   try {
-    const res = await API.getCommodities();
+    const res = await API.getCommodities({ timeout: 10000 });
     if (res && res.status === 'success') {
       allCommodities = res.data || [];
       updateCommodityKPIs(allCommodities, res.summary);
-      filterCommodities();
+      if (allCommodities.length === 0) {
+        setCommoditiesEmptyState(false);
+      } else {
+        filterCommodities();
+      }
+    } else {
+      setCommoditiesErrorState(res ? res.message : 'Invalid response from database');
     }
   } catch (err) {
-    showToast('Failed to load commodities catalog from database', 'error');
+    console.error('Failed to load commodities catalog:', err);
+    setCommoditiesErrorState(err.message || 'Network error connecting to MongoDB backend');
+    showToast(err.message || 'Failed to load commodities catalog from database', 'error');
   }
 }
 
@@ -268,6 +362,17 @@ function updateCommodityKPIs(commodities, summary) {
 }
 
 /**
+ * Resets search and filter inputs and triggers refresh.
+ */
+function resetCommodityFilters() {
+  const searchInput = document.getElementById('com-search');
+  const rateFilter = document.getElementById('com-filter-rate');
+  if (searchInput) searchInput.value = '';
+  if (rateFilter) rateFilter.value = '';
+  filterCommodities();
+}
+
+/**
  * Filters commodities based on search input and rate classification select.
  */
 function filterCommodities() {
@@ -295,7 +400,11 @@ function filterCommodities() {
     return matchSearch && matchType;
   });
 
-  renderCommoditiesTable(filtered);
+  if (filtered.length === 0) {
+    setCommoditiesEmptyState(allCommodities.length > 0);
+  } else {
+    renderCommoditiesTable(filtered);
+  }
 }
 
 /**
@@ -306,7 +415,7 @@ function renderCommoditiesTable(items) {
   if (!tbody) return;
 
   if (!items || items.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2rem;">No commodities match the selected criteria.</td></tr>';
+    setCommoditiesEmptyState(true);
     return;
   }
 
@@ -395,10 +504,10 @@ function renderCommoditiesTable(items) {
         <td>${linkageHtml}</td>
         <td>
           <div style="display:flex; gap:6px; align-items:center;">
-            <button class="btn btn-secondary btn-sm" onclick="openEditCommodityModal('${escapeHtml(c.commodity_code)}')" title="Configure Subsidized Pricing">
+            <button class="btn btn-secondary btn-sm" onclick="openConfigureCommodity('${escapeHtml(c.commodity_code)}')" title="Configure Subsidized Pricing">
               <i class="fa-solid fa-sliders"></i>
             </button>
-            <button class="btn btn-secondary btn-sm" onclick="promptDeleteCommodity('${escapeHtml(c.commodity_code)}', '${escapeHtml(c.name)}', ${invCount}, ${txnCount})" title="Delete Commodity" style="color:var(--accent-rose);">
+            <button class="btn btn-secondary btn-sm" onclick="confirmDeleteCommodity('${escapeHtml(c.commodity_code)}')" title="Delete Commodity" style="color:var(--accent-rose);">
               <i class="fa-solid fa-trash-can"></i>
             </button>
           </div>
@@ -408,28 +517,13 @@ function renderCommoditiesTable(items) {
   }).join('');
 }
 
-    return `
-      <tr>
-        <td><strong class="badge badge-info" style="font-family: monospace; font-size: 0.85rem; letter-spacing: 0.04em;">${escapeHtml(c.commodity_code)}</strong></td>
-        <td><strong>${escapeHtml(c.name)}</strong></td>
-        <td><span style="color: var(--text-secondary);">${unitStr}</span></td>
-        <td>${subPriceDisplay}</td>
-        <td>${marketHtml}</td>
-        <td>${rateBadgeHtml}</td>
-        <td>${linkageHtml}</td>
-        <td>
-          <div style="display: flex; gap: 6px;">
-            <button class="btn btn-secondary btn-sm" title="Configure Subsidized Pricing" onclick="openConfigureCommodity('${escapeHtml(c.commodity_code)}')">
-              <i class="fa-solid fa-pen-to-square"></i>
-            </button>
-            <button class="btn btn-secondary btn-sm" title="Delete Commodity" style="color: var(--accent-rose);" onclick="confirmDeleteCommodity('${escapeHtml(c.commodity_code)}')">
-              <i class="fa-solid fa-trash-can"></i>
-            </button>
-          </div>
-        </td>
-      </tr>
-    `;
-  }).join('');
+// Aliases for compatibility
+function openEditCommodityModal(code) {
+  openConfigureCommodity(code);
+}
+
+function promptDeleteCommodity(code) {
+  confirmDeleteCommodity(code);
 }
 
 /**

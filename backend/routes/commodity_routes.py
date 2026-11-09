@@ -16,22 +16,56 @@ def list_commodities():
     # Filter out corrupted records with negative pricing if any
     commodities = list(db.commodities.find({"subsidized_price": {"$gte": 0}}, {"_id": 0}).sort("commodity_code", 1))
 
+    # Optimized batch aggregation for operational inventory and transaction linkages
+    inv_counts = {}
+    try:
+        inv_agg = db.inventory.aggregate([
+            {"$group": {"_id": "$commodity", "count": {"$sum": 1}}}
+        ])
+        for doc in inv_agg:
+            if doc.get("_id"):
+                inv_counts[str(doc["_id"]).strip().lower()] = doc["count"]
+    except Exception as e:
+        logger.warning(f"Could not aggregate inventory counts: {e}")
+
+    txn_counts = {}
+    try:
+        txn_agg = db.transactions.aggregate([
+            {"$group": {"_id": "$commodity", "count": {"$sum": 1}}}
+        ])
+        for doc in txn_agg:
+            if doc.get("_id"):
+                txn_counts[str(doc["_id"]).strip().lower()] = doc["count"]
+    except Exception as e:
+        logger.warning(f"Could not aggregate transaction counts: {e}")
+
     # Enrich each commodity with operational linkage statistics
     for c in commodities:
         cname = c.get("name", "")
         ccode = c.get("commodity_code", "")
-        c["linked_inventory_count"] = db.inventory.count_documents({
-            "$or": [
-                {"commodity": {"$regex": f"^{re.escape(cname)}$", "$options": "i"}},
-                {"commodity_code": ccode}
-            ]
-        })
-        c["linked_transactions_count"] = db.transactions.count_documents({
-            "$or": [
-                {"commodity": {"$regex": f"^{re.escape(cname)}$", "$options": "i"}},
-                {"commodity_code": ccode}
-            ]
-        })
+        cname_k = cname.strip().lower()
+        ccode_k = ccode.strip().lower()
+
+        # Fast lookup from aggregation with fallback to point query if unmapped
+        inv_cnt = inv_counts.get(cname_k, inv_counts.get(ccode_k, None))
+        if inv_cnt is None:
+            inv_cnt = db.inventory.count_documents({
+                "$or": [
+                    {"commodity": {"$regex": f"^{re.escape(cname)}$", "$options": "i"}},
+                    {"commodity_code": ccode}
+                ]
+            })
+        c["linked_inventory_count"] = inv_cnt
+
+        txn_cnt = txn_counts.get(cname_k, txn_counts.get(ccode_k, None))
+        if txn_cnt is None:
+            txn_cnt = db.transactions.count_documents({
+                "$or": [
+                    {"commodity": {"$regex": f"^{re.escape(cname)}$", "$options": "i"}},
+                    {"commodity_code": ccode}
+                ]
+            })
+        c["linked_transactions_count"] = txn_cnt
 
         # Subsidized pricing and benchmark calculations
         sub_price = max(0.0, float(c.get("subsidized_price", 0.0)))
