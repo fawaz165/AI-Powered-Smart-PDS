@@ -1,6 +1,5 @@
-
 @echo off
-setlocal
+setlocal EnableExtensions
 title AI-Powered Smart PDS
 
 echo ===================================================
@@ -10,41 +9,58 @@ echo.
 
 cd /d "%~dp0"
 
-:: Check Docker Compose file
-if not exist "docker-compose.yml" if not exist "compose.yml" (
+:: Confirm this launcher is in the project root.
+if not exist "docker-compose.yml" if not exist "compose.yml" if not exist "compose.yaml" (
     echo ERROR: Docker Compose file not found.
-    echo Keep this BAT file in the project root.
+    echo Keep this BAT file in the Smart PDS project root.
     pause
     exit /b 1
 )
 
-:: Check Docker installation
+:: Check Docker CLI.
 where docker >nul 2>&1
 if errorlevel 1 (
-    echo ERROR: Docker is not installed or not in PATH.
+    echo ERROR: Docker CLI is not installed or is not in PATH.
+    echo Install Docker Desktop, then reopen this file.
     pause
     exit /b 1
 )
 
-:: Check Docker Engine
+:: Start Docker Desktop automatically when the engine is stopped.
 echo Checking Docker Engine...
 docker info >nul 2>&1
-
 if errorlevel 1 (
-    echo Starting Docker Desktop...
+    echo Docker Engine is not running. Launching Docker Desktop...
 
-    if exist "%ProgramFiles%\Docker\Docker\Docker Desktop.exe" (
-        start "" "%ProgramFiles%\Docker\Docker\Docker Desktop.exe"
-    ) else (
-        echo Please start Docker Desktop manually.
-    )
-
-    echo Waiting for Docker Engine...
-
-    powershell -NoProfile -Command "$ok=$false; for($i=0;$i -lt 60;$i++){ docker info *> $null; if($LASTEXITCODE -eq 0){$ok=$true;break}; Start-Sleep -Seconds 2 }; if($ok){exit 0}else{exit 1}"
+    powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+      "$candidates = @(" ^
+      "  (Join-Path $env:ProgramFiles 'Docker\Docker\Docker Desktop.exe')," ^
+      "  (Join-Path $env:ProgramW6432 'Docker\Docker\Docker Desktop.exe')," ^
+      "  (Join-Path $env:LOCALAPPDATA 'Programs\Docker\Docker\Docker Desktop.exe')," ^
+      "  (Join-Path $env:LOCALAPPDATA 'Docker\Docker\Docker Desktop.exe')" ^
+      ");" ^
+      "$exe = $candidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1;" ^
+      "if (-not $exe) {" ^
+      "  $keys = @('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*','HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*','HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*');" ^
+      "  $entry = Get-ItemProperty $keys -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -like '*Docker Desktop*' } | Select-Object -First 1;" ^
+      "  if ($entry -and $entry.InstallLocation) { $candidate = Join-Path $entry.InstallLocation 'Docker Desktop.exe'; if (Test-Path $candidate) { $exe = $candidate } }" ^
+      "};" ^
+      "if (-not $exe) { Write-Host 'Could not locate Docker Desktop.exe. Please install Docker Desktop.'; exit 2 };" ^
+      "Start-Process -FilePath $exe"
 
     if errorlevel 1 (
-        echo ERROR: Docker Engine did not start.
+        echo ERROR: Could not launch Docker Desktop.
+        pause
+        exit /b 1
+    )
+
+    echo Waiting for Docker Engine to become ready. This can take a few minutes...
+    powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+      "$ready=$false; for($i=0; $i -lt 180; $i++) { docker info *> $null; if($LASTEXITCODE -eq 0) { $ready=$true; break }; Start-Sleep -Seconds 2 }; if($ready) { exit 0 } else { exit 1 }"
+
+    if errorlevel 1 (
+        echo ERROR: Docker Engine did not become ready within 6 minutes.
+        echo Open Docker Desktop and check that its engine has started.
         pause
         exit /b 1
     )
@@ -53,54 +69,46 @@ if errorlevel 1 (
 echo Docker Engine is ready.
 echo.
 
-:: Start application and database
+:: Start the application and database without deleting persistent data.
 echo Starting Smart PDS containers...
 docker compose up -d
-
 if errorlevel 1 (
-    echo ERROR: Failed to start Smart PDS.
+    echo ERROR: Failed to start Smart PDS containers.
     docker compose ps
-    docker compose logs --tail=50
+    docker compose logs --tail=60
     pause
     exit /b 1
 )
 
-:: Check application health
+:: Wait for the Flask health endpoint.
 echo.
 echo Waiting for Smart PDS to become healthy...
-
-powershell -NoProfile -Command "$ready=$false; for($i=0;$i -lt 60;$i++){ try{$r=Invoke-WebRequest 'http://localhost:5000/api/health' -UseBasicParsing -TimeoutSec 3; if($r.StatusCode -eq 200){$ready=$true;break}}catch{}; Start-Sleep -Seconds 2 }; if($ready){exit 0}else{exit 1}"
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+  "$ready=$false; for($i=0; $i -lt 90; $i++) { try { $r=Invoke-WebRequest 'http://localhost:5000/api/health' -UseBasicParsing -TimeoutSec 5; if($r.StatusCode -eq 200) { $ready=$true; break } } catch {}; Start-Sleep -Seconds 2 }; if($ready) { exit 0 } else { exit 1 }"
 
 if errorlevel 1 (
-    echo ERROR: Application health check failed.
+    echo ERROR: Smart PDS did not respond successfully.
     docker compose ps
-    docker compose logs --tail=60 web
+    docker compose logs --tail=80
     pause
     exit /b 1
 )
 
-:: Open website
 echo.
 echo ===================================================
 echo       SMART PDS STARTED SUCCESSFULLY!
 echo ===================================================
 echo.
 echo Website: http://localhost:5000
-echo MongoDB: Docker Container
 echo.
-echo Opening website...
-
+echo Opening Smart PDS...
 start "" "http://localhost:5000"
 
 echo.
-echo You can close this window.
-echo Docker containers will continue running.
-echo.
-echo To stop Smart PDS safely, run:
-echo docker compose stop
-echo.
-echo Your MongoDB data will be preserved.
+echo Docker containers will continue running after this window closes.
+echo To stop safely, run: docker compose stop
+echo Your MongoDB named volume will be preserved.
 echo ===================================================
-
+echo.
 pause
 endlocal
