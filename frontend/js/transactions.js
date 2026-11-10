@@ -215,7 +215,7 @@ function renderTransactionsTable(txns) {
   if (!tbody) return;
 
   if (!txns || txns.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; color:var(--text-muted); padding:2rem;">No matching transactions found for current search/filter.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:2rem;">No matching transactions found for current search/filter.</td></tr>';
     updatePaginationUI(0);
     return;
   }
@@ -260,10 +260,7 @@ function renderTransactionsTable(txns) {
           <span class="badge ${badgeClass}">${escapeHtml(statusLabel)} (${escapeHtml(riskLabel)})</span>
           ${reviewPill}
         </td>
-        <td style="max-width:240px; font-size:0.8rem; color:var(--text-secondary); line-height:1.3;">
-          ${escapeHtml(t.reason || 'Conforms to cardholder monthly entitlement schedule.')}
-        </td>
-        <td>
+        <td class="text-center">
           <button class="btn btn-secondary btn-xs" style="padding:4px 8px; font-size:0.75rem;" onclick="viewTransactionDetails('${escapeHtml(t.transaction_id)}')">
             <i class="fa-solid fa-eye"></i> Details
           </button>

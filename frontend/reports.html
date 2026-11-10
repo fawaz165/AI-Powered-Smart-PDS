@@ -26,8 +26,13 @@
         <a href="predictions.html" class="nav-link"><i class="icon fa-solid fa-wand-magic-sparkles"></i> Demand Forecast</a>
         <a href="fraud.html" class="nav-link"><i class="icon fa-solid fa-shield-halved"></i> Anomaly & Fraud</a>
         <a href="reports.html" class="nav-link active"><i class="icon fa-solid fa-file-excel"></i> Reports Export</a>
-        <a href="about.html" class="nav-link"><i class="icon fa-solid fa-circle-info"></i> Viva Guide & About</a>
       </nav>
+
+      <div class="sidebar-secondary-nav">
+        <div class="section-heading">Documentation</div>
+        <a href="about.html" class="nav-link"><i class="icon fa-solid fa-book-open"></i> Viva Guide &amp; Architecture</a>
+      </div>
+
       <div class="sidebar-footer">
         <div class="user-snippet">
           <div class="user-avatar"><i class="fa-solid fa-user-shield"></i></div>
@@ -121,68 +126,56 @@
         <div class="grid-cards" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
           
           <!-- Inventory Report Card -->
-          <div class="stat-card" style="--card-accent: #3b82f6; padding: 24px;">
-            <div class="card-icon" style="color: #60a5fa; width: 44px; height: 44px; font-size: 1.3rem; margin-bottom: 12px;">
+          <div class="stat-card" style="--card-accent: #3b82f6; padding: 22px;">
+            <div class="card-icon" style="color: #60a5fa; width: 42px; height: 42px; font-size: 1.25rem; margin-bottom: 12px;">
               <i class="fa-solid fa-boxes-packing"></i>
             </div>
-            <h3 style="font-size: 1.15rem; font-weight: 700;">Warehouse Inventory Report</h3>
+            <h3 style="font-size: 1.1rem; font-weight: 700;">Warehouse Inventory Report</h3>
             <p style="color: var(--text-secondary); font-size: 0.82rem; margin-bottom: 16px; line-height: 1.45;">
-              Current stock balances, buffer stock thresholds, shortage indicators, and warehouse capacity across regional depots.
+              Stock balances, buffer thresholds, shortage indicators, and warehouse capacity across regional depots.
             </p>
-            <div style="font-size: 0.72rem; color: var(--text-muted); margin-bottom: 14px;">
-              <i class="fa-solid fa-circle-check" style="color: var(--accent-emerald);"></i> Real database records &bull; OpenPyXL styled XLSX
-            </div>
             <a href="/api/reports/inventory" id="btn-export-inventory" class="btn btn-primary" download onclick="triggerDownloadNotify('Warehouse Inventory')">
               <i class="fa-solid fa-file-excel"></i> Export Inventory (.xlsx)
             </a>
           </div>
 
           <!-- Transactions Report Card -->
-          <div class="stat-card" style="--card-accent: #10b981; padding: 24px;">
-            <div class="card-icon" style="color: #34d399; width: 44px; height: 44px; font-size: 1.3rem; margin-bottom: 12px;">
+          <div class="stat-card" style="--card-accent: #10b981; padding: 22px;">
+            <div class="card-icon" style="color: #34d399; width: 42px; height: 42px; font-size: 1.25rem; margin-bottom: 12px;">
               <i class="fa-solid fa-receipt"></i>
             </div>
-            <h3 style="font-size: 1.15rem; font-weight: 700;">Distribution Transaction Ledger</h3>
+            <h3 style="font-size: 1.1rem; font-weight: 700;">Distribution Transaction Ledger</h3>
             <p style="color: var(--text-secondary); font-size: 0.82rem; margin-bottom: 16px; line-height: 1.45;">
-              Complete transaction log with beneficiary IDs, ration shops, quantities distributed, formatted local time, and audit details.
+              Complete distribution records with cardholders, Fair Price Shops, quantities, and local timestamps.
             </p>
-            <div style="font-size: 0.72rem; color: var(--text-muted); margin-bottom: 14px;">
-              <i class="fa-solid fa-circle-check" style="color: var(--accent-emerald);"></i> Filterable by district &amp; date range
-            </div>
             <a href="/api/reports/distribution" id="btn-export-distribution" class="btn btn-primary" download style="background: linear-gradient(135deg, #10b981, #059669);" onclick="triggerDownloadNotify('Distribution Transactions')">
               <i class="fa-solid fa-file-excel"></i> Export Ledger (.xlsx)
             </a>
           </div>
 
           <!-- Predictions Report Card -->
-          <div class="stat-card" style="--card-accent: #8b5cf6; padding: 24px;">
-            <div class="card-icon" style="color: #a78bfa; width: 44px; height: 44px; font-size: 1.3rem; margin-bottom: 12px;">
+          <div class="stat-card" style="--card-accent: #8b5cf6; padding: 22px;">
+            <div class="card-icon" style="color: #a78bfa; width: 42px; height: 42px; font-size: 1.25rem; margin-bottom: 12px;">
               <i class="fa-solid fa-chart-line"></i>
             </div>
-            <h3 style="font-size: 1.15rem; font-weight: 700;">Demand Forecast &amp; Procurement</h3>
+            <h3 style="font-size: 1.1rem; font-weight: 700;">Demand Forecast &amp; Procurement</h3>
             <p style="color: var(--text-secondary); font-size: 0.82rem; margin-bottom: 16px; line-height: 1.45;">
-              Supervised regression predictions, demographic card scaling, seasonal multipliers, net shortages, and procurement requirements.
+              Supervised demand forecasts, seasonal multipliers, net shortages, and procurement requirements.
             </p>
-            <div style="font-size: 0.72rem; color: var(--text-muted); margin-bottom: 14px;">
-              <i class="fa-solid fa-circle-check" style="color: var(--accent-emerald);"></i> Real ML predictions from active model pipeline
-            </div>
             <a href="/api/reports/predictions" id="btn-export-predictions" class="btn btn-primary" download style="background: linear-gradient(135deg, #8b5cf6, #7c3aed);" onclick="triggerDownloadNotify('Demand Forecast')">
               <i class="fa-solid fa-file-excel"></i> Export Forecast (.xlsx)
             </a>
           </div>
 
           <!-- Fraud & Anomaly Report Card -->
-          <div class="stat-card" style="--card-accent: #f43f5e; padding: 24px;">
-            <div class="card-icon" style="color: #fb7185; width: 44px; height: 44px; font-size: 1.3rem; margin-bottom: 12px;">
+          <div class="stat-card" style="--card-accent: #f43f5e; padding: 22px;">
+            <div class="card-icon" style="color: #fb7185; width: 42px; height: 42px; font-size: 1.25rem; margin-bottom: 12px;">
               <i class="fa-solid fa-shield-virus"></i>
             </div>
-            <h3 style="font-size: 1.15rem; font-weight: 700;">Fraud &amp; Anomaly Audit Log</h3>
+            <h3 style="font-size: 1.1rem; font-weight: 700;">Fraud &amp; Anomaly Audit Log</h3>
             <p style="color: var(--text-secondary); font-size: 0.82rem; margin-bottom: 16px; line-height: 1.45;">
-              Isolation Forest decision scores, outlier score interpretations, explainable reasons, officer review decisions, and audit trail.
+              Isolation Forest anomaly scores, outlier detection reasons, officer review decisions, and audit trail.
             </p>
-            <div style="font-size: 0.72rem; color: var(--text-muted); margin-bottom: 14px;">
-              <i class="fa-solid fa-circle-check" style="color: var(--accent-emerald);"></i> Contains official officer decisions &amp; reasons
-            </div>
             <a href="/api/reports/fraud" id="btn-export-fraud" class="btn btn-primary" download style="background: linear-gradient(135deg, #f43f5e, #e11d48);" onclick="triggerDownloadNotify('Fraud & Anomaly Audit')">
               <i class="fa-solid fa-file-excel"></i> Export Audit Log (.xlsx)
             </a>

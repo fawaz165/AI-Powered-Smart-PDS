@@ -26,8 +26,13 @@
         <a href="predictions.html" class="nav-link"><i class="icon fa-solid fa-wand-magic-sparkles"></i> Demand Forecast</a>
         <a href="fraud.html" class="nav-link"><i class="icon fa-solid fa-shield-halved"></i> Anomaly & Fraud</a>
         <a href="reports.html" class="nav-link"><i class="icon fa-solid fa-file-excel"></i> Reports Export</a>
-        <a href="about.html" class="nav-link"><i class="icon fa-solid fa-circle-info"></i> Viva Guide & About</a>
       </nav>
+
+      <div class="sidebar-secondary-nav">
+        <div class="section-heading">Documentation</div>
+        <a href="about.html" class="nav-link"><i class="icon fa-solid fa-book-open"></i> Viva Guide &amp; Architecture</a>
+      </div>
+
       <div class="sidebar-footer">
         <div class="user-snippet">
           <div class="user-avatar"><i class="fa-solid fa-user-shield"></i></div>
@@ -43,8 +48,8 @@
     <main class="main-wrapper">
       <header class="top-navbar">
         <div class="page-title-box">
-          <h1>Essential Food-Grain Master Catalog</h1>
-          <p>National subsidized commodities, configurable issue pricing, and official NFSA rates</p>
+          <h1>Commodities Catalog</h1>
+          <p>Subsidized grain pricing, rate classifications, and market benchmarks</p>
         </div>
         <div class="nav-actions">
           <button class="btn btn-primary btn-sm" onclick="openModal('add-commodity-modal')">
@@ -59,7 +64,7 @@
           <div class="stat-card" style="--card-accent: #3b82f6;">
             <div class="card-top"><span>Total Commodities</span><i class="fa-solid fa-boxes-stacked" style="color: #60a5fa;"></i></div>
             <div class="card-value" id="com-kpi-total">--</div>
-            <div class="card-meta"><span class="meta-up"><i class="fa-solid fa-database"></i> Database Catalog</span> Linked to Inventory</div>
+            <div class="card-meta"><span class="meta-up"><i class="fa-solid fa-circle-check"></i> Active</span> Linked to Inventory</div>
           </div>
           <div class="stat-card" style="--card-accent: #10b981;">
             <div class="card-top"><span>Verified Official Schemes</span><i class="fa-solid fa-certificate" style="color: #34d399;"></i></div>
@@ -74,21 +79,18 @@
           <div class="stat-card" style="--card-accent: #8b5cf6;">
             <div class="card-top"><span>Avg Subsidy Discount</span><i class="fa-solid fa-percent" style="color: #a78bfa;"></i></div>
             <div class="card-value" id="com-kpi-discount" style="color: #a78bfa;">--%</div>
-            <div class="card-meta" title="Arithmetic mean of individual commodity discounts across valid benchmarked catalog items">Mean vs. Reference Retail Benchmarks</div>
+            <div class="card-meta">Average vs. Benchmark Retail Rates</div>
           </div>
         </div>
 
         <div class="data-panel">
           <div class="panel-header">
             <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
-              <h3>Registered Food-Grain Catalog</h3>
-              <span class="badge badge-info" style="font-size: 0.72rem; padding: 0.2rem 0.5rem;">
-                <i class="fa-solid fa-server"></i> DB-Backed Master Records
-              </span>
+              <h3>Food-Grain Catalog</h3>
             </div>
             <div class="panel-actions">
-              <input type="text" id="com-search" class="form-control" placeholder="Search by code, name, or desc..." style="width: 250px;" oninput="filterCommodities()">
-              <select id="com-filter-rate" class="form-control" style="width: 240px;" onchange="filterCommodities()">
+              <input type="text" id="com-search" class="form-control" placeholder="Search by code or name..." style="width: 220px;" oninput="filterCommodities()">
+              <select id="com-filter-rate" class="form-control" style="width: 220px;" onchange="filterCommodities()">
                 <option value="">All Classifications</option>
                 <option value="OFFICIAL_NFSA">Verified Official NFSA Rates</option>
                 <option value="STATE_SUBSIDY">Tamil Nadu State Welfare Subsidies</option>
@@ -107,7 +109,7 @@
                   <th>Commodity Name</th>
                   <th>Unit</th>
                   <th>Subsidized Price (₹)</th>
-                  <th>Market Benchmark (Reference Value)</th>
+                  <th>Market Benchmark</th>
                   <th>Rate Classification</th>
                   <th>Operational Linkage</th>
                   <th>Actions</th>

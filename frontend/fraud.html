@@ -26,8 +26,13 @@
         <a href="predictions.html" class="nav-link"><i class="icon fa-solid fa-wand-magic-sparkles"></i> Demand Forecast</a>
         <a href="fraud.html" class="nav-link active"><i class="icon fa-solid fa-shield-halved"></i> Anomaly & Fraud</a>
         <a href="reports.html" class="nav-link"><i class="icon fa-solid fa-file-excel"></i> Reports Export</a>
-        <a href="about.html" class="nav-link"><i class="icon fa-solid fa-circle-info"></i> Viva Guide & About</a>
       </nav>
+
+      <div class="sidebar-secondary-nav">
+        <div class="section-heading">Documentation</div>
+        <a href="about.html" class="nav-link"><i class="icon fa-solid fa-book-open"></i> Viva Guide &amp; Architecture</a>
+      </div>
+
       <div class="sidebar-footer">
         <div class="user-snippet">
           <div class="user-avatar"><i class="fa-solid fa-user-shield"></i></div>
@@ -56,57 +61,56 @@
       <div class="content-body fraud-content">
         
         <!-- Ethical AI & Administrative Notice Banner -->
-        <div class="fraud-notice-banner">
-          <div class="alert-banner-left">
-            <i class="fa-solid fa-scale-balanced alert-icon-large"></i>
+        <div class="fraud-notice-banner" style="margin-bottom: 12px; padding: 12px 16px;">
+          <div class="alert-banner-left" style="gap: 12px;">
+            <i class="fa-solid fa-scale-balanced" style="font-size: 1.4rem; color: var(--accent-amber);"></i>
             <div class="alert-text">
-              <h4>Administrative Audit &amp; Fair Allocation Principle</h4>
-              <p>
-                Statistical anomalies flagged by the Isolation Forest are mathematical deviations, <strong>NOT unilateral proof of fraud</strong>. All flagged transactions remain in review state until an authorized officer logs an official decision with written audit rationale. Original transaction records and ML anomaly scores are permanently preserved.
+              <h4 style="font-size: 0.88rem; margin-bottom: 2px;">Administrative Human-in-the-Loop Review</h4>
+              <p style="font-size: 0.78rem; margin: 0; line-height: 1.4;">
+                Statistical outliers flagged by the Isolation Forest are mathematical deviations, <strong>not unilateral proof of fraud</strong>. All flagged transactions remain in review state until an authorized officer logs an audit decision with written rationale.
               </p>
             </div>
           </div>
         </div>
 
-        <!-- Anomaly Score & Explainability Guide -->
-        <div class="explainability-guide-card">
-          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
-            <div style="font-size: 0.82rem; font-weight: 700; color: #fff;">
-              <i class="fa-solid fa-circle-question" style="color: var(--accent-cyan); margin-right: 6px;"></i>
-              Understanding Isolation Forest Anomaly Scores &bull; <span style="color: var(--accent-amber); font-weight: 600;">Continuous Distance, NOT Fraud Probability</span>
+        <!-- Collapsible Score Mechanics Guide -->
+        <details class="collapsible-card" style="margin-bottom: 14px;">
+          <summary>
+            <span><i class="fa-solid fa-circle-question" style="color: var(--accent-cyan); margin-right: 6px;"></i> Understanding Isolation Forest Scores &amp; Mechanics</span>
+            <i class="fa-solid fa-chevron-down" style="font-size: 0.72rem; color: var(--text-muted);"></i>
+          </summary>
+          <div class="collapsible-body" style="padding: 10px 14px;">
+            <div class="explainability-guide-grid" style="margin-top: 0;">
+              <div class="explainability-guide-item">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                  <strong style="color: var(--accent-rose); font-size: 0.76rem;"><i class="fa-solid fa-arrow-down"></i> Score &lt; 0 (Negative)</strong>
+                  <span class="badge badge-danger" style="font-size: 0.62rem;">Statistical Outlier</span>
+                </div>
+                <p style="font-size: 0.72rem; color: var(--text-secondary); line-height: 1.35; margin: 0;">
+                  Isolated with fewer tree splits (shorter path lengths). Indicates abnormal quantity, off-hours timing, or irregular draw frequency.
+                </p>
+              </div>
+              <div class="explainability-guide-item">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                  <strong style="color: var(--accent-emerald); font-size: 0.76rem;"><i class="fa-solid fa-arrow-up"></i> Score &ge; 0 (Positive)</strong>
+                  <span class="badge badge-success" style="font-size: 0.62rem;">Normal Inlier</span>
+                </div>
+                <p style="font-size: 0.72rem; color: var(--text-secondary); line-height: 1.35; margin: 0;">
+                  Requires deeper partitioning (longer path lengths). Conforms to standard registered cardholder quotas and normal operating cadence.
+                </p>
+              </div>
+              <div class="explainability-guide-item">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                  <strong style="color: #60a5fa; font-size: 0.76rem;"><i class="fa-solid fa-shield-halved"></i> Ethical AI Compliance</strong>
+                  <span class="badge badge-info" style="font-size: 0.62rem;">Human In The Loop</span>
+                </div>
+                <p style="font-size: 0.72rem; color: var(--text-secondary); line-height: 1.35; margin: 0;">
+                  Scores represent distance offsets, not fraud probabilities. Officer verification with written justification is mandatory.
+                </p>
+              </div>
             </div>
-            <span class="badge badge-info" style="font-size: 0.68rem;"><i class="fa-solid fa-microchip"></i> Unsupervised Isolation Forest (100 Trees)</span>
           </div>
-          <div class="explainability-guide-grid">
-            <div class="explainability-guide-item">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                <strong style="color: var(--accent-rose); font-size: 0.76rem;"><i class="fa-solid fa-arrow-down"></i> Score &lt; 0 (Negative)</strong>
-                <span class="badge badge-danger" style="font-size: 0.62rem;">Statistical Outlier</span>
-              </div>
-              <p style="font-size: 0.72rem; color: var(--text-secondary); line-height: 1.35; margin: 0;">
-                Points isolated with <strong>fewer tree splits (shorter path lengths)</strong> in the ensemble. Indicates abnormal quantity, off-hours timing, or irregular draw frequency.
-              </p>
-            </div>
-            <div class="explainability-guide-item">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                <strong style="color: var(--accent-emerald); font-size: 0.76rem;"><i class="fa-solid fa-arrow-up"></i> Score &ge; 0 (Positive)</strong>
-                <span class="badge badge-success" style="font-size: 0.62rem;">Normal Inlier</span>
-              </div>
-              <p style="font-size: 0.72rem; color: var(--text-secondary); line-height: 1.35; margin: 0;">
-                Points requiring <strong>deep tree partitioning (longer path lengths)</strong>. Conforms to standard registered cardholder quotas, operating hours, and standard distribution cadence.
-              </p>
-            </div>
-            <div class="explainability-guide-item">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                <strong style="color: #60a5fa; font-size: 0.76rem;"><i class="fa-solid fa-shield-halved"></i> Ethical AI Compliance</strong>
-                <span class="badge badge-info" style="font-size: 0.62rem;">Human In The Loop</span>
-              </div>
-              <p style="font-size: 0.72rem; color: var(--text-secondary); line-height: 1.35; margin: 0;">
-                <strong>Never treat score as a fraud percentage:</strong> A score of -0.38 is a geometric distance offset, NOT a 38% probability. Human verification with written comments is mandatory.
-              </p>
-            </div>
-          </div>
-        </div>
+        </details>
 
         <!-- Fraud Alerts Table Panel -->
         <div class="data-panel compact-data-panel">

@@ -671,7 +671,19 @@ class MLService:
 
         # Step 2: Compute commodity-specific and card-type-specific entitlement rules if not explicitly overridden
         if entitled_quota is None:
-            if "AAY" in card_type or "Antyodaya" in card_type:
+            if "NPHH" in card_type or "Non-Priority" in card_type:
+                # Non-Priority Household (NPHH): Restricted subsidized quota
+                if commodity == "Rice":
+                    entitled_quota = family_size * 3.0
+                elif commodity == "Wheat":
+                    entitled_quota = family_size * 1.5
+                elif commodity in ["Sugar", "Refined Sugar"]:
+                    entitled_quota = 1.0
+                elif commodity in ["Dal", "Toor Dal", "Pulses"]:
+                    entitled_quota = 0.5
+                else:
+                    entitled_quota = family_size * 1.0
+            elif "AAY" in card_type or "Antyodaya" in card_type:
                 # Antyodaya Anna Yojana (AAY): Fixed 35 kg grain allocation per family (e.g. 25kg Rice, 10kg Wheat), 2kg Sugar, 2kg Dal
                 if commodity == "Rice":
                     entitled_quota = 25.0
@@ -696,17 +708,17 @@ class MLService:
                 else:
                     entitled_quota = family_size * 2.0
             else:
-                # Non-Priority Household (NPHH): Restricted subsidized quota
+                # Default to PHH standard allocation
                 if commodity == "Rice":
-                    entitled_quota = family_size * 3.0
+                    entitled_quota = family_size * 5.0
                 elif commodity == "Wheat":
-                    entitled_quota = family_size * 1.5
+                    entitled_quota = family_size * 2.0
                 elif commodity in ["Sugar", "Refined Sugar"]:
                     entitled_quota = 1.0
                 elif commodity in ["Dal", "Toor Dal", "Pulses"]:
                     entitled_quota = 1.0
                 else:
-                    entitled_quota = family_size * 1.0
+                    entitled_quota = family_size * 2.0
 
         entitled_quota = max(1.0, float(entitled_quota))
         quota_ratio = round(quantity / (entitled_quota + 1e-5), 3)

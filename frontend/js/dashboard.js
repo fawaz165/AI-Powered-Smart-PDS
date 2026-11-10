@@ -7,6 +7,7 @@
 let inventoryChartInstance = null;
 let regionChartInstance = null;
 let lastDashboardLoadTime = 0;
+let latestDashboardTransactions = [];
 
 document.addEventListener('DOMContentLoaded', async () => {
   lastDashboardLoadTime = Date.now();
@@ -194,20 +195,21 @@ async function loadDashboardData() {
         fullBufferReplenishmentSum += neededWithBuffer;
       });
 
-      // 1. Net Statewide Shortfall (39,167 kg demand - 33,960 kg warehouse stock = 5,207 kg)
+      // 1. Net Statewide Shortfall (aggregate demand minus aggregate stock across all depots)
       const netShortfall = Math.max(0, Math.round(totalPredictedDemand - totalStock));
 
-      // 2. Localized Depot Deficits (sum of individual shortages where demand > stock = 5,743 kg across 14 deficit depots)
+      // 2. Localized Depot Deficits (sum of deficits where depot demand > warehouse stock)
       const depotDeficit = Math.round(totalDepotShortages);
 
-      // 3. Full Safety-Buffer Replenishment (sum of deficits + target buffer = 11,006 kg)
+      // 3. Full Safety-Buffer Replenishment (quantity needed to satisfy demand and fully restore minimum safety buffers)
       const fullBufferRestoration = Math.round(fullBufferReplenishmentSum);
 
       document.getElementById('kpi-demand').innerHTML = `${Math.round(totalPredictedDemand).toLocaleString()} <span style="font-size: 1rem; font-weight: 500;">kg</span>`;
       
       const kpiProcurementEl = document.getElementById('kpi-procurement');
       if (kpiProcurementEl) {
-        kpiProcurementEl.innerHTML = `${netShortfall.toLocaleString()} <span style="font-size: 1rem; font-weight: 500;">kg</span>`;
+        // Primary operational procurement requirement is the localized depot deficit needed to prevent stockouts
+        kpiProcurementEl.innerHTML = `${depotDeficit.toLocaleString()} <span style="font-size: 1rem; font-weight: 500;">kg</span>`;
       }
 
       const shortageMeta = document.getElementById('kpi-shortage-meta');
@@ -215,23 +217,23 @@ async function loadDashboardData() {
       const shortageCard = document.getElementById('card-shortage-procurement');
 
       if (shortageCard) {
-        shortageCard.title = `Transparent Calculation Breakdown:\n1. Net Statewide Shortage: ${netShortfall.toLocaleString()} kg (Demand ${Math.round(totalPredictedDemand).toLocaleString()} − Stock ${Math.round(totalStock).toLocaleString()}; assumes state-level stock pooling).\n2. Localized Depot Deficit: ${depotDeficit.toLocaleString()} kg (Direct shortfall across ${shortageCount} deficit depots; excludes 536 kg surplus in non-deficit depots).\n3. Full Safety-Buffer Replenishment: ${fullBufferRestoration.toLocaleString()} kg (Quantity required to satisfy demand AND restore 100% of minimum safety buffers).`;
+        shortageCard.title = `Localized Depot Shortages: ${depotDeficit.toLocaleString()} kg across ${shortageCount} deficit depots | Full Buffer Target: ${fullBufferRestoration.toLocaleString()} kg | Net Statewide Shortfall: ${netShortfall.toLocaleString()} kg`;
       }
 
       if (shortageCount > 0) {
         if (shortageMeta) {
-          shortageMeta.innerHTML = `<span class="meta-alert"><i class="fa-solid fa-triangle-exclamation"></i> 5,743 kg Localized Deficit</span> &bull; <span style="color: var(--text-secondary);" title="Quantity to satisfy demand plus 100% buffer replenishment">${fullBufferRestoration.toLocaleString()} kg Buffer Restored</span>`;
+          shortageMeta.innerHTML = `<span class="meta-alert"><i class="fa-solid fa-triangle-exclamation"></i> ${shortageCount} Deficit Depots</span> &bull; <span style="color: var(--text-secondary);" title="Buffer Replenishment Target: ${fullBufferRestoration.toLocaleString()} kg">${fullBufferRestoration.toLocaleString()} kg with Buffer</span>`;
         }
         if (shortageBanner) {
           shortageBanner.style.display = 'flex';
           const bannerTitle = document.getElementById('banner-title');
           const bannerDesc = document.getElementById('banner-desc');
-          if (bannerTitle) bannerTitle.textContent = `Procurement Notice: ${netShortfall.toLocaleString()} kg Net Shortage (${depotDeficit.toLocaleString()} kg Localized Deficit across ${shortageCount} Depots)`;
-          if (bannerDesc) bannerDesc.textContent = `• Net Statewide Shortage: ${netShortfall.toLocaleString()} kg (Demand ${Math.round(totalPredictedDemand).toLocaleString()} kg − Stock ${Math.round(totalStock).toLocaleString()} kg).\n• Localized Depot Deficit: ${depotDeficit.toLocaleString()} kg required to meet demand at ${shortageCount} deficit depots without inter-district transfers.\n• Full Buffer Replenishment: ${fullBufferRestoration.toLocaleString()} kg needed to satisfy demand and fully restore minimum safety buffers.`;
+          if (bannerTitle) bannerTitle.textContent = `Procurement Notice: ${depotDeficit.toLocaleString()} kg Required across ${shortageCount} Deficit Depots`;
+          if (bannerDesc) bannerDesc.textContent = `Localized demand exceeds warehouse stock in ${shortageCount} depots by ${depotDeficit.toLocaleString()} kg (${fullBufferRestoration.toLocaleString()} kg to fully replenish safety buffers; Net statewide shortfall: ${netShortfall.toLocaleString()} kg).`;
         }
       } else {
         if (shortageMeta) {
-          shortageMeta.innerHTML = `<span class="meta-up"><i class="fa-solid fa-check"></i> Stock Optimal</span>`;
+          shortageMeta.innerHTML = `<span class="meta-up"><i class="fa-solid fa-check"></i> Stock Optimal (0 kg Deficit)</span>`;
         }
         if (shortageBanner) {
           shortageBanner.style.display = 'none';
@@ -358,12 +360,15 @@ function renderRecentTransactions(transactions) {
   const tbody = document.getElementById('recent-txns-tbody');
   if (!tbody) return;
 
-  if (!transactions || transactions.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-muted);">No recent distribution transactions recorded.</td></tr>';
+  const recentItems = (transactions || []).slice(0, 6);
+  latestDashboardTransactions = recentItems;
+
+  if (recentItems.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: var(--text-muted);">No recent distribution transactions recorded.</td></tr>';
     return;
   }
 
-  tbody.innerHTML = transactions.map(t => {
+  tbody.innerHTML = recentItems.map(t => {
     const rawStatus = (t.status || 'NORMAL').toUpperCase();
     const rawRisk = (t.risk_level || 'LOW').toUpperCase();
     const reviewDecision = (t.review_decision || t.review_status || '').toUpperCase();
@@ -398,16 +403,18 @@ function renderRecentTransactions(transactions) {
     const safeShop = escapeHtml(t.ration_shop_id || '--');
     const safeRegion = escapeHtml(t.region || 'Chennai');
 
-    // Contextual reason resolution
+    // Contextual reason resolution with shortened text
     let displayReason = t.reason || t.review_reason || t.review_comments || '';
     if (!displayReason) {
       if (rawStatus === 'SUSPICIOUS' || rawRisk === 'HIGH') {
-        displayReason = `Single withdrawal ${safeQty} kg exceeds standard monthly family entitlement`;
+        displayReason = `Withdrawal ${safeQty} kg exceeds quota`;
       } else {
-        displayReason = 'Regular monthly subsidized quota distribution';
+        displayReason = 'Regular subsidized distribution';
       }
     }
-    const safeReason = escapeHtml(displayReason);
+    const shortReason = displayReason.length > 28
+      ? escapeHtml(displayReason.substring(0, 28)) + '&hellip;'
+      : escapeHtml(displayReason);
 
     return `
       <tr>
@@ -418,10 +425,75 @@ function renderRecentTransactions(transactions) {
         <td>${safeShop}</td>
         <td>${safeRegion}</td>
         <td>${statusBadgeHtml}</td>
-        <td style="max-width: 260px; font-size: 0.8rem; color: var(--text-secondary);">${safeReason}</td>
+        <td style="max-width: 200px; font-size: 0.8rem; color: var(--text-secondary);" title="${escapeHtml(displayReason)}">${shortReason}</td>
+        <td class="text-center">
+          <button class="btn btn-secondary btn-xs" style="padding: 3px 8px; font-size: 0.72rem;" onclick="viewDashboardTxnDetails('${safeTxnId}')" title="View Full Transaction Details">
+            <i class="fa-solid fa-eye"></i> Details
+          </button>
+        </td>
       </tr>
     `;
   }).join('');
+}
+
+/**
+ * Opens detailed transaction view modal with full evaluation reason and audit trail
+ */
+async function viewDashboardTxnDetails(txnId) {
+  const modalBody = document.getElementById('txn-detail-body');
+  if (!modalBody) return;
+
+  let txn = latestDashboardTransactions.find(t => t.transaction_id === txnId);
+  try {
+    const res = await API.request(`/transactions/${encodeURIComponent(txnId)}`);
+    if (res && res.status === 'success' && res.data) {
+      txn = res.data;
+    }
+  } catch (_) {}
+
+  if (!txn) {
+    showToast('Transaction details not found', 'error');
+    return;
+  }
+
+  const timeStr = txn.timestamp ? new Date(txn.timestamp).toLocaleString() : 'N/A';
+  const anomalyScore = txn.anomaly_score !== undefined ? Number(txn.anomaly_score).toFixed(4) : '0.0000';
+  const badgeClass = (txn.risk_level === 'HIGH' || txn.status === 'SUSPICIOUS') ? 'badge-danger' : ((txn.risk_level === 'MEDIUM') ? 'badge-warning' : 'badge-success');
+
+  modalBody.innerHTML = `
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px;">
+      <div style="background:rgba(255,255,255,0.02); padding:10px 12px; border-radius:var(--radius-sm); border:1px solid var(--border-subtle);">
+        <span style="font-size:0.75rem; color:var(--text-muted);">Transaction ID</span>
+        <div style="font-weight:700; color:var(--text-primary);">${escapeHtml(txn.transaction_id)}</div>
+      </div>
+      <div style="background:rgba(255,255,255,0.02); padding:10px 12px; border-radius:var(--radius-sm); border:1px solid var(--border-subtle);">
+        <span style="font-size:0.75rem; color:var(--text-muted);">ML Anomaly Assessment</span>
+        <div><span class="badge ${badgeClass}">${escapeHtml(txn.status)} (${escapeHtml(txn.risk_level || 'LOW')})</span> <span style="font-size:0.75rem; color:var(--text-secondary); margin-left:4px;">Score: ${anomalyScore}</span></div>
+      </div>
+      <div style="background:rgba(255,255,255,0.02); padding:10px 12px; border-radius:var(--radius-sm); border:1px solid var(--border-subtle);">
+        <span style="font-size:0.75rem; color:var(--text-muted);">Beneficiary</span>
+        <div style="font-weight:600; color:var(--text-primary);"><code>${escapeHtml(txn.beneficiary_id)}</code></div>
+      </div>
+      <div style="background:rgba(255,255,255,0.02); padding:10px 12px; border-radius:var(--radius-sm); border:1px solid var(--border-subtle);">
+        <span style="font-size:0.75rem; color:var(--text-muted);">Grain & Quantity</span>
+        <div style="font-weight:600; color:var(--accent-cyan);">${escapeHtml(txn.commodity)} &bull; ${Number(txn.quantity).toFixed(1)} kg</div>
+      </div>
+      <div style="background:rgba(255,255,255,0.02); padding:10px 12px; border-radius:var(--radius-sm); border:1px solid var(--border-subtle);">
+        <span style="font-size:0.75rem; color:var(--text-muted);">FPS Depot / Region</span>
+        <div style="color:var(--text-secondary); font-size:0.85rem;">${escapeHtml(txn.ration_shop_id || '-')} (${escapeHtml(txn.region || '-')})</div>
+      </div>
+      <div style="background:rgba(255,255,255,0.02); padding:10px 12px; border-radius:var(--radius-sm); border:1px solid var(--border-subtle);">
+        <span style="font-size:0.75rem; color:var(--text-muted);">Timestamp</span>
+        <div style="color:var(--text-secondary); font-size:0.82rem;">${timeStr}</div>
+      </div>
+    </div>
+
+    <div style="background:rgba(255,255,255,0.02); padding:12px; border-radius:var(--radius-sm); border:1px solid var(--border-subtle); margin-bottom:14px;">
+      <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:4px; font-weight:600;">Full Distribution Explanation & Evaluation Detail:</div>
+      <div style="font-size:0.85rem; color:var(--text-primary); line-height:1.5;">${escapeHtml(txn.reason || txn.review_reason || 'Standard subsidized grain quota distribution conforming to registered cardholder monthly entitlement schedule.')}</div>
+    </div>
+  `;
+  openModal('txn-detail-modal');
 }
 
 /**

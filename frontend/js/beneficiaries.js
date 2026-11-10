@@ -181,24 +181,24 @@ function computeMonthlyQuota(cardType, size) {
   const s = Math.max(1, parseInt(size, 10) || 1);
   const type = String(cardType || '');
 
-  if (type.includes('AAY') || type.includes('Antyodaya')) {
-    return {
-      quota: { Rice: 25.0, Wheat: 10.0, Sugar: 2.0, Dal: 2.0 },
-      html: '<strong>Rice:</strong> 25kg &bull; <strong>Wheat:</strong> 10kg &bull; <strong>Sugar:</strong> 2kg &bull; <strong>Dal:</strong> 2kg <span class="badge badge-purple" style="font-size:0.7rem; margin-left: 6px;">Fixed Family Quota (35kg Grains)</span>'
-    };
-  } else if (type.includes('Priority') || type.includes('PHH')) {
-    const rice = s * 5;
-    const wheat = s * 2;
-    return {
-      quota: { Rice: rice, Wheat: wheat, Sugar: 1.0, Dal: 1.0 },
-      html: `<strong>Rice:</strong> ${rice}kg &bull; <strong>Wheat:</strong> ${wheat}kg &bull; <strong>Sugar:</strong> 1kg &bull; <strong>Dal:</strong> 1kg <span class="badge badge-warning" style="font-size:0.7rem; margin-left: 6px;">Per-Member Quota (5kg Rice + 2kg Wheat/person)</span>`
-    };
-  } else {
+  if (type.includes('NPHH') || type.includes('Non-Priority')) {
     const rice = Math.round(s * 3.0 * 10) / 10;
     const wheat = Math.round(s * 1.5 * 10) / 10;
     return {
       quota: { Rice: rice, Wheat: wheat, Sugar: 1.0, Dal: 0.5 },
       html: `<strong>Rice:</strong> ${rice}kg &bull; <strong>Wheat:</strong> ${wheat}kg &bull; <strong>Sugar:</strong> 1kg &bull; <strong>Dal:</strong> 0.5kg <span class="badge badge-info" style="font-size:0.7rem; margin-left: 6px;">Basic Allotment (3kg Rice + 1.5kg Wheat/person)</span>`
+    };
+  } else if (type.includes('AAY') || type.includes('Antyodaya')) {
+    return {
+      quota: { Rice: 25.0, Wheat: 10.0, Sugar: 2.0, Dal: 2.0 },
+      html: '<strong>Rice:</strong> 25kg &bull; <strong>Wheat:</strong> 10kg &bull; <strong>Sugar:</strong> 2kg &bull; <strong>Dal:</strong> 2kg <span class="badge badge-purple" style="font-size:0.7rem; margin-left: 6px;">Fixed Family Quota (35kg Grains)</span>'
+    };
+  } else {
+    const rice = s * 5;
+    const wheat = s * 2;
+    return {
+      quota: { Rice: rice, Wheat: wheat, Sugar: 1.0, Dal: 1.0 },
+      html: `<strong>Rice:</strong> ${rice}kg &bull; <strong>Wheat:</strong> ${wheat}kg &bull; <strong>Sugar:</strong> 1kg &bull; <strong>Dal:</strong> 1kg <span class="badge badge-warning" style="font-size:0.7rem; margin-left: 6px;">Per-Member Quota (5kg Rice + 2kg Wheat/person)</span>`
     };
   }
 }
@@ -242,7 +242,7 @@ async function fetchBeneficiaries(isInitial = false) {
     const res = await API.getBeneficiaries({ limit: 1000 });
     if (res && res.status === 'success') {
       allBeneficiaries = res.data || [];
-      updateRegistryMetrics(allBeneficiaries);
+      updateRegistryMetrics(allBeneficiaries, res.categories);
       applyFilteringAndPagination();
     }
   } catch (err) {
@@ -255,20 +255,32 @@ async function fetchBeneficiaries(isInitial = false) {
 }
 
 /**
- * Updates summary metric KPI counters from database records.
+ * Updates summary metric KPI counters dynamically from database records.
  */
-function updateRegistryMetrics(beneficiaries) {
-  const total = beneficiaries.length;
+function updateRegistryMetrics(beneficiaries, categorySummary = null) {
+  let total = Array.isArray(beneficiaries) ? beneficiaries.length : 0;
   let phhCount = 0;
   let aayCount = 0;
   let nphhCount = 0;
 
-  beneficiaries.forEach(b => {
-    const type = b.ration_card_type || '';
-    if (type.includes('AAY') || type.includes('Antyodaya')) aayCount++;
-    else if (type.includes('Priority') || type.includes('PHH')) phhCount++;
-    else nphhCount++;
-  });
+  if (categorySummary && typeof categorySummary === 'object' && ('PHH' in categorySummary || 'AAY' in categorySummary || 'NPHH' in categorySummary)) {
+    phhCount = Number(categorySummary.PHH) || 0;
+    aayCount = Number(categorySummary.AAY) || 0;
+    nphhCount = Number(categorySummary.NPHH) || 0;
+    total = phhCount + aayCount + nphhCount;
+  } else if (Array.isArray(beneficiaries)) {
+    beneficiaries.forEach(b => {
+      const type = String(b.ration_card_type || '');
+      if (type.includes('NPHH') || type.includes('Non-Priority')) {
+        nphhCount++;
+      } else if (type.includes('AAY') || type.includes('Antyodaya')) {
+        aayCount++;
+      } else {
+        phhCount++;
+      }
+    });
+    total = beneficiaries.length;
+  }
 
   const totalEl = document.getElementById('ben-kpi-total');
   const phhEl = document.getElementById('ben-kpi-phh');
@@ -288,7 +300,7 @@ async function refreshBeneficiaries() {
   const btn = document.getElementById('btn-refresh-bens');
   if (btn) btn.disabled = true;
   await fetchBeneficiaries(false);
-  showToast('Beneficiary registry refreshed from live database', 'info');
+  showToast('Beneficiary registry refreshed', 'info');
   if (btn) btn.disabled = false;
 }
 
@@ -349,9 +361,9 @@ function renderBeneficiariesTable(beneficiaries) {
     const rawType = b.ration_card_type || 'Priority (PHH)';
     const safeType = escapeHtml(rawType);
     const safeCardNum = escapeHtml(b.ration_card_number || `RC-${b.beneficiary_id}`);
-    const badgeTypeClass = (rawType.includes('AAY') || rawType.includes('Antyodaya')) 
-      ? 'badge-purple' 
-      : ((rawType.includes('Priority') || rawType.includes('PHH')) ? 'badge-warning' : 'badge-info');
+    const badgeTypeClass = (rawType.includes('NPHH') || rawType.includes('Non-Priority'))
+      ? 'badge-info'
+      : ((rawType.includes('AAY') || rawType.includes('Antyodaya')) ? 'badge-purple' : 'badge-warning');
 
     // Dynamic monthly quota rendering from database object or calculated standard
     let quotaHtml = 'Standard Quota';

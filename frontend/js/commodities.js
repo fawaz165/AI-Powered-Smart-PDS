@@ -467,7 +467,6 @@ function renderCommoditiesTable(items) {
       marketHtml = `
         <div style="display:flex; flex-direction:column; gap:2px;">
           <span style="font-weight: 500;">₹ ${mktPriceVal.toFixed(2)} / ${unitStr}</span>
-          <span style="font-size:0.68rem; color:var(--text-muted);">Ref. Open Market Benchmark</span>
           <div>${savingsBadge}</div>
         </div>
       `;

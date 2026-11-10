@@ -28,8 +28,13 @@
         <a href="predictions.html" class="nav-link active"><i class="icon fa-solid fa-wand-magic-sparkles"></i> Demand Forecast</a>
         <a href="fraud.html" class="nav-link"><i class="icon fa-solid fa-shield-halved"></i> Anomaly & Fraud</a>
         <a href="reports.html" class="nav-link"><i class="icon fa-solid fa-file-excel"></i> Reports Export</a>
-        <a href="about.html" class="nav-link"><i class="icon fa-solid fa-circle-info"></i> Viva Guide & About</a>
       </nav>
+
+      <div class="sidebar-secondary-nav">
+        <div class="section-heading">Documentation</div>
+        <a href="about.html" class="nav-link"><i class="icon fa-solid fa-book-open"></i> Viva Guide &amp; Architecture</a>
+      </div>
+
       <div class="sidebar-footer">
         <div class="user-snippet">
           <div class="user-avatar"><i class="fa-solid fa-user-shield"></i></div>
@@ -234,31 +239,34 @@
               </div>
             </div>
 
-            <!-- Explainability Summary & Factors -->
-            <div class="explainability-compact-section">
-              <h4 class="explainability-title">
-                <i class="fa-solid fa-brain" style="color: var(--accent-cyan);"></i> Calculation Factors &amp; Explainability
-              </h4>
-              <p id="res-explanation-summary" class="explainability-summary-text">
-                Loading factor analysis...
-              </p>
-              <div id="res-factors-grid" class="factors-grid-compact">
-                <!-- Dynamically populated factor pills -->
-              </div>
+            <!-- Collapsible Derivations & Factor Analysis Section -->
+            <details class="collapsible-card">
+              <summary>
+                <span><i class="fa-solid fa-calculator" style="color: var(--accent-cyan); margin-right: 6px;"></i> View Derivations &amp; Factor Breakdown</span>
+                <i class="fa-solid fa-chevron-down" style="font-size: 0.72rem; color: var(--text-muted);"></i>
+              </summary>
+              <div class="collapsible-body">
+                <p id="res-explanation-summary" class="explainability-summary-text" style="font-size: 0.78rem; line-height: 1.4; margin-bottom: 8px;">
+                  Loading factor analysis...
+                </p>
+                <div id="res-factors-grid" class="factors-grid-compact" style="margin-bottom: 8px;">
+                  <!-- Dynamically populated factor pills -->
+                </div>
 
-              <!-- Mathematical Calculation Breakdown -->
-              <div class="math-breakdown-card">
-                <div class="math-breakdown-header">
-                  <span class="math-breakdown-title">
-                    <i class="fa-solid fa-calculator"></i> Step-by-Step Derivation Breakdown
-                  </span>
-                  <span class="math-breakdown-formula">Formula: max(0, (Demand + Buffer) &minus; Stock)</span>
-                </div>
-                <div id="res-calculation-breakdown" class="math-breakdown-grid">
-                  <!-- Dynamically populated math breakdown -->
+                <!-- Mathematical Calculation Breakdown -->
+                <div class="math-breakdown-card" style="margin-top: 6px;">
+                  <div class="math-breakdown-header" style="margin-bottom: 4px;">
+                    <span class="math-breakdown-title" style="font-size: 0.78rem;">
+                      <i class="fa-solid fa-calculator"></i> Step-by-Step Mathematical Derivation
+                    </span>
+                    <span class="math-breakdown-formula" style="font-size: 0.7rem;">Formula: max(0, (Demand + Buffer) &minus; Stock)</span>
+                  </div>
+                  <div id="res-calculation-breakdown" class="math-breakdown-grid">
+                    <!-- Dynamically populated math breakdown -->
+                  </div>
                 </div>
               </div>
-            </div>
+            </details>
 
           </div>
 
@@ -270,11 +278,11 @@
             <div>
               <h3 style="font-size: 0.95rem;"><i class="fa-solid fa-award" style="color: var(--accent-amber);"></i> ML Regression Models Benchmark &amp; Comparison</h3>
               <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">
-                Evaluated on a genuine unseen 20% test partition (144 samples) with zero data leakage. Metrics (MAE, MSE, RMSE, R²) calculated dynamically.
+                Evaluated on a 20% test partition (144 samples). Dynamic metrics (MAE, MSE, RMSE, R²) calculated dynamically.
               </p>
             </div>
             <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
-              <span class="badge badge-success" style="font-size: 0.7rem; padding: 2px 7px;"><i class="fa-solid fa-check-double"></i> Unseen Test Split</span>
+              <span class="badge badge-success" style="font-size: 0.7rem; padding: 2px 7px;"><i class="fa-solid fa-check-double"></i> Test Split</span>
               <button class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 5px 10px;" onclick="loadModelMetrics(true)" title="Evaluate all 4 candidate regression models dynamically on test split">
                 <i class="fa-solid fa-arrows-rotate"></i> Recalculate Dynamic Metrics
               </button>

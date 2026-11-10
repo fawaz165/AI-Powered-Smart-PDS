@@ -34,11 +34,17 @@ class BeneficiaryModel:
     def calculate_monthly_quota(cls, ration_card_type: str, family_size: int) -> dict:
         """Calculates monthly commodity entitlement quotas based on configured ration-card rules."""
         size = max(1, int(family_size))
+        ctype = str(ration_card_type or "").strip()
         matched_rule = None
-        for key, rule in cls.RATION_CARD_RULES.items():
-            if key.lower() in ration_card_type.lower() or ration_card_type.lower() in key.lower():
-                matched_rule = rule
-                break
+        if "NPHH" in ctype or "Non-Priority" in ctype:
+            matched_rule = cls.RATION_CARD_RULES.get("Non-Priority (NPHH)")
+        elif "AAY" in ctype or "Antyodaya" in ctype:
+            matched_rule = cls.RATION_CARD_RULES.get("Antyodaya Anna Yojana (AAY)")
+        elif "PHH" in ctype or "Priority" in ctype:
+            matched_rule = cls.RATION_CARD_RULES.get("Priority (PHH)")
+        else:
+            matched_rule = cls.RATION_CARD_RULES.get("Priority (PHH)")
+
         if not matched_rule:
             matched_rule = cls.RATION_CARD_RULES["Priority (PHH)"]
 

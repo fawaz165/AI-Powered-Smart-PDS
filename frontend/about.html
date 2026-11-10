@@ -26,8 +26,13 @@
         <a href="predictions.html" class="nav-link"><i class="icon fa-solid fa-wand-magic-sparkles"></i> Demand Forecast</a>
         <a href="fraud.html" class="nav-link"><i class="icon fa-solid fa-shield-halved"></i> Anomaly & Fraud</a>
         <a href="reports.html" class="nav-link"><i class="icon fa-solid fa-file-excel"></i> Reports Export</a>
-        <a href="about.html" class="nav-link active"><i class="icon fa-solid fa-circle-info"></i> Viva Guide & About</a>
       </nav>
+
+      <div class="sidebar-secondary-nav">
+        <div class="section-heading">Documentation</div>
+        <a href="about.html" class="nav-link active"><i class="icon fa-solid fa-book-open"></i> Viva Guide &amp; Architecture</a>
+      </div>
+
       <div class="sidebar-footer">
         <div class="user-snippet">
           <div class="user-avatar"><i class="fa-solid fa-user-shield"></i></div>
@@ -43,8 +48,8 @@
     <main class="main-wrapper">
       <header class="top-navbar">
         <div class="page-title-box">
-          <h1>System Architecture & College Viva Guide</h1>
-          <p>Technical architecture, mathematical equations, concurrency mechanisms, and examiner viva Q&A</p>
+          <h1>Technical Reference &amp; System Architecture</h1>
+          <p>Technical architecture, mathematical formulations, and engineering reference Q&amp;A</p>
         </div>
       </header>
 
@@ -67,9 +72,9 @@
               </p>
             </div>
             <div style="background: rgba(255,255,255,0.03); padding: 18px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
-              <h4 style="color: #34d399; margin-bottom: 8px;"><i class="fa-solid fa-lock"></i> 2. Thread-Safe Inventory</h4>
+              <h4 style="color: #34d399; margin-bottom: 8px;"><i class="fa-solid fa-lock"></i> 2. Synchronized Inventory</h4>
               <p style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.6;">
-                Prevents race conditions when multiple Fair Price Shops execute grain distributions concurrently using Python's <code>threading.Lock</code> to guarantee non-negative atomic deductions.
+                Coordinates inventory checks and deductions using Python threading synchronization locks to mitigate race conditions during concurrent Fair Price Shop transactions.
               </p>
             </div>
             <div style="background: rgba(255,255,255,0.03); padding: 18px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
@@ -128,7 +133,7 @@
             <div style="background: rgba(255,255,255,0.02); padding: 18px; border-left: 3px solid var(--accent-emerald); border-radius: 4px;">
               <strong style="color: #6ee7b7; font-size: 0.95rem;">Q2: How does the system handle concurrent transactions safely?</strong>
               <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 6px; line-height: 1.6;">
-                In real PDS depots, multiple Fair Price Shops disburse grain simultaneously. Without concurrency controls, race conditions can produce negative warehouse inventory. We implemented Python's <code>threading.Lock</code> inside <code>InventoryService</code> to serialize inventory verification and deduction atomically, guaranteeing that available stock is never oversold.
+                In real PDS depots, multiple Fair Price Shops disburse grain simultaneously. To protect warehouse balances from race conditions, we implemented synchronization locks inside <code>InventoryService</code> to coordinate inventory verification and deduction, preventing overselling under concurrent worker requests.
               </p>
             </div>
 

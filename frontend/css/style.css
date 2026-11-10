@@ -310,6 +310,28 @@ h1, h2, h3, h4, h5, .brand-title {
   margin-bottom: 20px;
 }
 
+.grid-cards-6 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (min-width: 1680px) {
+  .grid-cards-6 {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1100px) {
+  .grid-cards-6 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .grid-cards-6 {
+    grid-template-columns: 1fr;
+  }
+}
+
 .stat-card {
   background: var(--bg-card);
   backdrop-filter: var(--glass-blur);
@@ -318,6 +340,8 @@ h1, h2, h3, h4, h5, .brand-title {
   padding: 18px 20px;
   display: flex;
   flex-direction: column;
+  justify-content: space-between;
+  min-height: 136px;
   gap: 8px;
   position: relative;
   overflow: hidden;
@@ -377,6 +401,7 @@ h1, h2, h3, h4, h5, .brand-title {
   display: flex;
   align-items: center;
   gap: 6px;
+  margin-top: auto;
 }
 
 .meta-up { color: var(--accent-emerald); font-weight: 600; }
@@ -1509,3 +1534,69 @@ h1, h2, h3, h4, h5, .brand-title {
     align-items: stretch;
   }
 }
+
+/* ---------------- Secondary Sidebar Reference Section ---------------- */
+.sidebar-secondary-nav {
+  padding: 8px 12px 10px 12px;
+  border-top: 1px solid var(--border-subtle);
+  margin-top: auto;
+}
+
+.sidebar-secondary-nav .section-heading {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  margin: 4px 0 6px 10px;
+}
+
+.sidebar-secondary-nav .nav-link {
+  padding: 8px 12px;
+  font-size: 0.82rem;
+  border-radius: var(--radius-sm);
+}
+
+/* ---------------- Collapsible Details Card Components ---------------- */
+details.collapsible-card {
+  margin-top: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: rgba(13, 20, 36, 0.4);
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+details.collapsible-card summary {
+  padding: 9px 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  list-style: none;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+details.collapsible-card summary::-webkit-details-marker {
+  display: none;
+}
+
+details.collapsible-card summary:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+details.collapsible-card[open] summary {
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--primary);
+  background: rgba(59, 130, 246, 0.06);
+}
+
+details.collapsible-card .collapsible-body {
+  padding: 12px;
+}
+

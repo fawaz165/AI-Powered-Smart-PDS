@@ -37,10 +37,22 @@ def list_beneficiaries():
     beneficiaries = list(cursor)
     total_count = db.beneficiaries.count_documents(query)
 
+    # Dynamic category totals calculated from actual database records
+    categories = {"PHH": 0, "AAY": 0, "NPHH": 0}
+    for b in db.beneficiaries.find({}, {"ration_card_type": 1}):
+        ctype = str(b.get("ration_card_type", "")).strip()
+        if "NPHH" in ctype or "Non-Priority" in ctype:
+            categories["NPHH"] += 1
+        elif "AAY" in ctype or "Antyodaya" in ctype:
+            categories["AAY"] += 1
+        else:
+            categories["PHH"] += 1
+
     return jsonify({
         "status": "success",
         "total": total_count,
         "count": len(beneficiaries),
+        "categories": categories,
         "data": beneficiaries
     }), 200
 
