@@ -41,9 +41,9 @@ USER pdsuser
 # Expose server port
 EXPOSE 5000
 
-# Health check using installed curl
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD curl -f http://localhost:5000/api/health || exit 1
+# Health check using installed curl targeting dynamic ${PORT:-5000}
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD curl -f http://localhost:${PORT:-5000}/api/health || exit 1
 
-# Launch production WSGI / server
-CMD ["python", "backend/app.py"]
+# Launch production WSGI server with Gunicorn (1 worker, 2 threads for Render memory optimization)
+CMD ["sh", "-c", "exec gunicorn --bind 0.0.0.0:${PORT:-5000} --workers 1 --threads 2 --timeout 120 backend.app:app"]
