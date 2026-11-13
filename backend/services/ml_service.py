@@ -671,7 +671,9 @@ class MLService:
 
         # Step 2: Compute commodity-specific and card-type-specific entitlement rules if not explicitly overridden
         if entitled_quota is None:
-            if "NPHH" in card_type or "Non-Priority" in card_type:
+            from backend.models.beneficiary import BeneficiaryModel
+            card_cat = BeneficiaryModel.normalize_card_category(card_type)
+            if card_cat == "NPHH":
                 # Non-Priority Household (NPHH): Restricted subsidized quota
                 if commodity == "Rice":
                     entitled_quota = family_size * 3.0
@@ -683,7 +685,7 @@ class MLService:
                     entitled_quota = 0.5
                 else:
                     entitled_quota = family_size * 1.0
-            elif "AAY" in card_type or "Antyodaya" in card_type:
+            elif card_cat == "AAY":
                 # Antyodaya Anna Yojana (AAY): Fixed 35 kg grain allocation per family (e.g. 25kg Rice, 10kg Wheat), 2kg Sugar, 2kg Dal
                 if commodity == "Rice":
                     entitled_quota = 25.0
@@ -695,20 +697,8 @@ class MLService:
                     entitled_quota = 2.0
                 else:
                     entitled_quota = 5.0
-            elif "Priority" in card_type or "PHH" in card_type:
-                # Priority Household (PHH): 5kg Rice/person, 2kg Wheat/person, 1kg Sugar/card, 1kg Dal/card
-                if commodity == "Rice":
-                    entitled_quota = family_size * 5.0
-                elif commodity == "Wheat":
-                    entitled_quota = family_size * 2.0
-                elif commodity in ["Sugar", "Refined Sugar"]:
-                    entitled_quota = 1.0
-                elif commodity in ["Dal", "Toor Dal", "Pulses"]:
-                    entitled_quota = 1.0
-                else:
-                    entitled_quota = family_size * 2.0
             else:
-                # Default to PHH standard allocation
+                # Priority Household (PHH) standard statutory allocation
                 if commodity == "Rice":
                     entitled_quota = family_size * 5.0
                 elif commodity == "Wheat":

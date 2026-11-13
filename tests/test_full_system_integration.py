@@ -46,6 +46,8 @@ def test_full_system_integration_lifecycle(client):
     # 2. Beneficiary Management
     ben_id = "BEN-INTEG-001"
     db.beneficiaries.delete_one({"beneficiary_id": ben_id})
+    db.transactions.delete_many({"beneficiary_id": ben_id})
+    db.fraud_alerts.delete_many({"beneficiary_id": ben_id})
     ben_payload = {
         "beneficiary_id": ben_id,
         "name": "Integration Test Household",
@@ -90,10 +92,15 @@ def test_full_system_integration_lifecycle(client):
     assert pred_data["recommended_procurement"] >= 0
 
     # 5. Inventory Setup and Query
-    # Seed known inventory for Chennai Rice
+    # Seed known inventory for Chennai Rice and Wheat
     db.inventory.update_one(
         {"commodity": "Rice", "region": "Chennai"},
         {"$set": {"current_stock": 5000.0, "safety_stock": 500.0, "last_updated": datetime.utcnow()}},
+        upsert=True
+    )
+    db.inventory.update_one(
+        {"commodity": "Wheat", "region": "Chennai"},
+        {"$set": {"current_stock": 2500.0, "safety_stock": 400.0, "last_updated": datetime.utcnow()}},
         upsert=True
     )
 

@@ -160,6 +160,7 @@ def get_anomaly_metrics_endpoint():
 
 
 @ml_bp.route("/ml-status", methods=["GET"])
+@ml_bp.route("/ml/status", methods=["GET"])
 def get_ml_status_endpoint():
     """Returns real-time health and status of loaded ML models."""
     health_data = MLService.get_model_health()

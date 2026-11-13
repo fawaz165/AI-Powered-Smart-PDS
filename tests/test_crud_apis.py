@@ -51,8 +51,7 @@ def test_beneficiary_crud(client):
 def test_commodity_catalog_retrieval_and_rate_distinction(client):
     """
     Verifies that commodity records are retrieved from the database,
-    enriched with operational linkages, and that verified official NFSA rates
-    are clearly distinguished from synthetic demonstration welfare values.
+    enriched with operational linkages and source-verified Tamil Nadu State PDS prices.
     """
     res = client.get("/api/commodities")
     assert res.status_code == 200
@@ -66,20 +65,23 @@ def test_commodity_catalog_retrieval_and_rate_distinction(client):
     assert "COM-SUG" in comms
     assert "COM-DAL" in comms
 
-    # Official statutory NFSA rates
+    # State PDS issue prices, verified from the Tamil Nadu Cooperative PDS source.
     rice = comms["COM-RIC"]
-    assert rice["rate_type"] == "OFFICIAL_NFSA"
+    assert rice["scheme_classification"] == "TAMIL_NADU_STATE_PDS"
+    assert rice["rate_type"] == "STATE_SUBSIDY"
     assert rice["is_verified"] is True
     assert rice["is_demonstration"] is False
     assert rice["subsidized_price"] == 0.0
     assert rice["market_price"] == 42.0
     assert rice["subsidy_amount"] == 42.0
     assert rice["subsidy_percentage"] == 100.0
+    assert rice["category_pricing"] == {"AAY": 0.0, "PHH": 0.0, "NPHH": 0.0}
     assert rice["linked_inventory_count"] >= 5
     assert rice["linked_transactions_count"] > 0
 
     wheat = comms["COM-WHT"]
-    assert wheat["rate_type"] == "OFFICIAL_NFSA"
+    assert wheat["scheme_classification"] == "TAMIL_NADU_STATE_PDS"
+    assert wheat["rate_type"] == "STATE_SUBSIDY"
     assert wheat["is_verified"] is True
     assert wheat["is_demonstration"] is False
     assert wheat["subsidized_price"] == 0.0
@@ -88,7 +90,8 @@ def test_commodity_catalog_retrieval_and_rate_distinction(client):
     assert wheat["subsidy_percentage"] == 100.0
 
     sugar = comms["COM-SUG"]
-    assert sugar["rate_type"] == "OFFICIAL_NFSA"
+    assert sugar["scheme_classification"] == "TAMIL_NADU_STATE_PDS"
+    assert sugar["rate_type"] == "STATE_SUBSIDY"
     assert sugar["is_verified"] is True
     assert sugar["is_demonstration"] is False
     assert sugar["subsidized_price"] == 13.5
@@ -98,6 +101,7 @@ def test_commodity_catalog_retrieval_and_rate_distinction(client):
     assert sugar["category_pricing"]["AAY"] == 13.5
     assert sugar["category_pricing"]["PHH"] == 25.0
     assert sugar["category_pricing"]["NPHH"] == 25.0
+    assert sugar["category_discounts"] == {"AAY": 70.0, "PHH": 44.44, "NPHH": 44.44}
 
     # Tamil Nadu Special PDS subsidized pulse scheme
     dal = comms["COM-DAL"]
@@ -108,7 +112,7 @@ def test_commodity_catalog_retrieval_and_rate_distinction(client):
     assert dal["market_price"] == 140.0
     assert dal["subsidy_amount"] == 110.0
     assert dal["subsidy_percentage"] == 78.57
-    assert "Special PDS" in dal["official_source"]
+    assert "Registrar of Cooperative Societies" in dal["official_source"]
 
     # Verify summary statistics and clearly defined averaging method
     assert "summary" in data
@@ -116,9 +120,9 @@ def test_commodity_catalog_retrieval_and_rate_distinction(client):
     assert summary["total_count"] == 4
     assert summary["official_count"] == 4
     assert summary["demo_count"] == 0
-    assert summary["benchmarked_count"] == 4
-    assert summary["average_subsidy_discount"] == 87.1
-    assert summary["averaging_method"] == "arithmetic_mean_of_valid_benchmark_discounts"
+    assert summary["benchmarked_count"] == 12
+    assert summary["average_subsidy_discount"] == 82.9
+    assert summary["averaging_method"] == "arithmetic_mean_of_valid_category_issue_prices_vs_recorded_benchmarks"
 
 
 def test_commodity_validation_and_duplicate_prevention(client):
@@ -135,6 +139,7 @@ def test_commodity_validation_and_duplicate_prevention(client):
     res_neg_sub = client.post("/api/commodities", json={
         "commodity_code": "COM-VAL1",
         "name": "Validation Test Grain",
+        "unit": "kg", "scheme_classification": "DEMO_CUSTOM",
         "subsidized_price": -5.0
     })
     assert res_neg_sub.status_code == 400
@@ -144,6 +149,7 @@ def test_commodity_validation_and_duplicate_prevention(client):
     res_neg_mkt = client.post("/api/commodities", json={
         "commodity_code": "COM-VAL2",
         "name": "Validation Test Grain 2",
+        "unit": "kg", "scheme_classification": "DEMO_CUSTOM",
         "subsidized_price": 10.0,
         "market_price": -20.0
     })
@@ -154,22 +160,25 @@ def test_commodity_validation_and_duplicate_prevention(client):
     res_mkt_low = client.post("/api/commodities", json={
         "commodity_code": "COM-VAL3",
         "name": "Validation Low Benchmark",
+        "unit": "kg", "scheme_classification": "DEMO_CUSTOM",
         "subsidized_price": 50.0,
         "market_price": 30.0
     })
     assert res_mkt_low.status_code == 400
-    assert "market_price cannot be less than subsidized_price" in str(res_mkt_low.get_json()).lower()
+    assert "market_price cannot be less than an issue price" in str(res_mkt_low.get_json()).lower()
 
-    # 4. Unverified price cannot be labeled as OFFICIAL_NFSA
+    # 4. Selecting NFSA does not itself verify the classification or the rates.
     res_unverified_nfsa = client.post("/api/commodities", json={
         "commodity_code": "COM-VAL4",
         "name": "Unverified Expensive Grain",
+        "unit": "kg", "scheme_classification": "NFSA",
         "subsidized_price": 40.0,
-        "market_price": 80.0,
-        "rate_type": "OFFICIAL_NFSA"
+        "market_price": 80.0
     })
-    assert res_unverified_nfsa.status_code == 400
-    assert "unverified price cannot be labeled as official_nfsa" in str(res_unverified_nfsa.get_json()).lower()
+    assert res_unverified_nfsa.status_code == 201
+    assert res_unverified_nfsa.get_json()["data"]["is_verified"] is False
+    assert res_unverified_nfsa.get_json()["data"]["scheme_classification"] == "NFSA"
+    client.delete("/api/commodities/COM-VAL4")
 
     # 5. Invalid commodity code pattern
     res_bad_code = client.post("/api/commodities", json={
@@ -210,6 +219,7 @@ def test_commodity_validation_and_duplicate_prevention(client):
     res_dup_code = client.post("/api/commodities", json={
         "commodity_code": "COM-RIC",
         "name": "Duplicate Code Grain",
+        "unit": "kg", "scheme_classification": "DEMO_CUSTOM",
         "subsidized_price": 5.0
     })
     assert res_dup_code.status_code == 409
@@ -219,6 +229,7 @@ def test_commodity_validation_and_duplicate_prevention(client):
     res_dup_name = client.post("/api/commodities", json={
         "commodity_code": "COM-NEW-RIC",
         "name": "Rice",
+        "unit": "kg", "scheme_classification": "DEMO_CUSTOM",
         "subsidized_price": 5.0
     })
     assert res_dup_name.status_code == 409
@@ -229,7 +240,7 @@ def test_commodity_crud_lifecycle_and_configurable_pricing(client):
     """
     Verifies full lifecycle of Add Commodity:
     - Creation and persistent storage in database
-    - Configurable subsidized pricing and market benchmark update (PUT)
+    - Category-specific issue prices and optional benchmark update (PUT)
     - Rejection of invalid price updates and invalid benchmark relationships
     - Operational deletion protection when linked, and clean deletion when unlinked
     - Guaranteed cleanup in finally block for complete test isolation
@@ -240,31 +251,32 @@ def test_commodity_crud_lifecycle_and_configurable_pricing(client):
     db = get_db()
 
     try:
-        # 1. Create new commodity with valid official coarse grain pricing (<= ₹13.50)
+        # 1. Create an unverified custom commodity with category-specific prices.
         create_payload = {
             "commodity_code": test_code,
             "name": test_name,
             "unit": "kg",
-            "subsidized_price": 1.5,
+            "scheme_classification": "DEMO_CUSTOM",
+            "category_pricing": {"AAY": 1.5, "PHH": 2.0, "NPHH": 3.0},
             "market_price": 35.0,
-            "rate_type": "OFFICIAL_NFSA",
             "description": "Nutritious coarse grain millet"
         }
         create_res = client.post("/api/commodities", json=create_payload)
         assert create_res.status_code == 201
         created_data = create_res.get_json()["data"]
         assert created_data["commodity_code"] == test_code
+        assert created_data["category_pricing"] == {"AAY": 1.5, "PHH": 2.0, "NPHH": 3.0}
         assert created_data["subsidized_price"] == 1.5
         assert created_data["market_price"] == 35.0
         assert created_data["subsidy_amount"] == 33.5
-        assert created_data["is_verified"] is True
-        assert created_data["is_demonstration"] is False
+        assert created_data["is_verified"] is False
+        assert created_data["is_demonstration"] is True
 
         # 2. Verify database persistence in MongoDB
         db_doc = db.commodities.find_one({"commodity_code": test_code}, {"_id": 0})
         assert db_doc is not None
         assert db_doc["name"] == test_name
-        assert db_doc["subsidized_price"] == 1.5
+        assert db_doc["category_pricing"] == {"AAY": 1.5, "PHH": 2.0, "NPHH": 3.0}
         assert db_doc["market_price"] == 35.0
 
         # 3. Read single commodity via API
@@ -272,20 +284,23 @@ def test_commodity_crud_lifecycle_and_configurable_pricing(client):
         assert get_res.status_code == 200
         assert get_res.get_json()["data"]["name"] == test_name
 
-        # 4. Make subsidized price and classification configurable via PUT
+        # 4. Update category prices, benchmark, and classification.
         update_res = client.put(f"/api/commodities/{test_code}", json={
-            "subsidized_price": 2.25,
+            "category_pricing": {"AAY": 2.25, "PHH": 2.5, "NPHH": 3.5},
             "market_price": 38.0,
-            "rate_type": "STATE_SUBSIDY",
+            "scheme_classification": "TAMIL_NADU_STATE_PDS",
             "description": "Updated state subsidy policy rate"
         })
         assert update_res.status_code == 200
         updated_data = update_res.get_json()["data"]
+        assert updated_data["category_pricing"] == {"AAY": 2.25, "PHH": 2.5, "NPHH": 3.5}
         assert updated_data["subsidized_price"] == 2.25
         assert updated_data["market_price"] == 38.0
         assert updated_data["rate_type"] == "STATE_SUBSIDY"
         assert updated_data["subsidy_amount"] == 35.75
         assert updated_data["is_demonstration"] is False
+        assert updated_data["is_verified"] is False
+        assert updated_data["scheme_classification"] == "TAMIL_NADU_STATE_PDS"
 
         # 5. Reject negative price update
         bad_update = client.put(f"/api/commodities/{test_code}", json={"subsidized_price": -10.0})
@@ -295,14 +310,15 @@ def test_commodity_crud_lifecycle_and_configurable_pricing(client):
         bad_benchmark = client.put(f"/api/commodities/{test_code}", json={"subsidized_price": 30.0, "market_price": 20.0})
         assert bad_benchmark.status_code == 400
 
-        # 7. Reject labeling unverified rate (> 15.0) as OFFICIAL_NFSA on PUT
-        bad_official = client.put(f"/api/commodities/{test_code}", json={"subsidized_price": 25.0, "rate_type": "OFFICIAL_NFSA"})
-        assert bad_official.status_code == 400
+        # 7. High values are not arbitrarily capped or marked verified.
+        unverified_rate = client.put(f"/api/commodities/{test_code}", json={"subsidized_price": 25.0})
+        assert unverified_rate.status_code == 200
+        assert unverified_rate.get_json()["data"]["is_verified"] is False
 
         # 8. Verify operational deletion restriction for linked commodity (COM-RIC)
         rice_del_res = client.delete("/api/commodities/COM-RIC")
         assert rice_del_res.status_code == 409
-        assert "operational integrity" in rice_del_res.get_json()["message"].lower()
+        assert "linked to" in rice_del_res.get_json()["message"].lower()
 
         # 9. Cleanly delete unlinked test commodity
         del_res = client.delete(f"/api/commodities/{test_code}")
@@ -610,3 +626,210 @@ def test_beneficiary_deletion_restriction_with_anomaly_alert(client):
     assert data["status"] == "error"
     assert "deletion blocked" in data["message"].lower() or "transaction" in data["message"].lower() or "anomaly" in data["message"].lower()
 
+
+def test_nfsa_entitlement_calculations_and_card_types(client):
+    """
+    Verifies that statutory NFSA monthly foodgrain entitlements and state allocations
+    are correctly calculated across all three ration card types and varying family sizes:
+    - PHH: 5 kg foodgrains per person/month (Family size × 5 kg).
+    - AAY: 35 kg foodgrains per household/month (Fixed).
+    - NPHH: Non-NFSA; state-scheme allocation if configured.
+    """
+    from backend.models.beneficiary import BeneficiaryModel
+
+    # 1. Priority Households (PHH) - varying family sizes
+    for size in [1, 2, 4, 6, 10]:
+        quota = BeneficiaryModel.calculate_monthly_quota("Priority (PHH)", size)
+        # Rice provides the 5 kg/person NFSA statutory foodgrain entitlement
+        assert quota["Rice"] == size * 5.0
+        # Wheat provides 2 kg/person additional state-scheme allocation
+        assert quota["Wheat"] == size * 2.0
+        # Sugar and Dal are fixed state subsidies
+        assert quota["Sugar"] == 1.0
+        assert quota["Dal"] == 1.0
+
+    # 2. Antyodaya Anna Yojana (AAY) - fixed 35 kg statutory foodgrains regardless of size
+    for size in [1, 3, 5, 8]:
+        quota = BeneficiaryModel.calculate_monthly_quota("Antyodaya Anna Yojana (AAY)", size)
+        # Rice 25 kg + Wheat 10 kg = 35 kg total statutory NFSA foodgrains
+        assert quota["Rice"] == 25.0
+        assert quota["Wheat"] == 10.0
+        assert quota["Rice"] + quota["Wheat"] == 35.0
+        # State welfare additions
+        assert quota["Sugar"] == 2.0
+        assert quota["Dal"] == 2.0
+
+    # 3. Non-Priority (NPHH) - state scheme allotment
+    for size in [1, 2, 4]:
+        quota = BeneficiaryModel.calculate_monthly_quota("Non-Priority (NPHH)", size)
+        assert quota["Rice"] == round(size * 3.0, 1)
+        assert quota["Wheat"] == round(size * 1.5, 1)
+        assert quota["Sugar"] == 1.0
+        assert quota["Dal"] == 0.5
+
+
+def test_beneficiary_category_counts_and_rules_endpoint(client):
+    """
+    Verifies /api/beneficiaries/rules endpoint and confirms category summary counts:
+    Expected live demo database counts: Total: 10, PHH: 6, AAY: 3, NPHH: 1.
+    """
+    # 1. Test /api/beneficiaries/rules endpoint
+    rules_res = client.get("/api/beneficiaries/rules")
+    assert rules_res.status_code == 200
+    rules_data = rules_res.get_json()["data"]
+    assert "Priority (PHH)" in rules_data
+    assert "Antyodaya Anna Yojana (AAY)" in rules_data
+    assert "Non-Priority (NPHH)" in rules_data
+    assert rules_data["Priority (PHH)"]["policy"] == "NFSA"
+    assert rules_data["Antyodaya Anna Yojana (AAY)"]["policy"] == "NFSA"
+    assert rules_data["Non-Priority (NPHH)"]["policy"] == "STATE"
+
+    # 2. Test /api/beneficiaries listing and dynamic category counts
+    res = client.get("/api/beneficiaries")
+    assert res.status_code == 200
+    body = res.get_json()
+    cats = body["categories"]
+    assert cats["PHH"] == 6
+    assert cats["AAY"] == 3
+    assert cats["NPHH"] == 1
+    assert body["total"] == 10
+    assert body["summary"]["valid"] is True
+
+
+def test_beneficiary_entitlement_breakdown_and_never_zero_kg(client):
+    """
+    Verifies that:
+    1. PHH entitlement = 5 kg/person/month (family size * 5.0) and never 0 kg.
+    2. AAY entitlement = 35 kg/household/month (fixed 35.0 kg) and never 0 kg.
+    3. NPHH clearly separates state scheme allocations from central statutory quotas.
+    4. GET /api/beneficiaries returns structured 'entitlement' object on every record without 0 kg errors.
+    """
+    from backend.models.beneficiary import BeneficiaryModel
+
+    # 1. PHH: size * 5.0 kg statutory foodgrains
+    for size in [1, 2, 4, 5, 8]:
+        breakdown = BeneficiaryModel.get_entitlement_breakdown("Priority (PHH)", size)
+        assert breakdown["category"] == "PHH"
+        assert breakdown["is_nfsa"] is True
+        assert breakdown["statutory_foodgrains_kg"] == size * 5.0
+        assert breakdown["statutory_foodgrains_kg"] > 0
+        assert f"{size * 5} kg/mo" in breakdown["statutory_label"]
+        assert "Wheat" in breakdown["state_allocations"]
+        assert "Sugar" in breakdown["state_allocations"]
+        assert "Dal" in breakdown["state_allocations"]
+        # Statutory foodgrains (Rice) must not be duplicated into state welfare
+        assert "Rice" not in breakdown["state_allocations"]
+
+    # 2. AAY: fixed 35.0 kg statutory foodgrains
+    for size in [1, 3, 5, 6]:
+        breakdown = BeneficiaryModel.get_entitlement_breakdown("Antyodaya Anna Yojana (AAY)", size)
+        assert breakdown["category"] == "AAY"
+        assert breakdown["is_nfsa"] is True
+        assert breakdown["statutory_foodgrains_kg"] == 35.0
+        assert breakdown["statutory_label"] == "NFSA: 35 kg/mo"
+        assert "Sugar" in breakdown["state_allocations"]
+        assert "Dal" in breakdown["state_allocations"]
+        assert "Rice" not in breakdown["state_allocations"]
+        assert "Wheat" not in breakdown["state_allocations"]
+
+    # 3. NPHH: Non-NFSA (statutory_foodgrains_kg is None)
+    breakdown_nphh = BeneficiaryModel.get_entitlement_breakdown("Non-Priority (NPHH)", 2)
+    assert breakdown_nphh["category"] == "NPHH"
+    assert breakdown_nphh["is_nfsa"] is False
+    assert breakdown_nphh["statutory_foodgrains_kg"] is None
+    assert breakdown_nphh["statutory_label"] == "Non-NFSA"
+    assert "Rice" in breakdown_nphh["state_allocations"]
+
+    # 4. API endpoint verification: GET /api/beneficiaries
+    res = client.get("/api/beneficiaries")
+    assert res.status_code == 200
+    bens = res.get_json()["data"]
+    assert len(bens) > 0
+
+    for b in bens:
+        cat = BeneficiaryModel.normalize_card_category(b.get("ration_card_type"))
+        assert "entitlement" in b
+        ent = b["entitlement"]
+        assert ent["category"] == cat
+
+        if cat == "PHH":
+            expected_nfsa = b["family_size"] * 5.0
+            assert ent["statutory_foodgrains_kg"] == expected_nfsa
+            assert ent["statutory_foodgrains_kg"] > 0
+        elif cat == "AAY":
+            assert ent["statutory_foodgrains_kg"] == 35.0
+        elif cat == "NPHH":
+            assert ent["statutory_foodgrains_kg"] is None
+
+
+def test_commodity_pricing_categories_verification_and_distinctions(client):
+    """
+    Verifies that:
+    1. Category-wise AAY, PHH, and NPHH issue prices are returned and correctly categorized.
+    2. Free entitlements (price == 0.0) are classified as FREE_ENTITLEMENT.
+    3. Actual subsidized rates (price > 0) are classified as ACTUAL_SUBSIDIZED.
+    4. Demo schemes cannot be marked verified, even if is_verified=True is requested.
+    5. Schemes with invalid/unreliable verification sources are never marked verified.
+    6. Consistent benchmark discounts and summary calculations match across all records.
+    """
+    from backend.models.commodity import CommodityModel
+
+    # 1. Source verification check
+    assert CommodityModel.is_reliable_verification_source("https://www.rcs.tn.gov.in/pds_cooperative.php") is True
+    assert CommodityModel.is_reliable_verification_source("Tamil Nadu Gazette Notification No. 124") is True
+    assert CommodityModel.is_reliable_verification_source("None") is False
+    assert CommodityModel.is_reliable_verification_source("N/A") is False
+    assert CommodityModel.is_reliable_verification_source("") is False
+    assert CommodityModel.is_reliable_verification_source("test") is False
+
+    # 2. Test GET /api/commodities response
+    res = client.get("/api/commodities")
+    assert res.status_code == 200
+    data = res.get_json()
+    commodities = data["data"]
+    by_code = {c["commodity_code"]: c for c in commodities}
+
+    # Verify Rice (Free Entitlement)
+    rice = by_code["COM-RIC"]
+    assert rice["category_details"]["AAY"]["rate_status"] == "FREE_ENTITLEMENT"
+    assert rice["category_details"]["AAY"]["is_free"] is True
+    assert rice["category_details"]["PHH"]["rate_status"] == "FREE_ENTITLEMENT"
+    assert rice["category_details"]["NPHH"]["rate_status"] == "FREE_ENTITLEMENT"
+    assert rice["category_discounts"]["AAY"] == 100.0
+
+    # Verify Sugar (Differential category pricing: AAY 13.50, PHH 25.00, NPHH 25.00)
+    sugar = by_code["COM-SUG"]
+    assert sugar["category_details"]["AAY"]["rate_status"] == "ACTUAL_SUBSIDIZED"
+    assert sugar["category_details"]["AAY"]["price"] == 13.5
+    assert sugar["category_details"]["PHH"]["price"] == 25.0
+    assert sugar["category_details"]["NPHH"]["price"] == 25.0
+    assert sugar["category_discounts"]["AAY"] == 70.0
+    assert sugar["category_discounts"]["PHH"] == 44.44
+
+    # Verify Summary Cards Consistency
+    assert data["summary"]["total_count"] == 4
+    assert data["summary"]["official_count"] == 4
+    assert data["summary"]["demo_count"] == 0
+    assert data["summary"]["average_subsidy_discount"] == 82.9
+    assert rice["is_verified"] is True
+    assert rice["verification_source"] is not None
+
+    # 3. Test that demo schemes or unverified sources reject verified flag
+    fake_doc = CommodityModel.create_doc(
+        commodity_code="COM-FAKE",
+        name="Fake Commodity",
+        scheme_classification="DEMO_CUSTOM",
+        is_verified=True,
+        verification_source="N/A"
+    )
+    assert fake_doc["is_verified"] is False
+    assert fake_doc["is_demonstration"] is True
+
+    fake_unreliable = CommodityModel.create_doc(
+        commodity_code="COM-UNREL",
+        name="Unreliable Commodity",
+        scheme_classification="TAMIL_NADU_STATE_PDS",
+        is_verified=True,
+        verification_source="none"
+    )
+    assert fake_unreliable["is_verified"] is False

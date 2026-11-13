@@ -107,7 +107,7 @@ def test_inventory_alerts_aggregation_consistency(client):
         assert alert["shortage"] >= 0.0
         assert alert["current_stock"] >= 0.0
         assert alert["buffer_stock"] >= 0.0
-        assert alert["status"] in ["SHORTAGE", "SUFFICIENT", "EXCESS"]
+        assert alert["status"] in ["SHORTAGE", "SUFFICIENT", "EXCESS", "SURPLUS"]
         if alert["status"] == "SHORTAGE":
             assert alert["recommended_procurement"] == alert["shortage"]
         else:

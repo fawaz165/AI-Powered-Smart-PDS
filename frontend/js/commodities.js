@@ -1,590 +1,345 @@
-/**
- * AI-Powered Smart PDS - Commodity Catalog Controller
- * Handles database fetching, strict validation, unique commodity code enforcement,
- * configurable subsidized pricing, verified official NFSA vs synthetic demonstration distinctions,
- * operational linkage tracking, and safe deletion protections.
- */
-
+/** Smart PDS commodity catalog controller. */
 let allCommodities = [];
 let targetDeleteCommodityCode = null;
 
-function escapeHtml(text) {
-  if (text === null || text === undefined) return '';
-  const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
-  return String(text).replace(/[&<>"']/g, m => map[m]);
+function escapeHtml(value) {
+  if (value === null || value === undefined) return '';
+  return String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char]));
 }
+
+const categoryFields = {
+  AAY: ['new-com-price-aay', 'edit-com-price-aay'],
+  PHH: ['new-com-price-phh', 'edit-com-price-phh'],
+  NPHH: ['new-com-price-nphh', 'edit-com-price-nphh']
+};
 
 document.addEventListener('DOMContentLoaded', async () => {
+  wirePreviews();
   await loadCommodities();
-
-  // Add Commodity Form Submit Handler
-  const addForm = document.getElementById('add-commodity-form');
-  if (addForm) {
-    addForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const code = document.getElementById('new-com-code').value.trim().toUpperCase();
-      const name = document.getElementById('new-com-name').value.trim();
-      const unit = document.getElementById('new-com-unit').value.trim().toLowerCase();
-      const price = parseFloat(document.getElementById('new-com-price').value);
-      const marketPriceVal = document.getElementById('new-com-market-price').value;
-      const marketPrice = marketPriceVal !== '' ? parseFloat(marketPriceVal) : null;
-      const rateType = document.getElementById('new-com-rate-type').value;
-      const desc = document.getElementById('new-com-desc').value.trim();
-
-      // Client-side Strict Validation
-      const codeRegex = /^[A-Za-z0-9\-_]{3,20}$/;
-      if (!codeRegex.test(code)) {
-        showToast('Commodity Code must be 3-20 alphanumeric characters (hyphens and underscores allowed).', 'error');
-        return;
-      }
-      const nameRegex = /^[A-Za-z][A-Za-z0-9\s\-_()]{1,49}$/;
-      if (!nameRegex.test(name)) {
-        showToast('Commodity Name must start with a letter and be 2-50 characters long.', 'error');
-        return;
-      }
-      if (!unit) {
-        showToast('Measurement unit is required.', 'error');
-        return;
-      }
-      if (isNaN(price) || price < 0) {
-        showToast('Subsidized price must be a non-negative number.', 'error');
-        return;
-      }
-      if (marketPrice !== null) {
-        if (isNaN(marketPrice) || marketPrice < 0) {
-          showToast('Market benchmark price must be a non-negative number.', 'error');
-          return;
-        }
-        if (marketPrice < price) {
-          showToast(`Market benchmark price (₹${marketPrice.toFixed(2)}) cannot be lower than subsidized price (₹${price.toFixed(2)}).`, 'error');
-          return;
-        }
-      }
-
-      // Legal statutory check: Never label unverified rates (> ₹15.0/kg) as Official NFSA
-      if (rateType === 'OFFICIAL_NFSA' && price > 15.0) {
-        showToast("Unverified price (> ₹15.00/kg) cannot be labeled as Official NFSA. Statutory NFSA cap is ₹13.50/kg for sugar and ₹3.00/kg for grains. Choose 'Synthetic Demo Rate' or 'State Welfare Subsidy'.", 'error');
-        return;
-      }
-
-      const payload = {
-        commodity_code: code,
-        name: name,
-        unit: unit,
-        subsidized_price: price,
-        market_price: marketPrice,
-        rate_type: rateType,
-        description: desc
-      };
-
-      try {
-        const res = await API.createCommodity(payload);
-        if (res && res.status === 'success') {
-          showToast(`Commodity ${code} (${name}) registered and persisted successfully!`, 'success');
-          closeModal('add-commodity-modal');
-          addForm.reset();
-          await loadCommodities();
-        }
-      } catch (err) {
-        showToast(err.message || 'Error registering commodity', 'error');
-      }
-    });
-  }
-
-  // Edit / Configure Commodity Form Submit Handler
-  const editForm = document.getElementById('edit-commodity-form');
-  if (editForm) {
-    editForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const code = document.getElementById('edit-com-code').value.trim().toUpperCase();
-      const name = document.getElementById('edit-com-name').value.trim();
-      const unit = document.getElementById('edit-com-unit').value.trim().toLowerCase();
-      const price = parseFloat(document.getElementById('edit-com-price').value);
-      const marketPriceVal = document.getElementById('edit-com-market-price').value;
-      const marketPrice = marketPriceVal !== '' ? parseFloat(marketPriceVal) : null;
-      const rateType = document.getElementById('edit-com-rate-type').value;
-      const desc = document.getElementById('edit-com-desc').value.trim();
-
-      const nameRegex = /^[A-Za-z][A-Za-z0-9\s\-_()]{1,49}$/;
-      if (!nameRegex.test(name)) {
-        showToast('Commodity Name must start with a letter and be 2-50 characters long.', 'error');
-        return;
-      }
-      if (isNaN(price) || price < 0) {
-        showToast('Subsidized price must be non-negative.', 'error');
-        return;
-      }
-      if (marketPrice !== null) {
-        if (isNaN(marketPrice) || marketPrice < 0) {
-          showToast('Market benchmark price must be non-negative.', 'error');
-          return;
-        }
-        if (marketPrice < price) {
-          showToast(`Market benchmark price (₹${marketPrice.toFixed(2)}) cannot be lower than subsidized price (₹${price.toFixed(2)}).`, 'error');
-          return;
-        }
-      }
-
-      // Legal statutory check: Never label unverified rates (> ₹15.0/kg) as Official NFSA
-      if (rateType === 'OFFICIAL_NFSA' && price > 15.0) {
-        showToast("Unverified price (> ₹15.00/kg) cannot be labeled as Official NFSA. Statutory NFSA cap is ₹13.50/kg for sugar and ₹3.00/kg for grains. Choose 'Synthetic Demo Rate' or 'State Welfare Subsidy'.", 'error');
-        return;
-      }
-
-      const payload = {
-        name: name,
-        unit: unit,
-        subsidized_price: price,
-        market_price: marketPrice,
-        rate_type: rateType,
-        description: desc
-      };
-
-      try {
-        const res = await API.updateCommodity(code, payload);
-        if (res && res.status === 'success') {
-          showToast(`Commodity ${code} pricing and configuration updated successfully!`, 'success');
-          closeModal('edit-commodity-modal');
-          await loadCommodities();
-        }
-      } catch (err) {
-        showToast(err.message || 'Error updating commodity', 'error');
-      }
-    });
-  }
-
-  // Safe Deletion Confirmation Handler
-  const deleteConfirmBtn = document.getElementById('btn-confirm-delete-commodity');
-  if (deleteConfirmBtn) {
-    deleteConfirmBtn.addEventListener('click', async () => {
-      if (!targetDeleteCommodityCode) return;
-      deleteConfirmBtn.disabled = true;
-      deleteConfirmBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Checking...';
-
-      try {
-        const res = await API.deleteCommodity(targetDeleteCommodityCode);
-        if (res && res.status === 'success') {
-          showToast(`Commodity ${targetDeleteCommodityCode} removed successfully.`, 'success');
-          closeModal('delete-commodity-modal');
-          targetDeleteCommodityCode = null;
-          await loadCommodities();
-        }
-      } catch (err) {
-        showToast(err.message || 'Deletion rejected by server', 'error');
-      } finally {
-        deleteConfirmBtn.disabled = false;
-        deleteConfirmBtn.innerHTML = '<i class="fa-solid fa-trash-can"></i> Confirm Deletion';
-      }
-    });
-  }
+  document.getElementById('add-commodity-form')?.addEventListener('submit', createCommodityFromForm);
+  document.getElementById('edit-commodity-form')?.addEventListener('submit', updateCommodityFromForm);
+  document.getElementById('btn-confirm-delete-commodity')?.addEventListener('click', deleteCommodity);
 });
 
-/**
- * Displays full loading state in the table body.
- */
+function wirePreviews() {
+  const ids = ['new-com-code', 'new-com-name', 'new-com-unit', 'new-com-scheme', 'new-com-market-price', 'new-com-desc', ...Object.values(categoryFields).map(fields => fields[0])];
+  ids.forEach(id => document.getElementById(id)?.addEventListener('input', updateAddPreview));
+  ['edit-com-name', 'edit-com-unit', 'edit-com-scheme', 'edit-com-market-price', 'edit-com-desc', ...Object.values(categoryFields).map(fields => fields[1])]
+    .forEach(id => document.getElementById(id)?.addEventListener('input', updateEditPreview));
+  document.getElementById('new-com-scheme')?.addEventListener('change', updateAddPreview);
+  document.getElementById('edit-com-scheme')?.addEventListener('change', updateEditPreview);
+}
+
+function getCategoryPrices(prefix) {
+  const suffix = prefix === 'new' ? 0 : 1;
+  const values = {};
+  for (const [category, fields] of Object.entries(categoryFields)) {
+    const raw = document.getElementById(fields[suffix])?.value ?? '';
+    values[category] = raw === '' ? null : Number(raw);
+  }
+  return values;
+}
+
+function schemeLabel(value) {
+  return ({ NFSA: 'NFSA', TAMIL_NADU_STATE_PDS: 'Tamil Nadu State PDS', DEMO_CUSTOM: 'Demo / Custom' })[value] || 'Unclassified';
+}
+
+function renderPreview(targetId, record) {
+  const target = document.getElementById(targetId);
+  if (!target) return;
+  const isDemo = record.scheme_classification === 'DEMO_CUSTOM';
+  const unit = escapeHtml(record.unit || 'unit');
+  const rates = Object.entries(record.category_pricing || {})
+    .map(([key, value]) => {
+      if (value === null || !Number.isFinite(value)) return `${key}: Missing`;
+      if (Number(value) === 0) return `${key}: FREE (₹0.00)/${unit}`;
+      return `${key}: ₹${value.toFixed(2)}/${unit}${isDemo ? ' (Demo)' : ''}`;
+    })
+    .join(' · ');
+  const benchmark = record.market_price === null || !Number.isFinite(record.market_price) ? 'Not provided' : `₹${record.market_price.toFixed(2)}/${unit}`;
+  target.innerHTML = `<strong>${escapeHtml(record.commodity_code || 'New code')} · ${escapeHtml(record.name || 'New commodity')}</strong><br>${escapeHtml(schemeLabel(record.scheme_classification))}${isDemo ? ' <span class="badge badge-warning" style="font-size:0.65rem;">Demo</span>' : ''}<br>${rates}<br>Recorded benchmark: ${benchmark}<br>${escapeHtml(record.description || 'No description')}`;
+}
+
+function updateAddPreview() {
+  renderPreview('new-com-preview', {
+    commodity_code: document.getElementById('new-com-code')?.value.trim().toUpperCase(),
+    name: document.getElementById('new-com-name')?.value.trim(),
+    unit: document.getElementById('new-com-unit')?.value.trim(),
+    scheme_classification: document.getElementById('new-com-scheme')?.value,
+    category_pricing: getCategoryPrices('new'),
+    market_price: document.getElementById('new-com-market-price')?.value === '' ? null : Number(document.getElementById('new-com-market-price')?.value),
+    description: document.getElementById('new-com-desc')?.value.trim()
+  });
+}
+
+function updateEditPreview() {
+  renderPreview('edit-com-preview', {
+    commodity_code: document.getElementById('edit-com-code')?.value,
+    name: document.getElementById('edit-com-name')?.value.trim(),
+    unit: document.getElementById('edit-com-unit')?.value.trim(),
+    scheme_classification: document.getElementById('edit-com-scheme')?.value,
+    category_pricing: getCategoryPrices('edit'),
+    market_price: document.getElementById('edit-com-market-price')?.value === '' ? null : Number(document.getElementById('edit-com-market-price')?.value),
+    description: document.getElementById('edit-com-desc')?.value.trim()
+  });
+}
+
 function setCommoditiesLoadingState() {
   const tbody = document.getElementById('commodities-tbody');
-  if (tbody) {
-    tbody.innerHTML = `
-      <tr>
-        <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 3rem 1.5rem;">
-          <i class="fa-solid fa-circle-notch fa-spin" style="font-size: 1.8rem; color: var(--primary); margin-bottom: 12px; display: block;"></i>
-          <div style="font-weight: 600; font-size: 0.95rem; color: var(--text-primary); margin-bottom: 4px;">Loading food-grain catalog...</div>
-          <div style="font-size: 0.8rem; color: var(--text-secondary);">Connecting to MongoDB cluster and aggregating operational linkages</div>
-        </td>
-      </tr>
-    `;
-  }
+  if (tbody) tbody.innerHTML = '<tr><td colspan="8" role="status" style="text-align:center;color:var(--text-muted);padding:3rem"><i class="fa-solid fa-circle-notch fa-spin"></i> Loading commodity records from MongoDB…</td></tr>';
 }
 
-/**
- * Displays error state with retry button in the table body.
- */
-function setCommoditiesErrorState(errorMessage) {
+function setCommoditiesErrorState(message) {
   const tbody = document.getElementById('commodities-tbody');
-  if (tbody) {
-    tbody.innerHTML = `
-      <tr>
-        <td colspan="8" style="text-align: center; color: var(--accent-rose); padding: 3rem 1.5rem;">
-          <i class="fa-solid fa-triangle-exclamation" style="font-size: 2rem; margin-bottom: 12px; display: block;"></i>
-          <div style="font-weight: 700; font-size: 1rem; margin-bottom: 6px;">Failed to Load Commodity Catalog</div>
-          <div style="font-size: 0.82rem; color: var(--text-secondary); max-width: 500px; margin: 0 auto 16px auto;">
-            ${escapeHtml(errorMessage || 'Unable to retrieve commodity master records from MongoDB database.')}
-          </div>
-          <button class="btn btn-primary btn-sm" onclick="loadCommodities()" style="padding: 8px 18px;">
-            <i class="fa-solid fa-arrows-rotate"></i> Retry Connection
-          </button>
-        </td>
-      </tr>
-    `;
-  }
-  // Keep KPI cards safely in fallback state
-  const elTotal = document.getElementById('com-kpi-total');
-  const elOfficial = document.getElementById('com-kpi-official');
-  const elDemo = document.getElementById('com-kpi-demo');
-  const elDiscount = document.getElementById('com-kpi-discount');
-  if (elTotal) elTotal.textContent = '--';
-  if (elOfficial) elOfficial.textContent = '--';
-  if (elDemo) elDemo.textContent = '--';
-  if (elDiscount) elDiscount.innerHTML = `--<span style="font-size:1.1rem; font-weight:600;">%</span>`;
+  if (tbody) tbody.innerHTML = `<tr><td colspan="8" role="alert" style="text-align:center;color:var(--accent-rose);padding:3rem"><i class="fa-solid fa-triangle-exclamation"></i> ${escapeHtml(message || 'Commodity records could not be loaded.')} <button class="btn btn-secondary btn-sm" onclick="loadCommodities()">Retry</button></td></tr>`;
+  ['com-kpi-total', 'com-kpi-official', 'com-kpi-demo', 'com-kpi-discount'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '--'; });
 }
 
-/**
- * Displays empty state for zero commodities or no filter match.
- */
-function setCommoditiesEmptyState(isSearchOrFilter = false) {
+function setCommoditiesEmptyState(filtered) {
   const tbody = document.getElementById('commodities-tbody');
   if (!tbody) return;
-  if (isSearchOrFilter) {
-    tbody.innerHTML = `
-      <tr>
-        <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2.5rem 1.5rem;">
-          <i class="fa-solid fa-magnifying-glass" style="font-size: 1.8rem; color: var(--text-muted); margin-bottom: 10px; display: block;"></i>
-          <div style="font-weight: 600; font-size: 0.95rem; color: var(--text-primary); margin-bottom: 4px;">No Matching Commodities Found</div>
-          <div style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 12px;">Try adjusting your keyword search or rate classification filter.</div>
-          <button class="btn btn-secondary btn-sm" onclick="resetCommodityFilters()">
-            <i class="fa-solid fa-filter-circle-xmark"></i> Reset Filters
-          </button>
-        </td>
-      </tr>
-    `;
-  } else {
-    tbody.innerHTML = `
-      <tr>
-        <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2.5rem 1.5rem;">
-          <i class="fa-solid fa-boxes-stacked" style="font-size: 2rem; color: var(--text-muted); margin-bottom: 10px; display: block;"></i>
-          <div style="font-weight: 600; font-size: 0.95rem; color: var(--text-primary); margin-bottom: 4px;">No Commodities Registered in Database</div>
-          <div style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 14px;">The central catalog has no active records. Click below to add your first commodity.</div>
-          <button class="btn btn-primary btn-sm" onclick="openModal('add-commodity-modal')">
-            <i class="fa-solid fa-plus"></i> Add First Commodity
-          </button>
-        </td>
-      </tr>
-    `;
-  }
+  tbody.innerHTML = filtered
+    ? '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:2.5rem">No matching commodities. Adjust the search or classification filter.</td></tr>'
+    : '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:2.5rem">No commodity records are stored. Use Add Commodity to register one.</td></tr>';
 }
 
-/**
- * Loads commodity records from backend database.
- */
 async function loadCommodities() {
   setCommoditiesLoadingState();
   try {
-    const res = await API.getCommodities({ timeout: 10000 });
-    if (res && res.status === 'success') {
-      allCommodities = res.data || [];
-      updateCommodityKPIs(allCommodities, res.summary);
-      if (allCommodities.length === 0) {
-        setCommoditiesEmptyState(false);
-      } else {
-        filterCommodities();
-      }
-    } else {
-      setCommoditiesErrorState(res ? res.message : 'Invalid response from database');
-    }
-  } catch (err) {
-    console.error('Failed to load commodities catalog:', err);
-    setCommoditiesErrorState(err.message || 'Network error connecting to MongoDB backend');
-    showToast(err.message || 'Failed to load commodities catalog from database', 'error');
+    const res = await API.getCommodities();
+    if (!res || res.status !== 'success' || !Array.isArray(res.data)) throw new Error(res?.message || 'Invalid commodity response');
+    allCommodities = res.data;
+    updateCommodityKPIs(res.summary || {});
+    filterCommodities();
+  } catch (error) {
+    console.error('Could not load commodity catalog:', error);
+    setCommoditiesErrorState(error.message);
+    showToast(error.message || 'Could not load commodity records', 'error');
   }
 }
 
-/**
- * User-triggered catalog refresh.
- * Spins only the inner icon while the network request is active.
- */
 async function refreshCommodities() {
-  const btn = document.getElementById('btn-refresh-commodities');
-  const icon = btn ? btn.querySelector('i') : null;
-  if (btn) btn.disabled = true;
-  if (icon) icon.classList.add('fa-spin');
-
-  try {
-    await loadCommodities();
-    showToast('Commodity catalog refreshed from live database', 'info');
-  } finally {
-    if (icon) icon.classList.remove('fa-spin');
-    if (btn) btn.disabled = false;
-  }
+  const button = document.getElementById('btn-refresh-commodities');
+  if (button) button.disabled = true;
+  try { await loadCommodities(); }
+  finally { if (button) button.disabled = false; }
 }
 
-/**
- * Computes and renders top KPI metrics cards dynamically from database records.
- * Uses a clearly defined unweighted arithmetic mean across valid benchmarked commodities.
- * Excludes invalid or negative records. No hardcoded replacement statistics.
- */
-function updateCommodityKPIs(commodities, summary) {
-  let totalCount = commodities.length;
-  let officialCount = 0;
-  let demoCount = 0;
-  let totalSubsidyDiscount = 0;
-  let benchmarkedCount = 0;
-
-  commodities.forEach(c => {
-    // Verified official schemes include statutory NFSA and Tamil Nadu State Welfare Subsidies (e.g. Special PDS)
-    const isOfficialVerified = Boolean(
-      (c.rate_type === 'OFFICIAL_NFSA' || c.rate_type === 'STATE_SUBSIDY') &&
-      c.is_verified &&
-      !c.is_demonstration
-    );
-    if (isOfficialVerified) {
-      officialCount++;
-    } else {
-      demoCount++;
-    }
-
-    const mkt = Number(c.market_price);
-    const sub = Number(c.subsidized_price);
-    // Strictly validate: positive market price, non-negative subsidized price, and market >= subsidized
-    if (!isNaN(mkt) && mkt > 0 && !isNaN(sub) && sub >= 0 && mkt >= sub) {
-      const discountPct = (c.subsidy_percentage !== undefined && c.subsidy_percentage !== null)
-        ? Number(c.subsidy_percentage)
-        : Math.max(0, Math.min(100, ((mkt - sub) / mkt) * 100));
-      totalSubsidyDiscount += discountPct;
-      benchmarkedCount++;
-    }
-  });
-
-  // Calculate dynamic arithmetic mean across valid benchmarked commodities
-  const avgSubsidyPct = (summary && summary.average_subsidy_discount !== undefined)
-    ? Number(summary.average_subsidy_discount).toFixed(1)
-    : (benchmarkedCount > 0 ? (totalSubsidyDiscount / benchmarkedCount).toFixed(1) : '0.0');
-
-  const elTotal = document.getElementById('com-kpi-total');
-  const elOfficial = document.getElementById('com-kpi-official');
-  const elDemo = document.getElementById('com-kpi-demo');
-  const elDiscount = document.getElementById('com-kpi-discount');
-
-  if (elTotal) elTotal.textContent = (summary && summary.total_count !== undefined) ? summary.total_count : totalCount;
-  if (elOfficial) elOfficial.textContent = (summary && summary.official_count !== undefined) ? summary.official_count : officialCount;
-  if (elDemo) elDemo.textContent = (summary && summary.demo_count !== undefined) ? summary.demo_count : demoCount;
-  if (elDiscount) elDiscount.innerHTML = `${avgSubsidyPct}<span style="font-size:1.1rem; font-weight:600;">%</span>`;
+function updateCommodityKPIs(summary) {
+  const setText = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
+  setText('com-kpi-total', Number(summary.total_count ?? 0).toLocaleString());
+  setText('com-kpi-official', Number(summary.official_count ?? 0).toLocaleString());
+  setText('com-kpi-demo', Number(summary.demo_count ?? 0).toLocaleString());
+  const avg = summary.average_subsidy_discount;
+  setText('com-kpi-discount', avg === null || avg === undefined ? '—' : `${Number(avg).toFixed(1)}%`);
 }
 
-/**
- * Resets search and filter inputs and triggers refresh.
- */
 function resetCommodityFilters() {
-  const searchInput = document.getElementById('com-search');
-  const rateFilter = document.getElementById('com-filter-rate');
-  if (searchInput) searchInput.value = '';
-  if (rateFilter) rateFilter.value = '';
+  document.getElementById('com-search').value = '';
+  document.getElementById('com-filter-rate').value = '';
   filterCommodities();
 }
 
-/**
- * Filters commodities based on search input and rate classification select.
- */
 function filterCommodities() {
-  const searchInput = document.getElementById('com-search');
-  const rateFilter = document.getElementById('com-filter-rate');
-  const term = searchInput ? searchInput.value.trim().toLowerCase() : '';
-  const selectedType = rateFilter ? rateFilter.value : '';
-
-  let filtered = allCommodities.filter(c => {
-    const matchSearch = !term ||
-      (c.commodity_code && c.commodity_code.toLowerCase().includes(term)) ||
-      (c.name && c.name.toLowerCase().includes(term)) ||
-      (c.description && c.description.toLowerCase().includes(term)) ||
-      (c.official_source && c.official_source.toLowerCase().includes(term));
-
-    let matchType = true;
-    if (selectedType === 'OFFICIAL_NFSA') {
-      matchType = Boolean(c.rate_type === 'OFFICIAL_NFSA' && c.is_verified && !c.is_demonstration);
-    } else if (selectedType === 'DEMONSTRATION') {
-      matchType = Boolean(c.rate_type === 'DEMONSTRATION' || c.is_demonstration || !c.is_verified);
-    } else if (selectedType === 'STATE_SUBSIDY') {
-      matchType = Boolean(c.rate_type === 'STATE_SUBSIDY');
-    }
-
-    return matchSearch && matchType;
+  const term = (document.getElementById('com-search')?.value || '').trim().toLowerCase();
+  const scheme = document.getElementById('com-filter-rate')?.value || '';
+  const filtered = allCommodities.filter(c => {
+    const matchesSearch = !term || [c.commodity_code, c.name, c.description, c.official_source]
+      .some(value => String(value || '').toLowerCase().includes(term));
+    return matchesSearch && (!scheme || c.scheme_classification === scheme);
   });
-
-  if (filtered.length === 0) {
-    setCommoditiesEmptyState(allCommodities.length > 0);
-  } else {
-    renderCommoditiesTable(filtered);
-  }
+  if (filtered.length) renderCommoditiesTable(filtered);
+  else setCommoditiesEmptyState(allCommodities.length > 0);
 }
 
-/**
- * Renders the commodities table rows with rate badges, benchmarks, and linkage statistics.
- */
 function renderCommoditiesTable(items) {
   const tbody = document.getElementById('commodities-tbody');
   if (!tbody) return;
-
-  if (!items || items.length === 0) {
-    setCommoditiesEmptyState(true);
-    return;
-  }
-
   tbody.innerHTML = items.map(c => {
-    const isOfficial = Boolean(c.rate_type === 'OFFICIAL_NFSA' && c.is_verified && !c.is_demonstration);
-    const isStateSubsidy = Boolean(c.rate_type === 'STATE_SUBSIDY');
+    const categoryPrices = c.category_pricing || {};
+    const isDemo = c.scheme_classification === 'DEMO_CUSTOM' || c.is_demonstration;
+    const unit = escapeHtml(c.unit || 'unit');
 
-    let rateBadgeHtml = '';
-    if (c.commodity_code === 'COM-DAL' || isStateSubsidy) {
-      rateBadgeHtml = '<span class="badge badge-purple" title="Tamil Nadu Special Public Distribution System (Special PDS Scheme)"><i class="fa-solid fa-landmark"></i> Tamil Nadu Special PDS</span>';
-    } else if (isOfficial) {
-      rateBadgeHtml = '<span class="badge badge-success" title="Verified statutory NFSA / State Universal PDS entitlement"><i class="fa-solid fa-certificate"></i> Verified Official NFSA</span>';
-    } else {
-      rateBadgeHtml = '<span class="badge badge-warning" title="Synthetic simulation value - Not statutory official rate"><i class="fa-solid fa-flask"></i> Synthetic Demo Rate</span>';
-    }
+    const rates = ['AAY', 'PHH', 'NPHH'].map(category => {
+      const price = categoryPrices[category];
+      const discount = c.category_discounts?.[category];
+      const saving = c.category_savings?.[category];
 
-    const unitStr = escapeHtml(c.unit || 'kg');
-    const subPriceVal = Number(c.subsidized_price || 0);
+      let priceHtml = '';
+      let discountHtml = '';
 
-    // Subsidized Price Display (Supports Category-Based Sugar Pricing & Free Entitlements)
-    let subPriceDisplay = '';
-    if (c.commodity_code === 'COM-SUG' || c.category_pricing) {
-      const cp = c.category_pricing || { AAY: 13.50, PHH: 25.00, NPHH: 25.00 };
-      subPriceDisplay = `
-        <div style="display:flex; flex-direction:column; gap:2px;">
-          <div><span class="badge badge-purple" style="font-size:0.65rem; padding:1px 4px;">AAY</span> <strong style="color:var(--accent-emerald);">₹ ${Number(cp.AAY || 13.50).toFixed(2)} / ${unitStr}</strong></div>
-          <div style="font-size:0.75rem; color:var(--text-secondary);"><span class="badge badge-info" style="font-size:0.65rem; padding:1px 4px;">PHH/NPHH</span> ₹ ${Number(cp.PHH || 25.00).toFixed(2)} / ${unitStr}</div>
+      if (price === undefined || price === null || !Number.isFinite(Number(price))) {
+        priceHtml = '<span style="color:var(--text-muted); font-style:italic;">Missing / Not recorded</span>';
+      } else if (Number(price) === 0) {
+        priceHtml = `<span class="badge badge-success" style="font-size:0.74rem;"><i class="fa-solid fa-gift"></i> FREE (₹0.00)</span>`;
+        if (saving !== undefined && Number(saving) > 0) {
+          discountHtml = `<small style="color:var(--text-muted); display:block; margin-top:2px;">100.0% subsidized (₹${Number(saving).toFixed(2)} savings)</small>`;
+        }
+      } else if (isDemo) {
+        priceHtml = `<strong>₹${Number(price).toFixed(2)}</strong> <span style="font-size:0.75rem; color:var(--text-secondary);">/ ${unit}</span> <span class="badge badge-warning" style="font-size:0.65rem;"><i class="fa-solid fa-flask"></i> Demo Rate</span>`;
+        if (discount !== undefined) {
+          discountHtml = `<small style="color:var(--text-muted); display:block; margin-top:2px;">${discount.toFixed(1)}% vs benchmark (₹${Number(saving).toFixed(2)})</small>`;
+        }
+      } else {
+        priceHtml = `<strong>₹${Number(price).toFixed(2)} / ${unit}</strong>`;
+        if (discount !== undefined) {
+          discountHtml = `<small style="color:var(--text-muted); display:block; margin-top:2px;">${discount.toFixed(1)}% below benchmark (₹${Number(saving).toFixed(2)})</small>`;
+        }
+      }
+
+      const catBadge = category === 'AAY' ? 'badge-purple' : (category === 'PHH' ? 'badge-info' : 'badge-secondary');
+      return `
+        <div class="commodity-rate">
+          <span class="badge ${catBadge}" style="font-weight:700;">${category}</span>
+          <span style="text-align:right;">${priceHtml}${discountHtml}</span>
         </div>
       `;
-    } else if (subPriceVal === 0) {
-      subPriceDisplay = `<strong style="color: var(--accent-emerald);">₹ 0.00 / ${unitStr}</strong> <span class="badge badge-success" style="font-size:0.7rem; padding: 1px 5px;">Free Entitlement</span>`;
+    }).join('');
+
+    const benchmark = c.market_price === null || c.market_price === undefined || !Number.isFinite(Number(c.market_price))
+      ? '<span style="color:var(--text-muted); font-style:italic;">Not recorded</span>'
+      : `<strong>₹${Number(c.market_price).toFixed(2)} / ${unit}</strong>`;
+
+    const className = c.scheme_classification;
+    const classLabel = schemeLabel(className);
+    const classBadge = className === 'NFSA' ? 'badge-info' : className === 'TAMIL_NADU_STATE_PDS' ? 'badge-purple' : 'badge-warning';
+
+    let verificationBadge = '';
+    if (c.is_verified) {
+      verificationBadge = '<span class="badge badge-success" title="Verified by official published authority"><i class="fa-solid fa-circle-check"></i> Verified Official</span>';
+    } else if (c.scheme_classification === 'DEMO_CUSTOM') {
+      verificationBadge = '<span class="badge badge-warning" title="Synthetic demo rate for simulation and testing"><i class="fa-solid fa-flask"></i> Demo / Synthetic</span>';
     } else {
-      subPriceDisplay = `<strong style="color: var(--accent-emerald);">₹ ${subPriceVal.toFixed(2)} / ${unitStr}</strong>`;
+      verificationBadge = '<span class="badge badge-secondary" title="No reliable official verification source provided"><i class="fa-solid fa-circle-question"></i> Unverified</span>';
     }
 
-    // Reference Open Market Benchmark & Subsidy Calculation Display
-    let marketHtml = '<span style="color: var(--text-muted);">-</span>';
-    if (c.market_price && c.market_price > 0) {
-      const mktPriceVal = Number(c.market_price);
-      const diffAmount = (c.subsidy_amount !== undefined && c.subsidy_amount !== null)
-        ? Number(c.subsidy_amount)
-        : Math.max(0, mktPriceVal - subPriceVal);
-      const discountPct = (c.subsidy_percentage !== undefined && c.subsidy_percentage !== null)
-        ? Math.round(Number(c.subsidy_percentage))
-        : Math.round((diffAmount / mktPriceVal) * 100);
-      const savingsBadge = discountPct >= 100 
-        ? '<span class="badge badge-success" style="font-size:0.7rem; padding: 2px 6px;">100% Free Entitlement</span>'
-        : `<span class="badge badge-info" style="font-size:0.7rem; padding: 2px 6px;">Save ₹${diffAmount.toFixed(2)} (-${discountPct}%)</span>`;
-      marketHtml = `
-        <div style="display:flex; flex-direction:column; gap:2px;">
-          <span style="font-weight: 500;">₹ ${mktPriceVal.toFixed(2)} / ${unitStr}</span>
-          <div>${savingsBadge}</div>
-        </div>
-      `;
+    const source = c.verification_source || c.official_source;
+    let sourceHtml = '';
+    if (source) {
+      const isUrl = /^https?:\/\//i.test(source);
+      if (isUrl) {
+        sourceHtml = `<div style="font-size:0.7rem; margin-top:4px;"><a href="${escapeHtml(source)}" target="_blank" rel="noopener noreferrer" style="color:var(--accent-cyan); text-decoration:underline;"><i class="fa-solid fa-arrow-up-right-from-square"></i> Official Source</a></div>`;
+      } else {
+        sourceHtml = `<div style="font-size:0.72rem; color:var(--text-muted); margin-top:4px; line-height:1.3; overflow-wrap:anywhere;">${escapeHtml(source)}</div>`;
+      }
     }
 
-    // Official Scheme Source Subtitle
-    const sourceHtml = c.official_source 
-      ? `<div style="font-size:0.7rem; color:var(--text-muted); margin-top:3px;"><i class="fa-solid fa-shield-halved" style="color:var(--accent-cyan); font-size:0.65rem;"></i> ${escapeHtml(c.official_source)}</div>`
-      : '';
-
-    // Operational Linkages Badges
-    const invCount = c.linked_inventory_count || 0;
-    const txnCount = c.linked_transactions_count || 0;
-    const linkageHtml = `<div style="display:flex; gap:6px; flex-wrap:wrap;">
-      <span class="badge badge-info" title="Linked regional inventory stocks" style="font-size:0.72rem;">
-        <i class="fa-solid fa-warehouse"></i> ${invCount} Depots
-      </span>
-      <span class="badge badge-purple" title="Linked distribution transactions" style="font-size:0.72rem;">
-        <i class="fa-solid fa-receipt"></i> ${txnCount} Txns
-      </span>
-    </div>`;
-
-    return `
-      <tr>
-        <td><code>${escapeHtml(c.commodity_code)}</code></td>
-        <td>
-          <strong style="color:var(--text-primary);">${escapeHtml(c.name)}</strong>
-          ${sourceHtml}
-        </td>
-        <td>${unitStr}</td>
-        <td>${subPriceDisplay}</td>
-        <td>${marketHtml}</td>
-        <td>${rateBadgeHtml}</td>
-        <td>${linkageHtml}</td>
-        <td>
-          <div style="display:flex; gap:6px; align-items:center;">
-            <button class="btn btn-secondary btn-sm" onclick="openConfigureCommodity('${escapeHtml(c.commodity_code)}')" title="Configure Subsidized Pricing">
-              <i class="fa-solid fa-sliders"></i>
-            </button>
-            <button class="btn btn-secondary btn-sm" onclick="confirmDeleteCommodity('${escapeHtml(c.commodity_code)}')" title="Delete Commodity" style="color:var(--accent-rose);">
-              <i class="fa-solid fa-trash-can"></i>
-            </button>
-          </div>
-        </td>
-      </tr>
-    `;
+    return `<tr>
+      <td><span style="font-weight:500; color:var(--text-primary); font-size:0.88rem;">${escapeHtml(c.commodity_code)}</span></td>
+      <td><strong>${escapeHtml(c.name)}</strong>${c.description ? `<div style="font-size:0.75rem; color:var(--text-muted); margin-top:3px; line-height:1.3;">${escapeHtml(c.description)}</div>` : ''}</td>
+      <td style="text-align:center;">${escapeHtml(c.unit || '—')}</td>
+      <td><div class="commodity-rates">${rates}</div></td>
+      <td>${benchmark}</td>
+      <td><span class="badge ${classBadge} scheme-badge">${escapeHtml(classLabel)}</span><div style="margin-top:4px;">${verificationBadge}</div>${sourceHtml}</td>
+      <td><div style="display:flex; flex-direction:column; gap:4px; align-items:flex-start;"><span class="badge badge-info">${Number(c.linked_inventory_count || 0)} Depots</span><span class="badge badge-purple">${Number(c.linked_transactions_count || 0)} Txns</span></div></td>
+      <td style="text-align:right;"><div style="display:inline-flex; gap:6px; align-items:center; justify-content:flex-end;"><button class="btn btn-secondary btn-sm" onclick="openConfigureCommodity('${escapeHtml(c.commodity_code)}')" title="Edit"><i class="fa-solid fa-sliders"></i></button><button class="btn btn-secondary btn-sm" onclick="confirmDeleteCommodity('${escapeHtml(c.commodity_code)}')" title="Delete" style="color:var(--accent-rose);"><i class="fa-solid fa-trash-can"></i></button></div></td>
+    </tr>`;
   }).join('');
 }
 
-// Aliases for compatibility
-function openEditCommodityModal(code) {
-  openConfigureCommodity(code);
+function getPricePayload(prefix) {
+  const id = category => `${prefix}-com-price-${category.toLowerCase()}`;
+  return { AAY: Number(document.getElementById(id('AAY')).value), PHH: Number(document.getElementById(id('PHH')).value), NPHH: Number(document.getElementById(id('NPHH')).value) };
 }
 
-function promptDeleteCommodity(code) {
-  confirmDeleteCommodity(code);
+function validateFormPrices(prices, benchmark) {
+  if (Object.values(prices).some(value => !Number.isFinite(value) || value < 0)) return 'All category issue prices must be valid non-negative numbers.';
+  if (benchmark !== null && (!Number.isFinite(benchmark) || benchmark < 0)) return 'Benchmark must be a valid non-negative number.';
+  if (benchmark !== null && Object.values(prices).some(price => benchmark < price)) return 'Benchmark cannot be lower than any category issue price.';
+  return '';
 }
 
-/**
- * Opens modal to configure subsidized prices, market benchmark, and classification.
- */
+async function createCommodityFromForm(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const code = document.getElementById('new-com-code').value.trim().toUpperCase();
+  const name = document.getElementById('new-com-name').value.trim();
+  const benchmarkRaw = document.getElementById('new-com-market-price').value;
+  const benchmark = benchmarkRaw === '' ? null : Number(benchmarkRaw);
+  const prices = getPricePayload('new');
+  const validation = validateFormPrices(prices, benchmark);
+  if (validation) return showToast(validation, 'error');
+  const payload = {
+    commodity_code: code, name, unit: document.getElementById('new-com-unit').value.trim(),
+    scheme_classification: document.getElementById('new-com-scheme').value,
+    category_pricing: prices, market_price: benchmark,
+    description: document.getElementById('new-com-desc').value.trim()
+  };
+  try {
+    const res = await API.createCommodity(payload);
+    if (res?.status === 'success') {
+      showToast(`Commodity ${code} saved to MongoDB.`, 'success');
+      closeModal('add-commodity-modal'); form.reset();
+      document.getElementById('new-com-unit').value = 'kg'; updateAddPreview();
+      await loadCommodities();
+    }
+  } catch (error) { showToast(error.message || 'Could not create commodity', 'error'); }
+}
+
+async function updateCommodityFromForm(event) {
+  event.preventDefault();
+  const code = document.getElementById('edit-com-code').value;
+  const benchmarkRaw = document.getElementById('edit-com-market-price').value;
+  const benchmark = benchmarkRaw === '' ? null : Number(benchmarkRaw);
+  const prices = getPricePayload('edit');
+  const validation = validateFormPrices(prices, benchmark);
+  if (validation) return showToast(validation, 'error');
+  try {
+    const res = await API.updateCommodity(code, {
+      name: document.getElementById('edit-com-name').value.trim(),
+      unit: document.getElementById('edit-com-unit').value.trim(),
+      scheme_classification: document.getElementById('edit-com-scheme').value,
+      category_pricing: prices, market_price: benchmark,
+      description: document.getElementById('edit-com-desc').value.trim()
+    });
+    if (res?.status === 'success') {
+      showToast(`Commodity ${code} updated in MongoDB. Verification was cleared for review.`, 'success');
+      closeModal('edit-commodity-modal'); await loadCommodities();
+    }
+  } catch (error) { showToast(error.message || 'Could not update commodity', 'error'); }
+}
+
 function openConfigureCommodity(code) {
-  const commodity = allCommodities.find(c => c.commodity_code === code);
-  if (!commodity) {
-    showToast(`Commodity ${code} not found in catalog`, 'error');
-    return;
-  }
-
-  document.getElementById('edit-com-code').value = commodity.commodity_code;
-  document.getElementById('edit-com-name').value = commodity.name;
-  document.getElementById('edit-com-unit').value = commodity.unit || 'kg';
-  document.getElementById('edit-com-price').value = commodity.subsidized_price !== undefined ? commodity.subsidized_price : 0;
-  document.getElementById('edit-com-market-price').value = commodity.market_price !== undefined ? commodity.market_price : '';
-  document.getElementById('edit-com-rate-type').value = commodity.rate_type || 'OFFICIAL_NFSA';
-  document.getElementById('edit-com-desc').value = commodity.description || '';
-
-  openModal('edit-commodity-modal');
+  const c = allCommodities.find(item => item.commodity_code === code);
+  if (!c) return showToast(`Commodity ${code} not found`, 'error');
+  document.getElementById('edit-com-code').value = c.commodity_code;
+  document.getElementById('edit-com-name').value = c.name || '';
+  document.getElementById('edit-com-unit').value = c.unit || '';
+  document.getElementById('edit-com-scheme').value = c.scheme_classification || 'DEMO_CUSTOM';
+  document.getElementById('edit-com-market-price').value = c.market_price ?? '';
+  document.getElementById('edit-com-desc').value = c.description || '';
+  const prices = c.category_pricing || {};
+  for (const category of ['AAY', 'PHH', 'NPHH']) document.getElementById(`edit-com-price-${category.toLowerCase()}`).value = prices[category] ?? '';
+  updateEditPreview(); openModal('edit-commodity-modal');
 }
 
-/**
- * Opens safe deletion confirmation dialog with linkage audit checks.
- */
 function confirmDeleteCommodity(code) {
-  const commodity = allCommodities.find(c => c.commodity_code === code);
-  if (!commodity) return;
-
+  const c = allCommodities.find(item => item.commodity_code === code);
+  if (!c) return;
   targetDeleteCommodityCode = code;
-  const nameElem = document.getElementById('delete-com-target-name');
-  const detailsElem = document.getElementById('delete-com-linkage-warning');
-
-  if (nameElem) {
-    nameElem.textContent = `${commodity.commodity_code} (${commodity.name})`;
-  }
-
-  const invCount = commodity.linked_inventory_count || 0;
-  const txnCount = commodity.linked_transactions_count || 0;
-
-  if (invCount > 0 || txnCount > 0) {
-    if (detailsElem) {
-      detailsElem.style.display = 'block';
-      detailsElem.innerHTML = `
-        <div style="background: rgba(244, 63, 94, 0.12); border: 1px solid rgba(244, 63, 94, 0.35); border-radius: var(--radius-sm); padding: 12px; margin-top: 10px;">
-          <p style="color: #fda4af; font-weight: 600; margin-bottom: 4px;">
-            <i class="fa-solid fa-triangle-exclamation"></i> Operational Linkage Detected
-          </p>
-          <p style="color: var(--text-secondary); font-size: 0.84rem;">
-            This commodity is currently linked to <strong>${invCount} regional depot stock record(s)</strong> and <strong>${txnCount} distribution transaction(s)</strong>.
-            Deleting it will corrupt inventory audits and is blocked by the backend to maintain operational integrity.
-          </p>
-        </div>
-      `;
-    }
-  } else {
-    if (detailsElem) {
-      detailsElem.style.display = 'none';
-      detailsElem.innerHTML = '';
-    }
-  }
-
+  document.getElementById('delete-com-target-name').textContent = `${c.commodity_code} (${c.name})`;
+  const warning = document.getElementById('delete-com-linkage-warning');
+  const inv = Number(c.linked_inventory_count || 0), txns = Number(c.linked_transactions_count || 0);
+  warning.style.display = inv || txns ? 'block' : 'none';
+  warning.textContent = inv || txns ? `Deletion will be blocked: linked to ${inv} inventory record(s) and ${txns} transaction(s).` : '';
   openModal('delete-commodity-modal');
 }
+
+async function deleteCommodity(event) {
+  if (!targetDeleteCommodityCode) return;
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
+    const res = await API.deleteCommodity(targetDeleteCommodityCode);
+    if (res?.status === 'success') {
+      showToast(`Commodity ${targetDeleteCommodityCode} deleted.`, 'success');
+      closeModal('delete-commodity-modal'); targetDeleteCommodityCode = null;
+      await loadCommodities();
+    }
+  } catch (error) { showToast(error.message || 'Deletion rejected by server', 'error'); }
+  finally { button.disabled = false; }
+}
+
+// Compatibility aliases for links in older pages/scripts.
+function openEditCommodityModal(code) { openConfigureCommodity(code); }
+function promptDeleteCommodity(code) { confirmDeleteCommodity(code); }

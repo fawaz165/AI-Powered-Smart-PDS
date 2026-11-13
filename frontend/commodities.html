@@ -3,20 +3,31 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Commodities Master | AI-Powered Smart PDS</title>
+  <title>Commodities Catalog | AI-Powered Smart PDS</title>
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    .commodity-table { min-width: 900px; width: 100%; table-layout: fixed; }
+    .commodity-table th, .commodity-table td { white-space: normal; overflow-wrap: anywhere; vertical-align: top; padding: 14px 12px; }
+    .commodity-table th:nth-child(1) { width: 9%; min-width: 80px; }
+    .commodity-table th:nth-child(2) { width: 15%; min-width: 120px; }
+    .commodity-table th:nth-child(3) { width: 5%; min-width: 45px; text-align: center; }
+    .commodity-table th:nth-child(4) { width: 27%; min-width: 220px; }
+    .commodity-table th:nth-child(5) { width: 12%; min-width: 100px; }
+    .commodity-table th:nth-child(6) { width: 17%; min-width: 135px; }
+    .commodity-table th:nth-child(7) { width: 9%; min-width: 80px; }
+    .commodity-table th:nth-child(8) { width: 6%; min-width: 60px; text-align: right; }
+    .commodity-rates { display: grid; gap: 8px; }
+    .commodity-rate { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+    .scheme-badge { display: inline-flex; max-width: 100%; white-space: normal; line-height: 1.25; }
+    .commodity-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 14px; }
+    @media (max-width: 720px) { .commodity-form-grid { grid-template-columns: 1fr; } }
+  </style>
 </head>
 <body>
   <div class="app-container">
     <aside class="sidebar">
-      <div class="sidebar-header">
-        <div class="brand-badge"><i class="fa-solid fa-wheat-awn" style="color: #fff;"></i></div>
-        <div class="brand-text">
-          <h2>Smart PDS</h2>
-          <span>AI Distribution</span>
-        </div>
-      </div>
+      <div class="sidebar-header"><div class="brand-badge"><i class="fa-solid fa-wheat-awn" style="color:#fff"></i></div><div class="brand-text"><h2>Smart PDS</h2><span>AI Distribution</span></div></div>
       <nav class="sidebar-nav">
         <a href="dashboard.html" class="nav-link"><i class="icon fa-solid fa-chart-pie"></i> Dashboard</a>
         <a href="beneficiaries.html" class="nav-link"><i class="icon fa-solid fa-users"></i> Beneficiaries</a>
@@ -24,77 +35,71 @@
         <a href="inventory.html" class="nav-link"><i class="icon fa-solid fa-warehouse"></i> Inventory Stock</a>
         <a href="transactions.html" class="nav-link"><i class="icon fa-solid fa-arrow-right-arrow-left"></i> Transactions</a>
         <a href="predictions.html" class="nav-link"><i class="icon fa-solid fa-wand-magic-sparkles"></i> Demand Forecast</a>
-        <a href="fraud.html" class="nav-link"><i class="icon fa-solid fa-shield-halved"></i> Anomaly & Fraud</a>
+        <a href="fraud.html" class="nav-link"><i class="icon fa-solid fa-shield-halved"></i> Anomaly &amp; Fraud</a>
         <a href="reports.html" class="nav-link"><i class="icon fa-solid fa-file-excel"></i> Reports Export</a>
       </nav>
-
-      <div class="sidebar-secondary-nav">
-        <div class="section-heading">Documentation</div>
-        <a href="about.html" class="nav-link"><i class="icon fa-solid fa-book-open"></i> Viva Guide &amp; Architecture</a>
-      </div>
-
-      <div class="sidebar-footer">
-        <div class="user-snippet">
-          <div class="user-avatar"><i class="fa-solid fa-user-shield"></i></div>
-          <div class="user-details">
-            <h4 id="sidebar-user-name">Administrator</h4>
-            <p id="sidebar-user-role">PDS CHIEF OFFICER</p>
-          </div>
-        </div>
-        <button class="btn-logout" title="Logout" onclick="handleLogout()"><i class="fa-solid fa-arrow-right-from-bracket"></i></button>
-      </div>
+      <div class="sidebar-secondary-nav"><div class="section-heading">Documentation</div><a href="about.html" class="nav-link"><i class="icon fa-solid fa-book-open"></i> Viva Guide &amp; Architecture</a></div>
+      <div class="sidebar-footer"><div class="user-snippet"><div class="user-avatar"><i class="fa-solid fa-user-shield"></i></div><div class="user-details"><h4 id="sidebar-user-name">Administrator</h4><p id="sidebar-user-role">PDS CHIEF OFFICER</p></div></div><button class="btn-logout" title="Logout" onclick="handleLogout()"><i class="fa-solid fa-arrow-right-from-bracket"></i></button></div>
     </aside>
 
     <main class="main-wrapper">
-      <header class="top-navbar">
-        <div class="page-title-box">
-          <h1>Commodities Catalog</h1>
-          <p>Subsidized grain pricing, rate classifications, and market benchmarks</p>
-        </div>
-        <div class="nav-actions">
-          <button class="btn btn-primary btn-sm" onclick="openModal('add-commodity-modal')">
-            <i class="fa-solid fa-plus"></i> Add Commodity
-          </button>
-        </div>
-      </header>
-
+      <header class="top-navbar"><div class="page-title-box"><h1>Commodities Catalog</h1><p>Recorded issue prices by card category, with NFSA, Tamil Nadu State PDS, and demo/custom classifications</p></div><div class="nav-actions"><button class="btn btn-primary btn-sm" onclick="openModal('add-commodity-modal')"><i class="fa-solid fa-plus"></i> Add Commodity</button></div></header>
       <div class="content-body">
-        <!-- Top Metrics Cards -->
-        <div class="grid-cards" style="margin-bottom: 1.5rem;">
-          <div class="stat-card" style="--card-accent: #3b82f6;">
-            <div class="card-top"><span>Total Commodities</span><i class="fa-solid fa-boxes-stacked" style="color: #60a5fa;"></i></div>
-            <div class="card-value" id="com-kpi-total">--</div>
-            <div class="card-meta"><span class="meta-up"><i class="fa-solid fa-circle-check"></i> Active</span> Linked to Inventory</div>
+        <div class="grid-cards" style="margin-bottom:1.5rem;">
+          <div class="stat-card" style="--card-accent:#3b82f6;">
+            <div class="card-top">
+              <span>TOTAL COMMODITIES</span>
+              <div class="card-icon" style="background:rgba(59,130,246,0.15); width:32px; height:32px; border-radius:6px; display:flex; align-items:center; justify-content:center;">
+                <i class="fa-solid fa-boxes-stacked" style="color:#60a5fa; font-size:0.9rem;"></i>
+              </div>
+            </div>
+            <div class="card-value" id="com-kpi-total">4</div>
+            <div class="card-meta">Loaded from commodity records</div>
           </div>
-          <div class="stat-card" style="--card-accent: #10b981;">
-            <div class="card-top"><span>Verified Official Schemes</span><i class="fa-solid fa-certificate" style="color: #34d399;"></i></div>
-            <div class="card-value" id="com-kpi-official" style="color: #34d399;">--</div>
-            <div class="card-meta">NFSA &amp; Special PDS Schemes</div>
+          <div class="stat-card" style="--card-accent:#10b981;">
+            <div class="card-top">
+              <span>VERIFIED SCHEMES</span>
+              <div class="card-icon" style="background:rgba(16,185,129,0.15); width:32px; height:32px; border-radius:6px; display:flex; align-items:center; justify-content:center;">
+                <i class="fa-solid fa-circle-check" style="color:#34d399; font-size:0.9rem;"></i>
+              </div>
+            </div>
+            <div class="card-value" id="com-kpi-official" style="color:#34d399">4</div>
+            <div class="card-meta">Classification and rates have a verification source</div>
           </div>
-          <div class="stat-card" style="--card-accent: #f59e0b;">
-            <div class="card-top"><span>Demo / Custom Rates</span><i class="fa-solid fa-flask" style="color: #fbbf24;"></i></div>
-            <div class="card-value" id="com-kpi-demo" style="color: #fbbf24;">--</div>
-            <div class="card-meta">Simulation &amp; Custom Additions</div>
+          <div class="stat-card" style="--card-accent:#f59e0b;">
+            <div class="card-top">
+              <span>DEMO / CUSTOM</span>
+              <div class="card-icon" style="background:rgba(245,158,11,0.15); width:32px; height:32px; border-radius:6px; display:flex; align-items:center; justify-content:center;">
+                <i class="fa-solid fa-flask" style="color:#fbbf24; font-size:0.9rem;"></i>
+              </div>
+            </div>
+            <div class="card-value" id="com-kpi-demo" style="color:#fbbf24">0</div>
+            <div class="card-meta">Explicit demo/custom classifications</div>
           </div>
-          <div class="stat-card" style="--card-accent: #8b5cf6;">
-            <div class="card-top"><span>Avg Subsidy Discount</span><i class="fa-solid fa-percent" style="color: #a78bfa;"></i></div>
-            <div class="card-value" id="com-kpi-discount" style="color: #a78bfa;">--%</div>
-            <div class="card-meta">Average vs. Benchmark Retail Rates</div>
+          <div class="stat-card" style="--card-accent:#8b5cf6;">
+            <div class="card-top">
+              <span>AVG. DISCOUNT</span>
+              <div class="card-icon" style="background:rgba(139,92,246,0.15); width:32px; height:32px; border-radius:6px; display:flex; align-items:center; justify-content:center;">
+                <i class="fa-solid fa-percent" style="color:#a78bfa; font-size:0.9rem;"></i>
+              </div>
+            </div>
+            <div class="card-value" id="com-kpi-discount" style="color:#a78bfa">82.9%</div>
+            <div class="card-meta">Mean of valid category prices vs recorded benchmarks</div>
           </div>
         </div>
 
         <div class="data-panel">
           <div class="panel-header">
-            <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+            <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
               <h3>Food-Grain Catalog</h3>
             </div>
             <div class="panel-actions">
-              <input type="text" id="com-search" class="form-control" placeholder="Search by code or name..." style="width: 220px;" oninput="filterCommodities()">
-              <select id="com-filter-rate" class="form-control" style="width: 220px;" onchange="filterCommodities()">
+              <input type="text" id="com-search" class="form-control" placeholder="Search by code or name..." style="width:220px" oninput="filterCommodities()">
+              <select id="com-filter-rate" class="form-control" style="width:200px" onchange="filterCommodities()">
                 <option value="">All Classifications</option>
-                <option value="OFFICIAL_NFSA">Verified Official NFSA Rates</option>
-                <option value="STATE_SUBSIDY">Tamil Nadu State Welfare Subsidies</option>
-                <option value="DEMONSTRATION">Synthetic Demo Rates</option>
+                <option value="NFSA">NFSA</option>
+                <option value="TAMIL_NADU_STATE_PDS">Tamil Nadu State PDS</option>
+                <option value="DEMO_CUSTOM">Demo / Custom</option>
               </select>
               <button class="btn btn-secondary btn-sm" id="btn-refresh-commodities" onclick="refreshCommodities()" title="Refresh Catalog">
                 <i class="fa-solid fa-arrows-rotate"></i> Refresh
@@ -102,21 +107,21 @@
             </div>
           </div>
           <div class="table-responsive">
-            <table class="custom-table">
+            <table class="custom-table commodity-table">
               <thead>
                 <tr>
-                  <th>Code</th>
-                  <th>Commodity Name</th>
-                  <th>Unit</th>
-                  <th>Subsidized Price (₹)</th>
-                  <th>Market Benchmark</th>
-                  <th>Rate Classification</th>
-                  <th>Operational Linkage</th>
-                  <th>Actions</th>
+                  <th>CODE</th>
+                  <th>COMMODITY</th>
+                  <th style="text-align:center;">UNIT</th>
+                  <th>ISSUE PRICES BY CATEGORY (₹ / UNIT)</th>
+                  <th>RECORDED BENCHMARK</th>
+                  <th>SCHEME CLASSIFICATION</th>
+                  <th>OPERATIONAL LINKAGE</th>
+                  <th style="text-align:right;">ACTIONS</th>
                 </tr>
               </thead>
               <tbody id="commodities-tbody">
-                <tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2rem;">Loading commodities from database...</td></tr>
+                <tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:2rem">Loading commodity records...</td></tr>
               </tbody>
             </table>
           </div>
@@ -125,146 +130,42 @@
     </main>
   </div>
 
-  <!-- Add Commodity Modal -->
-  <div id="add-commodity-modal" class="modal-overlay">
-    <div class="modal-card">
-      <div class="modal-header">
-        <h3><i class="fa-solid fa-plus" style="color: var(--primary);"></i> Add New Commodity</h3>
-        <button class="modal-close" onclick="closeModal('add-commodity-modal')">&times;</button>
+  <div id="add-commodity-modal" class="modal-overlay"><div class="modal-card"><div class="modal-header"><h3><i class="fa-solid fa-plus" style="color:var(--primary)"></i> Add New Commodity</h3><button class="modal-close" onclick="closeModal('add-commodity-modal')">&times;</button></div>
+    <form id="add-commodity-form"><div class="modal-body">
+      <div class="commodity-form-grid">
+        <div class="form-group"><label class="form-label" for="new-com-code">Commodity Code</label><input type="text" id="new-com-code" class="form-control" required pattern="^[A-Za-z0-9\-_]{3,20}$" title="3-20 alphanumeric characters, hyphens or underscores"><small style="color:var(--text-muted);font-size:.75rem">Must be unique.</small></div>
+        <div class="form-group"><label class="form-label" for="new-com-name">Commodity Name</label><input type="text" id="new-com-name" class="form-control" required minlength="2" maxlength="50"></div>
+        <div class="form-group"><label class="form-label" for="new-com-unit">Measurement Unit</label><input type="text" id="new-com-unit" class="form-control" value="kg" required maxlength="15"></div>
+        <div class="form-group"><label class="form-label" for="new-com-scheme">Scheme Classification</label><select id="new-com-scheme" class="form-control" required><option value="">Select classification</option><option value="NFSA">NFSA</option><option value="TAMIL_NADU_STATE_PDS">Tamil Nadu State PDS</option><option value="DEMO_CUSTOM">Demo / Custom</option></select></div>
+        <div class="form-group"><label class="form-label" for="new-com-price-aay">AAY Issue Price (₹ / unit)</label><input type="number" step="0.01" min="0" id="new-com-price-aay" class="form-control" required></div>
+        <div class="form-group"><label class="form-label" for="new-com-price-phh">PHH Issue Price (₹ / unit)</label><input type="number" step="0.01" min="0" id="new-com-price-phh" class="form-control" required></div>
+        <div class="form-group"><label class="form-label" for="new-com-price-nphh">NPHH Issue Price (₹ / unit)</label><input type="number" step="0.01" min="0" id="new-com-price-nphh" class="form-control" required></div>
+        <div class="form-group"><label class="form-label" for="new-com-market-price">Open-Market Benchmark (optional, ₹ / unit)</label><input type="number" step="0.01" min="0" id="new-com-market-price" class="form-control"></div>
       </div>
-      <form id="add-commodity-form">
-        <div class="modal-body">
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label" for="new-com-code">Commodity Code</label>
-              <input type="text" id="new-com-code" class="form-control" placeholder="e.g. COM-OIL" required pattern="^[A-Za-z0-9\-_]{3,20}$" title="3-20 alphanumeric characters, hyphens or underscores">
-              <small style="color: var(--text-muted); font-size: 0.75rem;">Must be unique across the system (e.g. COM-OIL)</small>
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="new-com-name">Commodity Name</label>
-              <input type="text" id="new-com-name" class="form-control" placeholder="e.g. Mustard Oil" required minlength="2" maxlength="50">
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label" for="new-com-unit">Measurement Unit</label>
-              <input type="text" id="new-com-unit" class="form-control" value="kg" required placeholder="e.g. kg, litre">
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="new-com-price">Subsidized Issue Price (₹)</label>
-              <input type="number" step="0.25" min="0" id="new-com-price" class="form-control" value="25.0" required>
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label" for="new-com-market-price">Open Market Benchmark (₹)</label>
-              <input type="number" step="0.5" min="0" id="new-com-market-price" class="form-control" placeholder="e.g. 110.0">
-              <small style="color: var(--text-muted); font-size: 0.75rem;">Reference open-market retail price for subsidy analysis</small>
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="new-com-rate-type">Rate Classification</label>
-              <select id="new-com-rate-type" class="form-control" required>
-                <option value="OFFICIAL_NFSA">Verified Official NFSA Rate</option>
-                <option value="DEMONSTRATION" selected>Synthetic Demo Rate (Simulation)</option>
-                <option value="STATE_SUBSIDY">State Welfare Subsidy</option>
-              </select>
-              <small style="color: var(--text-muted); font-size: 0.75rem;">Distinguishes statutory NFSA from synthetic demo rates</small>
-            </div>
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="new-com-desc">Description & Nutritional Note</label>
-            <input type="text" id="new-com-desc" class="form-control" placeholder="e.g. Essential ration commodity distributed via Fair Price Shops">
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" onclick="closeModal('add-commodity-modal')">Cancel</button>
-          <button type="submit" class="btn btn-primary"><i class="fa-solid fa-save"></i> Register Commodity</button>
-        </div>
-      </form>
-    </div>
-  </div>
+      <div class="form-group"><label class="form-label" for="new-com-desc">Description (optional)</label><textarea id="new-com-desc" class="form-control" rows="2" maxlength="500"></textarea></div>
+      <div class="form-group" style="background:var(--bg-surface);border:1px solid var(--border-color);border-radius:8px;padding:.75rem 1rem"><strong>Saved record preview</strong><div id="new-com-preview" aria-live="polite" style="margin-top:.4rem;color:var(--text-secondary)">Enter details to preview the record.</div></div>
+      <small style="color:var(--text-muted)">Scheme classification identifies the recorded rate source. It does not determine NFSA eligibility or entitlement quantities. New records remain unverified until reviewed.</small>
+    </div><div class="modal-footer"><button type="button" class="btn btn-secondary" onclick="closeModal('add-commodity-modal')">Cancel</button><button type="submit" class="btn btn-primary"><i class="fa-solid fa-save"></i> Register Commodity</button></div></form>
+  </div></div>
 
-  <!-- Edit / Configure Commodity Modal -->
-  <div id="edit-commodity-modal" class="modal-overlay">
-    <div class="modal-card">
-      <div class="modal-header">
-        <h3><i class="fa-solid fa-pen-to-square" style="color: var(--primary);"></i> Configure Commodity Pricing</h3>
-        <button class="modal-close" onclick="closeModal('edit-commodity-modal')">&times;</button>
-      </div>
-      <form id="edit-commodity-form">
-        <div class="modal-body">
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label" for="edit-com-code">Commodity Code</label>
-              <input type="text" id="edit-com-code" class="form-control" readonly style="opacity: 0.8; background: rgba(255,255,255,0.03);">
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="edit-com-name">Commodity Name</label>
-              <input type="text" id="edit-com-name" class="form-control" required minlength="2" maxlength="50">
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label" for="edit-com-price">Subsidized Issue Price (₹)</label>
-              <input type="number" step="0.25" min="0" id="edit-com-price" class="form-control" required>
-              <small style="color: var(--text-muted); font-size: 0.75rem;">Set to 0.0 for completely free NFSA grains (e.g. Rice)</small>
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="edit-com-market-price">Open Market Benchmark (₹)</label>
-              <input type="number" step="0.5" min="0" id="edit-com-market-price" class="form-control">
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label" for="edit-com-unit">Measurement Unit</label>
-              <input type="text" id="edit-com-unit" class="form-control" required>
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="edit-com-rate-type">Rate Classification</label>
-              <select id="edit-com-rate-type" class="form-control" required>
-                <option value="OFFICIAL_NFSA">Verified Official NFSA Rate</option>
-                <option value="DEMONSTRATION">Synthetic Demo Rate (Simulation)</option>
-                <option value="STATE_SUBSIDY">State Welfare Subsidy</option>
-              </select>
-            </div>
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="edit-com-desc">Description</label>
-            <input type="text" id="edit-com-desc" class="form-control">
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" onclick="closeModal('edit-commodity-modal')">Cancel</button>
-          <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check"></i> Save Changes</button>
-        </div>
-      </form>
-    </div>
-  </div>
+  <div id="edit-commodity-modal" class="modal-overlay"><div class="modal-card"><div class="modal-header"><h3><i class="fa-solid fa-pen-to-square" style="color:var(--primary)"></i> Configure Commodity</h3><button class="modal-close" onclick="closeModal('edit-commodity-modal')">&times;</button></div>
+    <form id="edit-commodity-form"><div class="modal-body"><div class="commodity-form-grid">
+      <div class="form-group"><label class="form-label" for="edit-com-code">Commodity Code</label><input type="text" id="edit-com-code" class="form-control" readonly></div>
+      <div class="form-group"><label class="form-label" for="edit-com-name">Commodity Name</label><input type="text" id="edit-com-name" class="form-control" required minlength="2" maxlength="50"></div>
+      <div class="form-group"><label class="form-label" for="edit-com-unit">Measurement Unit</label><input type="text" id="edit-com-unit" class="form-control" required maxlength="15"></div>
+      <div class="form-group"><label class="form-label" for="edit-com-scheme">Scheme Classification</label><select id="edit-com-scheme" class="form-control" required><option value="NFSA">NFSA</option><option value="TAMIL_NADU_STATE_PDS">Tamil Nadu State PDS</option><option value="DEMO_CUSTOM">Demo / Custom</option></select></div>
+      <div class="form-group"><label class="form-label" for="edit-com-price-aay">AAY Issue Price (₹ / unit)</label><input type="number" step="0.01" min="0" id="edit-com-price-aay" class="form-control" required></div>
+      <div class="form-group"><label class="form-label" for="edit-com-price-phh">PHH Issue Price (₹ / unit)</label><input type="number" step="0.01" min="0" id="edit-com-price-phh" class="form-control" required></div>
+      <div class="form-group"><label class="form-label" for="edit-com-price-nphh">NPHH Issue Price (₹ / unit)</label><input type="number" step="0.01" min="0" id="edit-com-price-nphh" class="form-control" required></div>
+      <div class="form-group"><label class="form-label" for="edit-com-market-price">Open-Market Benchmark (optional, ₹ / unit)</label><input type="number" step="0.01" min="0" id="edit-com-market-price" class="form-control"></div>
+    </div><div class="form-group"><label class="form-label" for="edit-com-desc">Description (optional)</label><textarea id="edit-com-desc" class="form-control" rows="2" maxlength="500"></textarea></div>
+    <div class="form-group" style="background:var(--bg-surface);border:1px solid var(--border-color);border-radius:8px;padding:.75rem 1rem"><strong>Saved record preview</strong><div id="edit-com-preview" aria-live="polite" style="margin-top:.4rem;color:var(--text-secondary)"></div></div>
+    <small style="color:var(--text-muted)">Editing prices or classification removes the current verification flag until reviewed again.</small>
+    </div><div class="modal-footer"><button type="button" class="btn btn-secondary" onclick="closeModal('edit-commodity-modal')">Cancel</button><button type="submit" class="btn btn-primary"><i class="fa-solid fa-check"></i> Save Changes</button></div></form>
+  </div></div>
 
-  <!-- Delete Confirmation Modal -->
-  <div id="delete-commodity-modal" class="modal-overlay">
-    <div class="modal-card" style="max-width: 480px;">
-      <div class="modal-header">
-        <h3 style="color: var(--accent-rose);"><i class="fa-solid fa-triangle-exclamation"></i> Delete Commodity</h3>
-        <button class="modal-close" onclick="closeModal('delete-commodity-modal')">&times;</button>
-      </div>
-      <div class="modal-body">
-        <p>Are you sure you want to delete commodity <strong id="delete-com-target-name">--</strong>?</p>
-        <div id="delete-com-linkage-warning" style="display: none;"></div>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" onclick="closeModal('delete-commodity-modal')">Cancel</button>
-        <button type="button" class="btn btn-primary" id="btn-confirm-delete-commodity" style="background: var(--accent-rose);">
-          <i class="fa-solid fa-trash-can"></i> Confirm Deletion
-        </button>
-      </div>
-    </div>
-  </div>
-
+  <div id="delete-commodity-modal" class="modal-overlay"><div class="modal-card" style="max-width:480px"><div class="modal-header"><h3 style="color:var(--accent-rose)"><i class="fa-solid fa-triangle-exclamation"></i> Delete Commodity</h3><button class="modal-close" onclick="closeModal('delete-commodity-modal')">&times;</button></div><div class="modal-body"><p>Are you sure you want to delete <strong id="delete-com-target-name">--</strong>?</p><div id="delete-com-linkage-warning" style="display:none"></div></div><div class="modal-footer"><button type="button" class="btn btn-secondary" onclick="closeModal('delete-commodity-modal')">Cancel</button><button type="button" class="btn btn-primary" id="btn-confirm-delete-commodity" style="background:var(--accent-rose)"><i class="fa-solid fa-trash-can"></i> Confirm Deletion</button></div></div></div>
   <div id="toast-container" class="toast-container"></div>
-
-  <script src="js/i18n.js"></script>
-  <script src="js/api.js"></script>
-  <script src="js/commodities.js"></script>
+  <script src="js/i18n.js"></script><script src="js/api.js"></script><script src="js/commodities.js"></script>
 </body>
 </html>

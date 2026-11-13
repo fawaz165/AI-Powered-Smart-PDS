@@ -28,16 +28,7 @@ SAVED_MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def train_and_evaluate_all():
-    """
-    Trains and compares 4 regression models on actual PDS demand data:
-    1. Linear Regression
-    2. Decision Tree Regressor
-    3. Random Forest Regressor
-    4. XGBoost Regressor
-    
-    Evaluates MAE, MSE, RMSE, R² on unseen test set.
-    Selects the best model and serializes it using Joblib.
-    """
+
     print("=" * 60)
     print("AI-POWERED SMART PDS - DEMAND PREDICTION MODEL BENCHMARK")
     print("=" * 60)

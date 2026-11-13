@@ -74,7 +74,10 @@ def seed_database():
             "unit": "kg",
             "subsidized_price": 0.0,
             "market_price": 42.0,
-            "rate_type": "OFFICIAL_NFSA",
+            "rate_type": "STATE_SUBSIDY",
+            "scheme_classification": "TAMIL_NADU_STATE_PDS",
+            "verification_source": "https://www.rcs.tn.gov.in/pds_cooperative.php",
+            "is_verified": True,
             "category_pricing": {"AAY": 0.0, "PHH": 0.0, "NPHH": 0.0},
             "official_source": "Tamil Nadu Universal PDS & NFSA (Free Rice Scheme)",
             "description": "Fortified raw & boiled rice under Tamil Nadu Universal PDS and NFSA free distribution"
@@ -85,7 +88,10 @@ def seed_database():
             "unit": "kg",
             "subsidized_price": 0.0,
             "market_price": 34.0,
-            "rate_type": "OFFICIAL_NFSA",
+            "rate_type": "STATE_SUBSIDY",
+            "scheme_classification": "TAMIL_NADU_STATE_PDS",
+            "verification_source": "https://www.rcs.tn.gov.in/pds_cooperative.php",
+            "is_verified": True,
             "category_pricing": {"AAY": 0.0, "PHH": 0.0, "NPHH": 0.0},
             "official_source": "Tamil Nadu PDS & PMGKAY (Free Entitlement for eligible cardholders)",
             "description": "Whole grain milled wheat flour supplied free of cost to eligible cardholders"
@@ -96,7 +102,10 @@ def seed_database():
             "unit": "kg",
             "subsidized_price": 13.5,
             "market_price": 45.0,
-            "rate_type": "OFFICIAL_NFSA",
+            "rate_type": "STATE_SUBSIDY",
+            "scheme_classification": "TAMIL_NADU_STATE_PDS",
+            "verification_source": "https://www.rcs.tn.gov.in/pds_cooperative.php",
+            "is_verified": True,
             "category_pricing": {"AAY": 13.50, "PHH": 25.00, "NPHH": 25.00},
             "official_source": "Central AAY Scheme (₹13.50/kg) & TNPDS State Order (₹25.00/kg for other cards)",
             "description": "Refined crystal sugar: AAY ₹13.50/kg, PHH/NPHH ₹25.00/kg"
@@ -108,6 +117,9 @@ def seed_database():
             "subsidized_price": 30.0,
             "market_price": 140.0,
             "rate_type": "STATE_SUBSIDY",
+            "scheme_classification": "TAMIL_NADU_STATE_PDS",
+            "verification_source": "https://www.rcs.tn.gov.in/pds_cooperative.php",
+            "is_verified": True,
             "category_pricing": {"AAY": 30.0, "PHH": 30.0, "NPHH": 30.0},
             "official_source": "Tamil Nadu Special Public Distribution System (Special PDS Scheme)",
             "description": "Subsidized Tur Dal under Tamil Nadu Special PDS Scheme at ₹30.00/kg"
@@ -125,7 +137,10 @@ def seed_database():
                 rate_type=c["rate_type"],
                 market_price=c["market_price"],
                 category_pricing=c.get("category_pricing"),
-                official_source=c.get("official_source")
+                official_source=c.get("official_source"),
+                scheme_classification=c.get("scheme_classification"),
+                verification_source=c.get("verification_source"),
+                is_verified=c.get("is_verified", False)
             )},
             upsert=True
         )

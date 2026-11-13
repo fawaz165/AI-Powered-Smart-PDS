@@ -228,12 +228,14 @@ h1, h2, h3, h4, h5, .brand-title {
 /* ---------------- Main Content Area ---------------- */
 .main-wrapper {
   margin-left: var(--sidebar-width);
+  width: calc(100% - var(--sidebar-width));
+  max-width: calc(100% - var(--sidebar-width));
   flex: 1;
   display: flex;
   flex-direction: column;
   min-height: 100vh;
   min-width: 0;
-  max-width: 100%;
+  box-sizing: border-box;
   overflow-x: hidden;
 }
 
@@ -522,9 +524,11 @@ h1, h2, h3, h4, h5, .brand-title {
 
 .table-responsive {
   width: 100%;
+  max-width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   display: block;
+  box-sizing: border-box;
 }
 
 .table-responsive::-webkit-scrollbar {
@@ -1201,6 +1205,128 @@ h1, h2, h3, h4, h5, .brand-title {
 .badge-info      { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
 .badge-purple    { background: rgba(139, 92, 246, 0.15); color: #a78bfa; border: 1px solid rgba(139, 92, 246, 0.3); }
 .badge-secondary { background: rgba(148, 163, 184, 0.12); color: #cbd5e1; border: 1px solid rgba(148, 163, 184, 0.25); }
+
+/* Statutory NFSA & State-Scheme Allocation Presentation */
+.beneficiary-registry-table {
+  width: 100%;
+  min-width: 760px;
+}
+
+.beneficiary-registry-table th,
+.beneficiary-registry-table td {
+  padding: 10px 10px;
+  vertical-align: middle;
+}
+
+.beneficiary-registry-table th:nth-child(1),
+.beneficiary-registry-table td:nth-child(1) { width: 14%; min-width: 110px; }
+
+.beneficiary-registry-table th:nth-child(2),
+.beneficiary-registry-table td:nth-child(2) { width: 15%; min-width: 115px; }
+
+.beneficiary-registry-table th:nth-child(3),
+.beneficiary-registry-table td:nth-child(3) { width: 10%; min-width: 80px; }
+
+.beneficiary-registry-table th:nth-child(4),
+.beneficiary-registry-table td:nth-child(4) { width: 9%; min-width: 75px; text-align: center; }
+
+.beneficiary-registry-table th:nth-child(5),
+.beneficiary-registry-table td:nth-child(5) { width: 11%; min-width: 85px; }
+
+.beneficiary-registry-table th:nth-child(6),
+.beneficiary-registry-table td:nth-child(6) { width: 23%; min-width: 175px; }
+
+.beneficiary-registry-table th:nth-child(7),
+.beneficiary-registry-table td:nth-child(7) { width: 9%; min-width: 75px; text-align: center; }
+
+.beneficiary-registry-table th:nth-child(8),
+.beneficiary-registry-table td:nth-child(8) { width: 9%; min-width: 80px; text-align: right; }
+
+.entitlement-cell-content {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.nfsa-entitlement-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.badge-nfsa {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  font-weight: 600;
+  font-size: 0.74rem;
+  padding: 2px 7px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.badge-nfsa-aay {
+  background: rgba(139, 92, 246, 0.18);
+  color: #c084fc;
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  font-weight: 600;
+  font-size: 0.74rem;
+  padding: 2px 7px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.badge-non-nfsa {
+  background: rgba(148, 163, 184, 0.12);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  font-weight: 500;
+  font-size: 0.72rem;
+  padding: 2px 7px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.entitlement-formula {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.state-scheme-row {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  font-size: 0.76rem;
+  flex-wrap: wrap;
+  line-height: 1.35;
+}
+
+.state-label {
+  color: var(--text-muted);
+  font-size: 0.70rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.state-commodities {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
 
 /* ---------------- Buttons ---------------- */
 .btn {

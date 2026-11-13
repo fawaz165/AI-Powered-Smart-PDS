@@ -34,11 +34,23 @@ def list_transactions():
 
     txns = list(db.transactions.find(query, {"_id": 0}).sort("timestamp", -1).skip(skip).limit(limit))
     total_count = db.transactions.count_documents(query)
+    class_counts = {"live": 0, "demo": 0}
+    for group in db.transactions.aggregate([
+        {"$match": query},
+        {"$project": {"classified_demo": {"$cond": [
+            {"$eq": [{"$type": "$is_demo"}, "bool"]}, "$is_demo",
+            {"$regexMatch": {"input": {"$ifNull": ["$transaction_id", ""]}, "regex": "^TXN-10[0-9]{2}$"}}
+        ]}}},
+        {"$group": {"_id": "$classified_demo", "count": {"$sum": 1}}}
+    ]):
+        class_counts["demo" if group["_id"] else "live"] = group["count"]
 
     return jsonify({
         "status": "success",
         "total": total_count,
         "count": len(txns),
+        "classification": {**class_counts, "total": sum(class_counts.values()),
+                            "valid": sum(class_counts.values()) == total_count},
         "data": txns
     }), 200
 
@@ -295,6 +307,13 @@ def list_fraud_alerts():
             {"risk_level": "HIGH"}
         ]
     })
+    suspicious_txn_count = db.transactions.count_documents({
+        "$or": [
+            {"status": {"$in": ["SUSPICIOUS", "HIGH_RISK"]}},
+            {"risk_level": "HIGH"},
+            {"anomaly_score": {"$lt": 0}}
+        ]
+    })
     
     # Enrich score interpretations and verify detection reasons against actual transaction & beneficiary entitlements
     for a in alerts:
@@ -350,7 +369,10 @@ def list_fraud_alerts():
         "pending_count": len(pending_alerts),
         "total_records": total_db_alerts,
         "total_pending": total_db_pending,
-        "total_outliers": total_db_outliers if total_db_outliers > 0 else total_db_alerts,
+        "total_outliers": total_db_outliers,
+        "suspicious_transaction_count": suspicious_txn_count,
+        "summary": {"total_alerts": total_db_alerts, "pending_reviews": total_db_pending,
+                    "outliers": total_db_outliers, "suspicious_transactions": suspicious_txn_count},
         "data": alerts,
         "audit_principle": "Statistical anomalies alone do NOT constitute unilateral proof of fraud. Human officer verification required."
     }), 200

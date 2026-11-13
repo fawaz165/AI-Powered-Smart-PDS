@@ -57,7 +57,7 @@
       <header class="top-navbar">
         <div class="page-title-box">
           <h1>Beneficiary Ration Card Registry</h1>
-          <p>National Food Security Act (NFSA) beneficiary entitlement directory and cardholder management</p>
+          <p>Beneficiary directory with statutory NFSA foodgrain entitlements and state-scheme allocations</p>
         </div>
         <div class="nav-actions">
           <button class="btn btn-primary btn-sm" onclick="openModal('add-beneficiary-modal')">
@@ -80,19 +80,19 @@
             <div class="card-top"><span>Priority Households (PHH)</span><i class="fa-solid fa-people-roof"
                 style="color: #fbbf24;"></i></div>
             <div class="card-value" id="ben-kpi-phh" style="color: #fbbf24;">--</div>
-            <div class="card-meta">Subsidized per-member quotas</div>
+            <div class="card-meta">NFSA: 5 kg foodgrains per person/month</div>
           </div>
           <div class="stat-card" style="--card-accent: #8b5cf6;">
             <div class="card-top"><span>Antyodaya Anna Yojana (AAY)</span><i class="fa-solid fa-hand-holding-heart"
                 style="color: #a78bfa;"></i></div>
             <div class="card-value" id="ben-kpi-aay" style="color: #a78bfa;">--</div>
-            <div class="card-meta">Heavily subsidized family quotas</div>
+            <div class="card-meta">NFSA: 35 kg foodgrains per household/month</div>
           </div>
           <div class="stat-card" style="--card-accent: #10b981;">
             <div class="card-top"><span>Non-Priority (NPHH)</span><i class="fa-solid fa-users"
                 style="color: #34d399;"></i></div>
             <div class="card-value" id="ben-kpi-nphh" style="color: #34d399;">--</div>
-            <div class="card-meta">Standard state welfare allocation</div>
+            <div class="card-meta">State-scheme allocation (Non-NFSA)</div>
           </div>
         </div>
 
@@ -121,17 +121,17 @@
             </div>
           </div>
           <div class="table-responsive">
-            <table class="custom-table">
+            <table class="custom-table beneficiary-registry-table">
               <thead>
                 <tr>
-                  <th>Beneficiary ID & Card No</th>
+                  <th>Beneficiary ID &amp; Card</th>
                   <th>Full Name</th>
                   <th>Region</th>
-                  <th>Family Size</th>
+                  <th style="text-align: center;">Family Size</th>
                   <th>Ration Card Type</th>
-                  <th>Monthly Entitlement Quota</th>
-                  <th>Status</th>
-                  <th>Actions</th>
+                  <th>Monthly Entitlement &amp; Allocation</th>
+                  <th style="text-align: center;">Status</th>
+                  <th style="text-align: right;">Actions</th>
                 </tr>
               </thead>
               <tbody id="beneficiaries-tbody">
@@ -215,7 +215,7 @@
               Preview:
             </div>
             <div id="entitlement-preview" style="font-size: 0.85rem; color: var(--text-primary); font-weight: 500;">
-              Rice: 20kg &bull; Wheat: 8kg &bull; Sugar: 1kg &bull; Dal: 1kg
+              Loading configured policy rules…
             </div>
           </div>
         </div>
@@ -289,7 +289,7 @@
             </div>
             <div id="edit-entitlement-preview"
               style="font-size: 0.85rem; color: var(--text-primary); font-weight: 500;">
-              Rice: 20kg &bull; Wheat: 8kg &bull; Sugar: 1kg &bull; Dal: 1kg
+              Loading configured policy rules…
             </div>
           </div>
         </div>

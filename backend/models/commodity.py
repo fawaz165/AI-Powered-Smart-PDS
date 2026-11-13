@@ -1,70 +1,89 @@
 from datetime import datetime
+import re
 
 
 class CommodityModel:
-    """Commodity representation (Rice, Wheat, Sugar, Dal) with verified Tamil Nadu PDS scheme rates."""
-    VALID_RATE_TYPES = ["OFFICIAL_NFSA", "STATE_SUBSIDY", "DEMONSTRATION"]
+    """Commodity catalog record with explicit scheme classification and category prices."""
 
-    @staticmethod
-    def create_doc(commodity_code, name, unit="kg", subsidized_price=0.0, description=None,
-                   rate_type="OFFICIAL_NFSA", market_price=None, is_demonstration=None,
-                   category_pricing=None, official_source=None):
+    VALID_SCHEME_CLASSIFICATIONS = ["NFSA", "TAMIL_NADU_STATE_PDS", "DEMO_CUSTOM"]
+    VALID_RATE_TYPES = ["OFFICIAL_NFSA", "STATE_SUBSIDY", "DEMONSTRATION"]
+    CATEGORY_KEYS = ("AAY", "PHH", "NPHH")
+    LEGACY_TO_SCHEME = {
+        "OFFICIAL_NFSA": "NFSA",
+        "STATE_SUBSIDY": "TAMIL_NADU_STATE_PDS",
+        "DEMONSTRATION": "DEMO_CUSTOM",
+    }
+    SCHEME_TO_LEGACY = {value: key for key, value in LEGACY_TO_SCHEME.items()}
+
+    @classmethod
+    def is_reliable_verification_source(cls, source: str) -> bool:
+        """
+        Validates whether a verification source is reliable.
+        Must be a non-empty official URL (http/https) or recognized government/statutory reference.
+        Rejects empty, generic, placeholder, or demonstration strings.
+        """
+        if not source:
+            return False
+        s = str(source).strip()
+        if s.lower() in ("none", "null", "n/a", "na", "undefined", "unverified", "demo", "test", ""):
+            return False
+        if re.match(r"^https?://[^\s]+$", s, re.IGNORECASE):
+            return True
+        authority_keywords = ["act", "gov", "cooperative", "gazette", "order", "ministry", "department", "scale", "pds", "tn.gov", "nic.in"]
+        if any(kw in s.lower() for kw in authority_keywords) and len(s) >= 8:
+            return True
+        return False
+
+    @classmethod
+    def normalize_scheme_classification(cls, value=None, legacy_rate_type=None):
+        classification = str(value or "").strip().upper()
+        if classification in cls.VALID_SCHEME_CLASSIFICATIONS:
+            return classification
+        legacy = str(legacy_rate_type or "").strip().upper()
+        return cls.LEGACY_TO_SCHEME.get(legacy, "DEMO_CUSTOM")
+
+    @classmethod
+    def create_doc(cls, commodity_code, name, unit="kg", subsidized_price=None, description=None,
+                   rate_type=None, market_price=None, is_demonstration=None,
+                   category_pricing=None, official_source=None, scheme_classification=None,
+                   verification_source=None, is_verified=False):
         code = commodity_code.strip().upper()
         comm_name = name.strip()
-        sub_price = max(0.0, float(subsidized_price))
-        mkt_price = float(market_price) if market_price is not None else round(max(sub_price * 3.5, 30.0), 2)
-        rtype = str(rate_type).strip().upper() if rate_type else "DEMONSTRATION"
-        if rtype not in CommodityModel.VALID_RATE_TYPES:
+        requested_scheme = str(scheme_classification or "").strip().upper()
+        rtype = str(rate_type or "").strip().upper()
+        scheme = cls.normalize_scheme_classification(requested_scheme, rtype)
+        if requested_scheme in cls.VALID_SCHEME_CLASSIFICATIONS or rtype not in cls.VALID_RATE_TYPES:
+            rtype = cls.SCHEME_TO_LEGACY[scheme]
+
+        prices = None
+        if isinstance(category_pricing, dict):
+            prices = {key: float(category_pricing[key]) for key in cls.CATEGORY_KEYS if key in category_pricing}
+        legacy_price = float(subsidized_price) if subsidized_price not in (None, "") else None
+        if legacy_price is None and prices and len(prices) == len(cls.CATEGORY_KEYS):
+            legacy_price = min(prices.values())
+        benchmark = float(market_price) if market_price not in (None, "") else None
+        verification_ref = str(verification_source or "").strip() or None
+        is_reliable = cls.is_reliable_verification_source(verification_ref)
+        verified = bool(is_verified and scheme != "DEMO_CUSTOM" and is_reliable)
+        demo = scheme == "DEMO_CUSTOM" if is_demonstration is None else bool(is_demonstration)
+        if demo:
+            scheme = "DEMO_CUSTOM"
             rtype = "DEMONSTRATION"
-
-        # Calculate subsidy savings and discount percentage against reference market benchmark
-        subsidy_amount = round(max(0.0, mkt_price - sub_price), 2) if mkt_price else 0.0
-        subsidy_percentage = round(min(100.0, max(0.0, (subsidy_amount / mkt_price) * 100)), 2) if mkt_price and mkt_price > 0 else 0.0
-
-        # Verification: NFSA and verified Tamil Nadu State Welfare Subsidies (e.g. Special PDS Tur Dal, Free Rice/Wheat)
-        if is_demonstration is not None:
-            demo_flag = bool(is_demonstration)
-        else:
-            demo_flag = bool(rtype == "DEMONSTRATION")
-
-        is_verified = bool(not demo_flag and (
-            code in ["COM-RIC", "COM-WHT", "COM-SUG", "COM-DAL"] or
-            rtype in ["OFFICIAL_NFSA", "STATE_SUBSIDY"]
-        ))
-
-        # Category-based pricing (e.g., Sugar: AAY ₹13.50/kg, PHH/NPHH ₹25.00/kg)
-        default_category_pricing = None
-        if code == "COM-SUG":
-            default_category_pricing = {"AAY": 13.50, "PHH": 25.00, "NPHH": 25.00}
-        elif code in ["COM-RIC", "COM-WHT"]:
-            default_category_pricing = {"AAY": 0.0, "PHH": 0.0, "NPHH": 0.0}
-        elif code == "COM-DAL":
-            default_category_pricing = {"AAY": 30.0, "PHH": 30.0, "NPHH": 30.0}
-
-        cat_pricing = category_pricing if isinstance(category_pricing, dict) else default_category_pricing
-
-        # Official Scheme Source Documentation
-        default_sources = {
-            "COM-RIC": "Tamil Nadu Universal PDS & NFSA (Free Rice Scheme)",
-            "COM-WHT": "Tamil Nadu PDS & PMGKAY (Free Entitlement for eligible cardholders)",
-            "COM-SUG": "Central AAY Scheme (₹13.50/kg) & TNPDS State Order (₹25.00/kg for other cards)",
-            "COM-DAL": "Tamil Nadu Special Public Distribution System (Special PDS Scheme, ₹30.00/kg)"
-        }
-        source_doc = official_source or default_sources.get(code) or ("National Food Security Act (NFSA)" if rtype == "OFFICIAL_NFSA" else "Tamil Nadu State Welfare Order")
+            verified = False
 
         return {
             "commodity_code": code,
             "name": comm_name,
             "unit": unit.strip().lower(),
-            "subsidized_price": sub_price,
-            "market_price": mkt_price,
-            "category_pricing": cat_pricing,
-            "official_source": source_doc,
-            "subsidy_amount": subsidy_amount,
-            "subsidy_percentage": subsidy_percentage,
+            "subsidized_price": legacy_price,
+            "market_price": benchmark,
+            "category_pricing": prices,
             "rate_type": rtype,
-            "is_demonstration": demo_flag,
-            "is_verified": is_verified,
-            "description": description or f"Essential PDS staple grain: {comm_name}",
-            "created_at": datetime.utcnow()
+            "scheme_classification": scheme,
+            "official_source": str(official_source or "").strip() or None,
+            "verification_source": verification_ref,
+            "is_verified": verified,
+            "is_demonstration": demo,
+            "description": str(description or "").strip(),
+            "created_at": datetime.utcnow(),
         }

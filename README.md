@@ -5,7 +5,7 @@
 [![MongoDB 6.0+](https://img.shields.io/badge/MongoDB-6.0+-green.svg)](https://www.mongodb.com/)
 [![Scikit-Learn 1.9](https://img.shields.io/badge/Scikit--Learn-1.9.1-orange.svg)](https://scikit-learn.org/)
 [![XGBoost 3.2](https://img.shields.io/badge/XGBoost-3.2.0-red.svg)](https://xgboost.readthedocs.io/)
-[![Pytest 9.1](https://img.shields.io/badge/Tests-75%20Passed%20(100%25)-brightgreen.svg)](https://pytest.org/)
+[![Pytest 9.1](https://img.shields.io/badge/Tests-81%20Passed%20(100%25)-brightgreen.svg)](https://pytest.org/)
 [![Docker Compose](https://img.shields.io/badge/Docker%20Compose-Orchestrated-2496ED.svg)](https://www.docker.com/)
 
 An enterprise predictive intelligence and transparent ration management platform designed for the Public Distribution System (PDS) under the Targeted Public Distribution System (TPDS) framework.
@@ -77,6 +77,16 @@ Conventional food-grain distribution networks encounter recurring operational bo
 
 ## 5. Key Features
 
+- **Statutory NFSA Entitlement Calculation**: Automated monthly grain quotas strictly complying with the National Food Security Act (NFSA):
+  - **Priority Household (PHH)**: Exactly $5\text{ kg per person per month}$ (dynamically calculated: $\text{Family Size} \times 5\text{ kg}$).
+  - **Antyodaya Anna Yojana (AAY)**: Flat $35\text{ kg per household per month}$ regardless of family size.
+  - **Non-Priority Household (NPHH)**: Explicitly designated as *"State scheme – not configured"* unless an authorized state quota is recorded.
+  - Strict UI separation between statutory entitlements and optional/demo state-scheme allocations.
+- **Multi-Tier Commodity Pricing & Scheme Verification**: Subsidized catalog tracking category-specific prices (`AAY`, `PHH`, `NPHH`), statutory free distribution (`FREE (₹0.00)`), open-market benchmark savings calculations, and official scheme classification sources (`NFSA`, `Tamil Nadu State PDS`, `Demo / Custom`).
+- **Dynamic Depot Inventory & Procurement Intelligence**: Live inventory balances directly evaluated from MongoDB:
+  - $\text{Difference} = \text{Current Stock} - \text{Predicted Demand}$.
+  - $\text{Procurement Required} = \max(0, \text{Predicted Demand} - \text{Current Stock})$.
+  - Configurable 3-tier operational classification (**Shortage**, **Sufficient**, **Surplus**), explicit monthly forecast timeframes (`kg/month`), and automated safety-buffer replenishment tracking.
 - **Multi-Model Demand Forecasting**: Benchmarks Linear Regression, Decision Tree, Random Forest, and XGBoost using month-grouped chronological validation.
 - **Feature Ablation Transparency**: Evaluates demand prediction with and without statutory quotas to document target-derived feature influence and demographic predictive capability.
 - **Behavioral Outlier Scoring**: Unsupervised Isolation Forest evaluates transaction quantity, quota ratios, inter-transaction intervals, and collection frequency.
@@ -247,7 +257,7 @@ AI-Powered Smart PDS/
 │   ├── about.html                  # System overview and viva guide
 │   ├── css/style.css               # Styling system
 │   └── js/                         # API clients and view controllers
-├── tests/                          # 75 Automated unit and regression test cases
+├── tests/                          # 81 Automated unit and regression test cases
 ├── .github/workflows/ci-cd.yml     # Automated CI/CD pipeline configuration
 ├── Dockerfile                      # Hardened container image (non-root pdsuser)
 ├── docker-compose.yml              # Multi-container orchestration (Flask + MongoDB 6.0)
@@ -445,22 +455,38 @@ Verified against `backend/database/mongo.py`:
 - Renders dynamic distribution telemetry and commodity breakdown via Chart.js.
 
 ### 3. Beneficiary Registry Management
-- CRUD interface for cardholder registration and household management (`/api/beneficiaries`).
+- Complete CRUD interface for cardholder registration and household management (`/api/beneficiaries`).
 - Enforces statutory card type categories: **AAY** (Antyodaya Anna Yojana), **PHH** (Priority Household), and **NPHH** (Non-Priority Household).
+- Dynamic NFSA monthly entitlement computation:
+  - **PHH**: Family size $\times 5\text{ kg/person/month}$.
+  - **AAY**: Fixed $35\text{ kg/household/month}$.
+  - **NPHH**: Marked as *"State scheme – not configured"* unless an authorized custom state allocation is recorded.
+- Strict presentation separation between statutory NFSA entitlements and optional/demo state-scheme custom quotas.
+- Responsive registry table preventing horizontal overflow with accessible column actions and live summary cards.
 
-### 4. Depot Inventory & Concurrency Protection
-- Tracks warehouse stock balances per district and commodity.
+### 4. Food-Grain Commodity Catalog & Scheme Verification
+- Multi-tier pricing engine maintaining category-specific subsidized issue prices (`AAY`, `PHH`, `NPHH`), statutory free distribution (`FREE (₹0.00)`), and open-market benchmarks.
+- Automated discount and subsidy savings computations (both percentage and absolute savings vs. recorded market benchmarks).
+- Transparent scheme classification governance (`NFSA`, `Tamil Nadu State PDS`, `Demo / Custom`) verified against published statutory authorities.
+- Operational linkage telemetry tracking connected depot warehouses and completed distribution transactions, with deletion locks (HTTP `409 Conflict`) protecting commodities with active linkages.
+
+### 5. Depot Inventory & Concurrency Protection
+- Real-time stock balance tracking across commodities and regional depot warehouses (`/api/inventory`).
+- Dynamic calculation of stock differences ($\text{Current Stock} - \text{Predicted Demand}$) and procurement requirements ($\max(0, \text{Predicted Demand} - \text{Current Stock})$).
+- 3-tier operational inventory classifications: **Shortage** ($\text{Stock} < \text{Demand}$), **Sufficient** ($\text{Stock} \ge \text{Demand}$), and **Surplus** ($\text{Stock} > 1.5 \times \text{Demand}$).
+- Explicit monthly demand forecast timeframes (`kg/month`) and safety buffer replenishment indicators.
+- Modal stock adjustment with non-negative validation, previous balance display, and audit history logging.
 - Atomic stock decrements execute via `find_one_and_update` with `{"stock": {"$gte": requested_quantity}}`. Requests exceeding warehouse stock are rejected atomically with HTTP `400 Bad Request`.
 
-### 5. Distribution Ledger & Rate Limiting
+### 6. Distribution Ledger & Rate Limiting
 - Processes grain distribution with biometric simulation flags and cardholder quota validation.
 - Built-in 60-second duplicate transaction lock prevents inadvertent double-deductions.
 
-### 6. Fraud & Anomaly Audit Console
+### 7. Fraud & Anomaly Audit Console
 - Surfaces transactions where the Isolation Forest anomaly score falls below standard decision thresholds.
 - Provides a structured review portal with immutable decision logging, reviewer ID stamps, and audit justifications.
 
-### 7. Analytical Spreadsheet Reporting Engine
+### 8. Analytical Spreadsheet Reporting Engine
 - Programmatically compiles database records into formatted Microsoft Excel (`.xlsx`) workbooks using OpenPyXL.
 - Provides filtered exports for Inventory Balances, Distribution Transactions, Demand Forecasts, and Fraud Decisions.
 
@@ -691,14 +717,14 @@ All API endpoints, methods, and URL prefixes are verified against the Flask rout
 
 ## 16. Testing and Evaluation
 
-The system includes a 75-test automated test suite covering unit functionality, database concurrency, security guards, and integration lifecycles.
+The system includes an **81-test automated test suite** covering unit functionality, database concurrency, security guards, statutory entitlements, and integration lifecycles.
 
 ```bash
 # Execute the complete automated test suite
 python -m pytest tests/ -v
 ```
 
-### Verified Test Suite Breakdown (75/75 Passed - 100%)
+### Verified Test Suite Breakdown (81/81 Passed - 100%)
 
 Verified by foreground execution:
 
@@ -706,12 +732,12 @@ Verified by foreground execution:
 | :--- | :---: | :--- |
 | `test_anomaly_detection.py` | 2 | Isolation Forest scoring, outlier separation, feature array formatting |
 | `test_auth.py` | 3 | JWT token generation, invalid credential rejection, `/api/auth/me` guard |
-| `test_crud_apis.py` | 16 | Beneficiary and commodity catalog CRUD operations, ID auto-generation |
-| `test_demand_prediction.py` | 13 | Multi-commodity prediction, shortage calculations, safety stock limits |
+| `test_crud_apis.py` | 20 | Beneficiary NFSA entitlement validation, commodity category pricing, CRUD operations |
+| `test_demand_prediction.py` | 13 | Multi-commodity prediction, shortage calculations, safety stock limits, monthly timeframe |
 | `test_fraud_console_audit.py` | 4 | Human-in-the-loop review workflow, decision status updates |
 | `test_full_system_integration.py` | 1 | End-to-end operational lifecycle from registration to distribution |
 | `test_health.py` | 2 | `/api/health` connectivity and live MongoDB ping verification |
-| `test_inventory_stock.py` | 6 | Overdraw rejection, regional stock filtering, procurement calculations |
+| `test_inventory_stock.py` | 8 | Stock difference, shortage/surplus classifications, overdraw rejection, audit history |
 | `test_ml_audit_validation.py` | 5 | Month-grouped temporal split verification, zero data leakage checks |
 | `test_rbac_and_forecast_history.py` | 3 | Role-based permission enforcement and forecast history persistence |
 | `test_reports_and_fraud_audit.py` | 9 | OpenPyXL Excel file generation, MIME headers, and filter validation |
@@ -722,23 +748,23 @@ Verified by foreground execution:
 ============================= test session starts =============================
 platform win32 -- Python 3.11.4, pytest-9.1.1, pluggy-1.6.0
 rootdir: D:\AI-Powered Smart PDS
-collected 75 items
+collected 81 items
 
 tests/test_anomaly_detection.py ..                                       [  2%]
 tests/test_auth.py ...                                                   [  6%]
-tests/test_crud_apis.py ................                                 [ 28%]
-tests/test_demand_prediction.py .............                            [ 45%]
-tests/test_fraud_console_audit.py ....                                   [ 50%]
-tests/test_full_system_integration.py .                                  [ 52%]
-tests/test_health.py ..                                                  [ 54%]
-tests/test_inventory_stock.py ......                                     [ 62%]
-tests/test_ml_audit_validation.py .....                                  [ 69%]
-tests/test_rbac_and_forecast_history.py ...                              [ 73%]
-tests/test_reports_and_fraud_audit.py .........                          [ 85%]
+tests/test_crud_apis.py ....................                             [ 30%]
+tests/test_demand_prediction.py .............                            [ 46%]
+tests/test_fraud_console_audit.py ....                                   [ 51%]
+tests/test_full_system_integration.py .                                  [ 53%]
+tests/test_health.py ..                                                  [ 55%]
+tests/test_inventory_stock.py ........                                   [ 65%]
+tests/test_ml_audit_validation.py .....                                  [ 71%]
+tests/test_rbac_and_forecast_history.py ...                              [ 75%]
+tests/test_reports_and_fraud_audit.py .........                          [ 86%]
 tests/test_thread_safe_inventory.py ..                                   [ 88%]
 tests/test_transactions_audit.py .........                               [100%]
 
-============================= 75 passed in 22.39s =============================
+============================= 81 passed in 27.94s =============================
 ```
 
 ---

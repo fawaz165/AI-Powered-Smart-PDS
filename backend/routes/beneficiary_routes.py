@@ -37,22 +37,32 @@ def list_beneficiaries():
     beneficiaries = list(cursor)
     total_count = db.beneficiaries.count_documents(query)
 
-    # Dynamic category totals calculated from actual database records
+    # Return current policy-derived quotas and clear statutory entitlement breakdown without rewriting legacy records.
+    for beneficiary in beneficiaries:
+        beneficiary["monthly_quota"] = BeneficiaryModel.calculate_monthly_quota(
+            beneficiary.get("ration_card_type"), beneficiary.get("family_size", 1)
+        )
+        beneficiary["entitlement"] = BeneficiaryModel.get_entitlement_breakdown(
+            beneficiary.get("ration_card_type"),
+            beneficiary.get("family_size", 1),
+            beneficiary.get("monthly_quota")
+        )
+
+    # Dynamic category totals calculated from actual database records via centralized normalization
     categories = {"PHH": 0, "AAY": 0, "NPHH": 0}
     for b in db.beneficiaries.find({}, {"ration_card_type": 1}):
-        ctype = str(b.get("ration_card_type", "")).strip()
-        if "NPHH" in ctype or "Non-Priority" in ctype:
-            categories["NPHH"] += 1
-        elif "AAY" in ctype or "Antyodaya" in ctype:
-            categories["AAY"] += 1
-        else:
-            categories["PHH"] += 1
+        cat = BeneficiaryModel.normalize_card_category(b.get("ration_card_type"))
+        categories[cat] = categories.get(cat, 0) + 1
 
+    registry_total = db.beneficiaries.count_documents({})
+    category_total = sum(categories.values())
     return jsonify({
         "status": "success",
         "total": total_count,
         "count": len(beneficiaries),
         "categories": categories,
+        "summary": {"total": registry_total, "categories": categories,
+                    "category_total": category_total, "valid": registry_total == category_total},
         "data": beneficiaries
     }), 200
 
@@ -77,6 +87,14 @@ def get_beneficiary(beneficiary_id):
     if not beneficiary:
         return jsonify({"status": "error", "message": f"Beneficiary {beneficiary_id} not found"}), 404
 
+    beneficiary["monthly_quota"] = BeneficiaryModel.calculate_monthly_quota(
+        beneficiary.get("ration_card_type"), beneficiary.get("family_size", 1)
+    )
+    beneficiary["entitlement"] = BeneficiaryModel.get_entitlement_breakdown(
+        beneficiary.get("ration_card_type"),
+        beneficiary.get("family_size", 1),
+        beneficiary.get("monthly_quota")
+    )
     return jsonify({"status": "success", "data": beneficiary}), 200
 
 
@@ -120,6 +138,9 @@ def create_beneficiary():
     )
     db.beneficiaries.insert_one(doc)
     doc.pop("_id", None)
+    doc["entitlement"] = BeneficiaryModel.get_entitlement_breakdown(
+        doc.get("ration_card_type"), doc.get("family_size", 1), doc.get("monthly_quota")
+    )
     logger.info(f"Beneficiary registered: {bid} (Region: {doc.get('region')})")
 
     return jsonify({
@@ -187,6 +208,13 @@ def update_beneficiary(beneficiary_id):
         db.beneficiaries.update_one({"beneficiary_id": bid}, {"$set": update_fields})
 
     updated = db.beneficiaries.find_one({"beneficiary_id": bid}, {"_id": 0})
+    if updated:
+        updated["monthly_quota"] = BeneficiaryModel.calculate_monthly_quota(
+            updated.get("ration_card_type"), updated.get("family_size", 1)
+        )
+        updated["entitlement"] = BeneficiaryModel.get_entitlement_breakdown(
+            updated.get("ration_card_type"), updated.get("family_size", 1), updated.get("monthly_quota")
+        )
     logger.info(f"Beneficiary updated: {bid}")
     return jsonify({
         "status": "success",

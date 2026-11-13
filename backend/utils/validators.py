@@ -1,4 +1,5 @@
 import re
+import math
 
 
 def validate_beneficiary_payload(data):
@@ -86,15 +87,17 @@ def validate_commodity_payload(data):
     elif not re.match(r"^[A-Za-z][A-Za-z0-9\s\-_()]{1,49}$", name):
         errors.append("Commodity name must start with a letter and contain only alphanumeric characters, spaces, hyphens, and parentheses")
 
-    if "unit" in data:
+    if "unit" not in data or not str(data.get("unit", "")).strip():
+        errors.append("unit is required")
+    else:
         unit = str(data["unit"]).strip().lower()
-        if not unit:
-            errors.append("Measurement unit cannot be empty")
-        elif len(unit) > 15:
+        if len(unit) > 15:
             errors.append("Measurement unit must be under 15 characters")
 
     parsed_sub_price = None
-    if "subsidized_price" in data:
+    if "category_pricing" not in data and data.get("subsidized_price") in (None, ""):
+        errors.append("category_pricing or subsidized_price is required")
+    if "subsidized_price" in data and data["subsidized_price"] not in (None, ""):
         try:
             parsed_sub_price = float(data["subsidized_price"])
             if parsed_sub_price < 0:
@@ -106,22 +109,45 @@ def validate_commodity_payload(data):
     if "market_price" in data and data["market_price"] is not None and data["market_price"] != "":
         try:
             parsed_market_price = float(data["market_price"])
-            if parsed_market_price < 0:
+            if not math.isfinite(parsed_market_price) or parsed_market_price < 0:
                 errors.append("market_price cannot be negative")
         except (ValueError, TypeError):
             errors.append("market_price must be a valid numeric value")
 
-    # Subsidy relationship validation
-    if parsed_sub_price is not None and parsed_market_price is not None:
-        if parsed_market_price < parsed_sub_price:
-            errors.append("market_price cannot be less than subsidized_price")
+    category_prices = data.get("category_pricing")
+    parsed_category_prices = {}
+    if category_prices is not None:
+        if not isinstance(category_prices, dict):
+            errors.append("category_pricing must be an object with AAY, PHH and NPHH prices")
+        else:
+            for category in ("AAY", "PHH", "NPHH"):
+                if category not in category_prices:
+                    errors.append(f"category_pricing.{category} is required")
+                    continue
+                try:
+                    price = float(category_prices[category])
+                    if not math.isfinite(price) or price < 0:
+                        errors.append(f"category_pricing.{category} must be a finite non-negative price")
+                    else:
+                        parsed_category_prices[category] = price
+                except (ValueError, TypeError):
+                    errors.append(f"category_pricing.{category} must be numeric")
+
+    if parsed_market_price is not None:
+        prices_to_compare = list(parsed_category_prices.values()) or ([parsed_sub_price] if parsed_sub_price is not None else [])
+        if any(parsed_market_price < price for price in prices_to_compare):
+            errors.append("market_price cannot be less than an issue price")
+
+    classification = str(data.get("scheme_classification", "")).strip().upper()
+    if not classification and not data.get("rate_type"):
+        errors.append("scheme_classification is required")
+    if classification and classification not in ["NFSA", "TAMIL_NADU_STATE_PDS", "DEMO_CUSTOM"]:
+        errors.append("scheme_classification must be NFSA, TAMIL_NADU_STATE_PDS, or DEMO_CUSTOM")
 
     if "rate_type" in data and data["rate_type"]:
         rate_type = str(data["rate_type"]).strip().upper()
         if rate_type not in ["OFFICIAL_NFSA", "DEMONSTRATION", "STATE_SUBSIDY"]:
             errors.append("rate_type must be one of: OFFICIAL_NFSA, DEMONSTRATION, STATE_SUBSIDY")
-        elif rate_type == "OFFICIAL_NFSA" and parsed_sub_price is not None and parsed_sub_price > 15.0:
-            errors.append("Unverified price cannot be labeled as OFFICIAL_NFSA. NFSA statutory maximum is ₹13.50/kg for sugar and ₹3.00/kg for grains. Use 'STATE_SUBSIDY' or 'DEMONSTRATION' instead.")
 
     return errors
 

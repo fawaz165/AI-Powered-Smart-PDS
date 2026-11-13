@@ -81,6 +81,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           closeModal('add-beneficiary-modal');
           addForm.reset();
           await fetchBeneficiaries(false);
+          try { localStorage.setItem('smart_pds_beneficiary_updated', Date.now().toString()); } catch (_) {}
         }
       } catch (err) {
         showToast(err.message || 'Error registering beneficiary', 'error');
@@ -144,6 +145,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           showToast(`Cardholder ${bid} updated successfully!`, 'success');
           closeModal('edit-beneficiary-modal');
           await fetchBeneficiaries(false);
+          try { localStorage.setItem('smart_pds_beneficiary_updated', Date.now().toString()); } catch (_) {}
         }
       } catch (err) {
         showToast(err.message || 'Error updating cardholder', 'error');
@@ -172,35 +174,187 @@ async function loadEntitlementRules() {
 }
 
 /**
- * Computes monthly commodity entitlement quota following statutory NFSA schemes:
- * - AAY: Fixed family monthly quota (Rice 25kg, Wheat 10kg, Sugar 2kg, Dal 2kg = 35kg total grain)
- * - Priority (PHH): Per-member quota (Rice 5kg/person, Wheat 2kg/person, Sugar 1kg, Dal 1kg)
- * - Non-Priority (NPHH): Per-member quota (Rice 3kg/person, Wheat 1.5kg/person, Sugar 1kg, Dal 0.5kg)
+ * Robustly normalizes raw ration card type string into canonical category ('PHH', 'AAY', 'NPHH').
+ * Accounts for case differences, leading/trailing whitespace, punctuation, and substring permutations.
+ * Checks NPHH first to prevent false substring collision with 'Priority' / 'PHH'.
  */
-function computeMonthlyQuota(cardType, size) {
-  const s = Math.max(1, parseInt(size, 10) || 1);
-  const type = String(cardType || '');
-
-  if (type.includes('NPHH') || type.includes('Non-Priority')) {
-    const rice = Math.round(s * 3.0 * 10) / 10;
-    const wheat = Math.round(s * 1.5 * 10) / 10;
-    return {
-      quota: { Rice: rice, Wheat: wheat, Sugar: 1.0, Dal: 0.5 },
-      html: `<strong>Rice:</strong> ${rice}kg &bull; <strong>Wheat:</strong> ${wheat}kg &bull; <strong>Sugar:</strong> 1kg &bull; <strong>Dal:</strong> 0.5kg <span class="badge badge-info" style="font-size:0.7rem; margin-left: 6px;">Basic Allotment (3kg Rice + 1.5kg Wheat/person)</span>`
-    };
-  } else if (type.includes('AAY') || type.includes('Antyodaya')) {
-    return {
-      quota: { Rice: 25.0, Wheat: 10.0, Sugar: 2.0, Dal: 2.0 },
-      html: '<strong>Rice:</strong> 25kg &bull; <strong>Wheat:</strong> 10kg &bull; <strong>Sugar:</strong> 2kg &bull; <strong>Dal:</strong> 2kg <span class="badge badge-purple" style="font-size:0.7rem; margin-left: 6px;">Fixed Family Quota (35kg Grains)</span>'
-    };
-  } else {
-    const rice = s * 5;
-    const wheat = s * 2;
-    return {
-      quota: { Rice: rice, Wheat: wheat, Sugar: 1.0, Dal: 1.0 },
-      html: `<strong>Rice:</strong> ${rice}kg &bull; <strong>Wheat:</strong> ${wheat}kg &bull; <strong>Sugar:</strong> 1kg &bull; <strong>Dal:</strong> 1kg <span class="badge badge-warning" style="font-size:0.7rem; margin-left: 6px;">Per-Member Quota (5kg Rice + 2kg Wheat/person)</span>`
-    };
+function normalizeRationCardType(rawType) {
+  const s = String(rawType || '').trim().toUpperCase();
+  if (s.includes('NPHH') || s.includes('NON-PRIORITY') || s.includes('NON PRIORITY') || s.includes('NON_PRIORITY')) {
+    return 'NPHH';
   }
+  if (s.includes('AAY') || s.includes('ANTYODAYA') || s.includes('ANNA YOJANA')) {
+    return 'AAY';
+  }
+  if (s.includes('PHH') || s.includes('PRIORITY')) {
+    return 'PHH';
+  }
+  return 'PHH';
+}
+
+/**
+ * Computes statutory NFSA foodgrain entitlements and separate State-scheme allocations:
+ * - PHH: Statutory NFSA = Family size × 5 kg foodgrains per person per month.
+ *        Additional state allocations: Wheat (2 kg/person), Sugar (1 kg), Dal (1 kg).
+ * - AAY: Statutory NFSA = 35 kg foodgrains per household per month (Fixed).
+ *        Additional state allocations: Sugar (2 kg), Dal (2 kg).
+ * - NPHH: Non-NFSA (no statutory central quota asserted).
+ *         State-scheme: Displays active state allocation, or "State scheme – not configured" if none exists.
+ * Guarantees: Never displays 0 kg when valid entitlement data exists.
+ */
+function computeMonthlyQuota(cardType, size, existingQuota = null, existingEntitlement = null) {
+  const s = Math.max(1, parseInt(size, 10) || 1);
+  const category = normalizeRationCardType(cardType);
+
+  let nfsaKg = null;
+  let nfsaBadgeHtml = '';
+  let nfsaFormulaText = '';
+  let stateAllocationsList = [];
+  let stateAllocationsText = '';
+
+  if (category === 'PHH') {
+    nfsaKg = s * 5;
+    nfsaBadgeHtml = `<span class="badge badge-nfsa"><i class="fa-solid fa-wheat-awn"></i> NFSA: ${nfsaKg} kg/mo</span>`;
+    nfsaFormulaText = `(${s} member${s > 1 ? 's' : ''} &times; 5 kg/person)`;
+
+    if (existingEntitlement && existingEntitlement.state_allocations_text) {
+      stateAllocationsText = existingEntitlement.state_allocations_text;
+    } else {
+      let quota = (existingQuota && typeof existingQuota === 'object' && Object.keys(existingQuota).length > 0)
+        ? { ...existingQuota }
+        : { Rice: s * 5.0, Wheat: s * 2.0, Sugar: 1.0, Dal: 1.0 };
+
+      Object.entries(quota).forEach(([comm, val]) => {
+        if (comm !== 'Rice' && comm !== 'Foodgrains' && Number(val) > 0) {
+          const num = Number(val);
+          stateAllocationsList.push(`${escapeHtml(comm)} ${Number.isInteger(num) ? num : num.toFixed(1)}kg`);
+        }
+      });
+      stateAllocationsText = stateAllocationsList.length > 0
+        ? stateAllocationsList.join(', ')
+        : 'None configured';
+    }
+
+  } else if (category === 'AAY') {
+    nfsaKg = 35;
+    nfsaBadgeHtml = `<span class="badge badge-nfsa-aay"><i class="fa-solid fa-wheat-awn"></i> NFSA: 35 kg/mo</span>`;
+    nfsaFormulaText = `(Fixed 35 kg/household)`;
+
+    if (existingEntitlement && existingEntitlement.state_allocations_text) {
+      stateAllocationsText = existingEntitlement.state_allocations_text;
+    } else {
+      let quota = (existingQuota && typeof existingQuota === 'object' && Object.keys(existingQuota).length > 0)
+        ? { ...existingQuota }
+        : { Rice: 25.0, Wheat: 10.0, Sugar: 2.0, Dal: 2.0 };
+
+      Object.entries(quota).forEach(([comm, val]) => {
+        if (comm !== 'Rice' && comm !== 'Wheat' && comm !== 'Foodgrains' && Number(val) > 0) {
+          const num = Number(val);
+          stateAllocationsList.push(`${escapeHtml(comm)} ${Number.isInteger(num) ? num : num.toFixed(1)}kg`);
+        }
+      });
+      stateAllocationsText = stateAllocationsList.length > 0
+        ? stateAllocationsList.join(', ')
+        : 'None configured';
+    }
+
+  } else { // NPHH
+    nfsaKg = null;
+    nfsaBadgeHtml = `<span class="badge badge-non-nfsa"><i class="fa-solid fa-circle-minus"></i> Non-NFSA</span>`;
+    nfsaFormulaText = `(No statutory central quota)`;
+
+    if (existingEntitlement && existingEntitlement.state_allocations_text) {
+      stateAllocationsText = existingEntitlement.state_allocations_text;
+    } else {
+      let quota = (existingQuota && typeof existingQuota === 'object' && Object.keys(existingQuota).length > 0)
+        ? { ...existingQuota }
+        : { Rice: Number((s * 3.0).toFixed(1)), Wheat: Number((s * 1.5).toFixed(1)), Sugar: 1.0, Dal: 0.5 };
+
+      const hasActualAllocation = Object.values(quota).some(v => Number(v) > 0);
+      if (hasActualAllocation) {
+        Object.entries(quota).forEach(([comm, val]) => {
+          if (Number(val) > 0) {
+            const num = Number(val);
+            stateAllocationsList.push(`${escapeHtml(comm)} ${Number.isInteger(num) ? num : num.toFixed(1)}kg`);
+          }
+        });
+        stateAllocationsText = stateAllocationsList.length > 0
+          ? stateAllocationsList.join(', ')
+          : 'State scheme – not configured';
+      } else {
+        stateAllocationsText = 'State scheme – not configured';
+      }
+    }
+  }
+
+  // HTML for directory table cell (compact, responsive, clearly separated)
+  const isNphhNotConfigured = category === 'NPHH' && stateAllocationsText.includes('not configured');
+  const tableHtml = `
+    <div class="entitlement-cell-content">
+      <div class="nfsa-entitlement-row">
+        ${nfsaBadgeHtml}
+        <span class="entitlement-formula">${nfsaFormulaText}</span>
+      </div>
+      <div class="state-scheme-row">
+        <span class="state-label">State/Demo:</span>
+        <span class="state-commodities ${isNphhNotConfigured ? 'text-muted' : ''}">${stateAllocationsText}</span>
+      </div>
+    </div>
+  `;
+
+  // HTML for modal previews (Add / Edit modals)
+  let previewHtml = '';
+  if (category === 'PHH') {
+    previewHtml = `
+      <div style="display:flex; flex-direction:column; gap:5px;">
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <span class="badge badge-nfsa"><i class="fa-solid fa-wheat-awn"></i> Statutory NFSA: ${nfsaKg} kg/month</span>
+          <span style="color:var(--text-muted); font-size:0.78rem;">(${s} member${s > 1 ? 's' : ''} &times; 5 kg/person/month)</span>
+        </div>
+        <div style="font-size:0.8rem; color:var(--text-secondary); line-height:1.4;">
+          <strong style="color:var(--text-muted); font-size:0.72rem; text-transform:uppercase; letter-spacing:0.03em;">Additional State Welfare:</strong>
+          <span style="color:var(--text-primary); margin-left:4px;">${stateAllocationsText}</span>
+        </div>
+      </div>
+    `;
+  } else if (category === 'AAY') {
+    previewHtml = `
+      <div style="display:flex; flex-direction:column; gap:5px;">
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <span class="badge badge-nfsa-aay"><i class="fa-solid fa-wheat-awn"></i> Statutory NFSA: 35 kg/month</span>
+          <span style="color:var(--text-muted); font-size:0.78rem;">(Fixed 35 kg/household/month)</span>
+        </div>
+        <div style="font-size:0.8rem; color:var(--text-secondary); line-height:1.4;">
+          <strong style="color:var(--text-muted); font-size:0.72rem; text-transform:uppercase; letter-spacing:0.03em;">Additional State Welfare:</strong>
+          <span style="color:var(--text-primary); margin-left:4px;">${stateAllocationsText}</span>
+        </div>
+      </div>
+    `;
+  } else {
+    previewHtml = `
+      <div style="display:flex; flex-direction:column; gap:5px;">
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <span class="badge badge-non-nfsa"><i class="fa-solid fa-circle-minus"></i> Non-NFSA</span>
+          <span style="color:var(--text-muted); font-size:0.78rem;">(Non-Priority Household &bull; No statutory central quota)</span>
+        </div>
+        <div style="font-size:0.8rem; color:var(--text-secondary); line-height:1.4;">
+          <strong style="color:var(--text-muted); font-size:0.72rem; text-transform:uppercase; letter-spacing:0.03em;">State Scheme Allocation:</strong>
+          <span style="color:${isNphhNotConfigured ? 'var(--text-muted)' : 'var(--text-primary)'}; margin-left:4px;">${stateAllocationsText}</span>
+        </div>
+      </div>
+    `;
+  }
+
+  return {
+    category,
+    size: s,
+    nfsaKg,
+    quota: existingQuota,
+    stateAllocationsText,
+    tableHtml,
+    previewHtml,
+    html: previewHtml
+  };
 }
 
 /**
@@ -213,7 +367,7 @@ function updateEntitlementPreview() {
   const size = parseInt(document.getElementById('new-ben-size')?.value || '4', 10);
   const cardType = document.getElementById('new-ben-type')?.value || 'Priority (PHH)';
   const res = computeMonthlyQuota(cardType, size);
-  previewEl.innerHTML = res.html;
+  previewEl.innerHTML = res.previewHtml;
 }
 
 /**
@@ -226,7 +380,7 @@ function updateEditEntitlementPreview() {
   const size = parseInt(document.getElementById('edit-ben-size')?.value || '4', 10);
   const cardType = document.getElementById('edit-ben-type')?.value || 'Priority (PHH)';
   const res = computeMonthlyQuota(cardType, size);
-  previewEl.innerHTML = res.html;
+  previewEl.innerHTML = res.previewHtml;
 }
 
 /**
@@ -239,10 +393,10 @@ async function fetchBeneficiaries(isInitial = false) {
   }
 
   try {
-    const res = await API.getBeneficiaries({ limit: 1000 });
+    const res = await API.getBeneficiaries({ limit: 0 });
     if (res && res.status === 'success') {
       allBeneficiaries = res.data || [];
-      updateRegistryMetrics(allBeneficiaries, res.categories);
+      updateRegistryMetrics(allBeneficiaries, res.summary || res.categories);
       applyFilteringAndPagination();
     }
   } catch (err) {
@@ -263,17 +417,18 @@ function updateRegistryMetrics(beneficiaries, categorySummary = null) {
   let aayCount = 0;
   let nphhCount = 0;
 
-  if (categorySummary && typeof categorySummary === 'object' && ('PHH' in categorySummary || 'AAY' in categorySummary || 'NPHH' in categorySummary)) {
-    phhCount = Number(categorySummary.PHH) || 0;
-    aayCount = Number(categorySummary.AAY) || 0;
-    nphhCount = Number(categorySummary.NPHH) || 0;
-    total = phhCount + aayCount + nphhCount;
+  const categories = categorySummary?.categories || categorySummary;
+  if (categories && typeof categories === 'object' && ('PHH' in categories || 'AAY' in categories || 'NPHH' in categories)) {
+    phhCount = Number(categories.PHH) || 0;
+    aayCount = Number(categories.AAY) || 0;
+    nphhCount = Number(categories.NPHH) || 0;
+    total = Number(categorySummary?.total ?? (phhCount + aayCount + nphhCount));
   } else if (Array.isArray(beneficiaries)) {
     beneficiaries.forEach(b => {
-      const type = String(b.ration_card_type || '');
-      if (type.includes('NPHH') || type.includes('Non-Priority')) {
+      const cat = normalizeRationCardType(b.ration_card_type);
+      if (cat === 'NPHH') {
         nphhCount++;
-      } else if (type.includes('AAY') || type.includes('Antyodaya')) {
+      } else if (cat === 'AAY') {
         aayCount++;
       } else {
         phhCount++;
@@ -361,39 +516,36 @@ function renderBeneficiariesTable(beneficiaries) {
     const rawType = b.ration_card_type || 'Priority (PHH)';
     const safeType = escapeHtml(rawType);
     const safeCardNum = escapeHtml(b.ration_card_number || `RC-${b.beneficiary_id}`);
-    const badgeTypeClass = (rawType.includes('NPHH') || rawType.includes('Non-Priority'))
+    const category = normalizeRationCardType(rawType);
+    const badgeTypeClass = category === 'NPHH'
       ? 'badge-info'
-      : ((rawType.includes('AAY') || rawType.includes('Antyodaya')) ? 'badge-purple' : 'badge-warning');
+      : (category === 'AAY' ? 'badge-purple' : 'badge-warning');
 
-    // Dynamic monthly quota rendering from database object or calculated standard
-    let quotaHtml = 'Standard Quota';
-    if (b.monthly_quota && typeof b.monthly_quota === 'object') {
-      quotaHtml = Object.entries(b.monthly_quota)
-        .map(([comm, qty]) => `<span style="white-space: nowrap;"><strong>${escapeHtml(comm)}:</strong> ${qty}kg</span>`)
-        .join(' &bull; ');
-    } else {
-      const q = computeMonthlyQuota(rawType, safeSize);
-      quotaHtml = Object.entries(q.quota)
-        .map(([comm, qty]) => `<span style="white-space: nowrap;"><strong>${comm}:</strong> ${qty}kg</span>`)
-        .join(' &bull; ');
-    }
+    const catLabel = category === 'AAY' ? 'AAY' : (category === 'PHH' ? 'PHH' : 'NPHH');
+    const catSub = category === 'AAY' ? 'Antyodaya' : (category === 'PHH' ? 'Priority' : 'Non-Priority');
+
+    const quota = computeMonthlyQuota(rawType, safeSize, b.monthly_quota, b.entitlement);
+    const quotaHtml = quota.tableHtml;
 
     return `
       <tr>
         <td>
           <strong>${safeBid}</strong>
-          <div style="font-size:0.75rem; color:var(--text-secondary); margin-top: 2px;">
-            <i class="fa-solid fa-id-card" style="margin-right: 3px; font-size: 0.7rem;"></i>${safeCardNum}
+          <div style="font-size:0.72rem; color:var(--text-secondary); margin-top: 2px;">
+            <i class="fa-solid fa-id-card" style="margin-right: 3px; font-size: 0.68rem; color: var(--text-muted);"></i>${safeCardNum}
           </div>
         </td>
         <td><strong>${safeName}</strong></td>
         <td><span class="badge badge-info">${safeRegion}</span></td>
-        <td>${safeSize} Member${safeSize === 1 ? '' : 's'}</td>
-        <td><span class="badge ${badgeTypeClass}">${safeType}</span></td>
-        <td style="font-size:0.8rem; color:var(--text-secondary); max-width: 280px; line-height: 1.4;">${quotaHtml}</td>
-        <td><span class="badge badge-success"><i class="fa-solid fa-circle-check" style="font-size:0.65rem;"></i> Active</span></td>
+        <td style="text-align: center; white-space: nowrap;"><strong>${safeSize}</strong> <span style="font-size:0.72rem; color:var(--text-secondary);">${safeSize === 1 ? 'member' : 'members'}</span></td>
         <td>
-          <div style="display: flex; gap: 6px; align-items: center;">
+          <span class="badge ${badgeTypeClass}" title="${safeType}">${catLabel}</span>
+          <div style="font-size:0.72rem; color:var(--text-secondary); margin-top: 2px;">${catSub}</div>
+        </td>
+        <td>${quotaHtml}</td>
+        <td style="text-align: center;"><span class="badge badge-success"><i class="fa-solid fa-circle-check" style="font-size:0.65rem;"></i> Active</span></td>
+        <td style="text-align: right;">
+          <div style="display: inline-flex; gap: 6px; align-items: center; justify-content: flex-end;">
             <button class="btn btn-secondary btn-sm" title="Edit Cardholder" onclick="openEditBeneficiaryModal('${safeBid}')">
               <i class="fa-solid fa-pen-to-square"></i> Edit
             </button>
@@ -511,6 +663,7 @@ async function executeSafeDeleteBeneficiary() {
       showToast(`Beneficiary ${targetDeleteBeneficiaryId} deleted successfully.`, 'info');
       closeModal('delete-beneficiary-modal');
       await fetchBeneficiaries(false);
+      try { localStorage.setItem('smart_pds_beneficiary_updated', Date.now().toString()); } catch (_) {}
     }
   } catch (err) {
     // If blocked by backend transaction protection, display clear explanation toast

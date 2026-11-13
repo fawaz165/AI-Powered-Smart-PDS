@@ -1,210 +1,145 @@
 from flask import Blueprint, request, jsonify
+import math
 import re
 from backend.database.mongo import get_db
 from backend.models.commodity import CommodityModel
-from backend.services.auth_service import token_required, role_required
+from backend.services.auth_service import role_required
 from backend.utils.validators import validate_commodity_payload
 from backend.utils.logger import logger
 
 commodity_bp = Blueprint("commodities", __name__, url_prefix="/api/commodities")
 
 
+def _safe_number(value):
+    try:
+        result = float(value)
+        return result if math.isfinite(result) else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _enrich_commodity(record, db):
+    """Enrich a Mongo record without filling missing prices or mutating stored data."""
+    c = dict(record)
+    code = str(c.get("commodity_code", ""))
+    name = str(c.get("name", ""))
+    scheme = CommodityModel.normalize_scheme_classification(
+        c.get("scheme_classification"), c.get("rate_type")
+    )
+    v_source = c.get("verification_source") or c.get("official_source")
+    is_reliable = CommodityModel.is_reliable_verification_source(v_source)
+    verified = bool(c.get("is_verified") and is_reliable and scheme != "DEMO_CUSTOM")
+    c["verification_source"] = v_source
+    c["scheme_classification"] = scheme
+    c["is_verified"] = verified
+    c["is_demonstration"] = scheme == "DEMO_CUSTOM"
+    c["rate_type"] = c.get("rate_type") or CommodityModel.SCHEME_TO_LEGACY[scheme]
+
+    c["linked_inventory_count"] = db.inventory.count_documents({
+        "$or": [
+            {"commodity": {"$regex": f"^{re.escape(name)}$", "$options": "i"}},
+            {"commodity_code": code}, {"commodity": code}
+        ]
+    })
+    c["linked_transactions_count"] = db.transactions.count_documents({
+        "$or": [
+            {"commodity": {"$regex": f"^{re.escape(name)}$", "$options": "i"}},
+            {"commodity_code": code}, {"commodity": code}
+        ]
+    })
+
+    benchmark = _safe_number(c.get("market_price"))
+    c["market_price"] = benchmark
+    prices = c.get("category_pricing") if isinstance(c.get("category_pricing"), dict) else {}
+    discounts = {}
+    savings = {}
+    category_details = {}
+    for category in CommodityModel.CATEGORY_KEYS:
+        issue_price = _safe_number(prices.get(category))
+        is_free = (issue_price == 0.0)
+        is_demo = (scheme == "DEMO_CUSTOM")
+        if benchmark is not None and benchmark > 0 and issue_price is not None and issue_price >= 0 and benchmark >= issue_price:
+            savings[category] = round(benchmark - issue_price, 2)
+            discounts[category] = round((benchmark - issue_price) / benchmark * 100, 2)
+
+        if issue_price is None:
+            rate_status = "MISSING"
+            rate_label = "Missing / Not Recorded"
+        elif is_free:
+            rate_status = "FREE_ENTITLEMENT"
+            rate_label = "Free Entitlement (₹0.00)"
+        elif is_demo:
+            rate_status = "SYNTHETIC_DEMO"
+            rate_label = f"Demo Rate (₹{issue_price:.2f})"
+        else:
+            rate_status = "ACTUAL_SUBSIDIZED"
+            rate_label = f"Subsidized (₹{issue_price:.2f})"
+
+        category_details[category] = {
+            "price": issue_price,
+            "is_free": is_free,
+            "is_demo": is_demo,
+            "rate_status": rate_status,
+            "rate_label": rate_label,
+            "saving": savings.get(category),
+            "discount": discounts.get(category)
+        }
+
+    c["category_savings"] = savings
+    c["category_discounts"] = discounts
+    c["category_details"] = category_details
+    c["valid_benchmark_categories"] = list(discounts)
+
+    base_price = _safe_number(c.get("subsidized_price"))
+    if base_price is not None and base_price >= 0 and benchmark is not None and benchmark > 0 and benchmark >= base_price:
+        c["subsidy_amount"] = round(benchmark - base_price, 2)
+        c["subsidy_percentage"] = round((benchmark - base_price) / benchmark * 100, 2)
+    else:
+        c["subsidy_amount"] = None
+        c["subsidy_percentage"] = None
+    return c
+
+
 @commodity_bp.route("", methods=["GET"])
 def list_commodities():
-    """Lists all registered commodities enriched with linked inventory and transaction counts."""
     db = get_db()
-    # Filter out corrupted records with negative pricing if any
-    commodities = list(db.commodities.find({"subsidized_price": {"$gte": 0}}, {"_id": 0}).sort("commodity_code", 1))
+    records = list(db.commodities.find({}, {"_id": 0}).sort("commodity_code", 1))
+    commodities = [_enrich_commodity(record, db) for record in records]
 
-    # Optimized batch aggregation for operational inventory and transaction linkages
-    inv_counts = {}
-    try:
-        inv_agg = db.inventory.aggregate([
-            {"$group": {"_id": "$commodity", "count": {"$sum": 1}}}
-        ])
-        for doc in inv_agg:
-            if doc.get("_id"):
-                inv_counts[str(doc["_id"]).strip().lower()] = doc["count"]
-    except Exception as e:
-        logger.warning(f"Could not aggregate inventory counts: {e}")
-
-    txn_counts = {}
-    try:
-        txn_agg = db.transactions.aggregate([
-            {"$group": {"_id": "$commodity", "count": {"$sum": 1}}}
-        ])
-        for doc in txn_agg:
-            if doc.get("_id"):
-                txn_counts[str(doc["_id"]).strip().lower()] = doc["count"]
-    except Exception as e:
-        logger.warning(f"Could not aggregate transaction counts: {e}")
-
-    # Enrich each commodity with operational linkage statistics
-    for c in commodities:
-        cname = c.get("name", "")
-        ccode = c.get("commodity_code", "")
-        cname_k = cname.strip().lower()
-        ccode_k = ccode.strip().lower()
-
-        # Fast lookup from aggregation with fallback to point query if unmapped
-        inv_cnt = inv_counts.get(cname_k, inv_counts.get(ccode_k, None))
-        if inv_cnt is None:
-            inv_cnt = db.inventory.count_documents({
-                "$or": [
-                    {"commodity": {"$regex": f"^{re.escape(cname)}$", "$options": "i"}},
-                    {"commodity_code": ccode}
-                ]
-            })
-        c["linked_inventory_count"] = inv_cnt
-
-        txn_cnt = txn_counts.get(cname_k, txn_counts.get(ccode_k, None))
-        if txn_cnt is None:
-            txn_cnt = db.transactions.count_documents({
-                "$or": [
-                    {"commodity": {"$regex": f"^{re.escape(cname)}$", "$options": "i"}},
-                    {"commodity_code": ccode}
-                ]
-            })
-        c["linked_transactions_count"] = txn_cnt
-
-        # Subsidized pricing and benchmark calculations
-        sub_price = max(0.0, float(c.get("subsidized_price", 0.0)))
-        c["subsidized_price"] = sub_price
-        mkt_price = float(c["market_price"]) if c.get("market_price") is not None else None
-        if mkt_price is not None:
-            c["market_price"] = max(0.0, mkt_price)
-            c["subsidy_amount"] = round(max(0.0, c["market_price"] - sub_price), 2)
-            c["subsidy_percentage"] = round(min(100.0, max(0.0, ((c["market_price"] - sub_price) / (c["market_price"] or 1)) * 100)), 2)
-        else:
-            c["subsidy_amount"] = 0.0
-            c["subsidy_percentage"] = 0.0
-
-        if "rate_type" not in c:
-            c["rate_type"] = "OFFICIAL_NFSA" if ccode in ["COM-RIC", "COM-WHT", "COM-SUG"] else ("STATE_SUBSIDY" if ccode == "COM-DAL" else "DEMONSTRATION")
-
-        is_official = (c["rate_type"] in ["OFFICIAL_NFSA", "STATE_SUBSIDY"])
-        c["is_verified"] = bool(is_official and not c.get("is_demonstration", False) and (
-            ccode in ["COM-RIC", "COM-WHT", "COM-SUG", "COM-DAL"] or sub_price <= 30.0
-        ))
-        c["is_demonstration"] = bool(c.get("is_demonstration", False) or c["rate_type"] == "DEMONSTRATION")
-
-        # Category-based pricing fallback
-        if not c.get("category_pricing"):
-            if ccode == "COM-SUG":
-                c["category_pricing"] = {"AAY": 13.50, "PHH": 25.00, "NPHH": 25.00}
-            elif ccode in ["COM-RIC", "COM-WHT"]:
-                c["category_pricing"] = {"AAY": 0.0, "PHH": 0.0, "NPHH": 0.0}
-            elif ccode == "COM-DAL":
-                c["category_pricing"] = {"AAY": 30.0, "PHH": 30.0, "NPHH": 30.0}
-
-        # Official scheme source fallback
-        if not c.get("official_source"):
-            source_map = {
-                "COM-RIC": "Tamil Nadu Universal PDS & NFSA (Free Rice Scheme)",
-                "COM-WHT": "Tamil Nadu PDS & PMGKAY (Free Entitlement for eligible cardholders)",
-                "COM-SUG": "Central AAY Scheme (₹13.50/kg) & TNPDS State Order (₹25.00/kg for other cards)",
-                "COM-DAL": "Tamil Nadu Special Public Distribution System (Special PDS Scheme, ₹30.00/kg)"
-            }
-            c["official_source"] = source_map.get(ccode, "National Food Security Act (NFSA)" if c["rate_type"] == "OFFICIAL_NFSA" else "Tamil Nadu State Welfare Order")
-
-    # Dynamic summary statistics across valid catalog records
-    valid_benchmark_discounts = []
-    official_count = 0
-    demo_count = 0
-    for c in commodities:
-        if c.get("is_verified") and not c.get("is_demonstration"):
-            official_count += 1
-        else:
-            demo_count += 1
-
-        mkt = c.get("market_price")
-        sub = c.get("subsidized_price", 0.0)
-        if mkt is not None and mkt > 0 and mkt >= sub:
-            valid_benchmark_discounts.append(c["subsidy_percentage"])
-
-    avg_subsidy = round(sum(valid_benchmark_discounts) / len(valid_benchmark_discounts), 1) if valid_benchmark_discounts else 0.0
-
-    return jsonify({
-        "status": "success",
-        "count": len(commodities),
-        "data": commodities,
-        "summary": {
-            "total_count": len(commodities),
-            "official_count": official_count,
-            "demo_count": demo_count,
-            "benchmarked_count": len(valid_benchmark_discounts),
-            "average_subsidy_discount": avg_subsidy,
-            "averaging_method": "arithmetic_mean_of_valid_benchmark_discounts"
-        }
-    }), 200
+    discounts = [
+        discount
+        for commodity in commodities
+        for discount in commodity["category_discounts"].values()
+    ]
+    verified_count = sum(1 for c in commodities if c["is_verified"])
+    demo_count = sum(1 for c in commodities if c["scheme_classification"] == "DEMO_CUSTOM")
+    summary = {
+        "total_count": len(commodities),
+        "official_count": verified_count,
+        "demo_count": demo_count,
+        "benchmarked_count": len(discounts),
+        "average_subsidy_discount": round(sum(discounts) / len(discounts), 1) if discounts else None,
+        "averaging_method": "arithmetic_mean_of_valid_category_issue_prices_vs_recorded_benchmarks",
+    }
+    return jsonify({"status": "success", "count": len(commodities), "data": commodities, "summary": summary}), 200
 
 
 @commodity_bp.route("/<commodity_code>", methods=["GET"])
 def get_commodity(commodity_code):
-    """Fetches details of a specific commodity by code or name."""
     db = get_db()
     code = commodity_code.strip().upper()
-    com = db.commodities.find_one({"commodity_code": code}, {"_id": 0})
-    if not com:
-        # Also check by name
-        com = db.commodities.find_one({"name": {"$regex": f"^{re.escape(commodity_code)}$", "$options": "i"}}, {"_id": 0})
-    if not com:
+    record = db.commodities.find_one({"commodity_code": code})
+    if not record:
+        record = db.commodities.find_one({"name": {"$regex": f"^{re.escape(commodity_code)}$", "$options": "i"}})
+    if not record:
         return jsonify({"status": "error", "message": f"Commodity '{commodity_code}' not found"}), 404
-
-    cname = com.get("name", "")
-    ccode = com.get("commodity_code", code)
-    com["linked_inventory_count"] = db.inventory.count_documents({
-        "$or": [
-            {"commodity": {"$regex": f"^{re.escape(cname)}$", "$options": "i"}},
-            {"commodity_code": ccode}
-        ]
-    })
-    com["linked_transactions_count"] = db.transactions.count_documents({
-        "$or": [
-            {"commodity": {"$regex": f"^{re.escape(cname)}$", "$options": "i"}},
-            {"commodity_code": ccode}
-        ]
-    })
-
-    sub_price = max(0.0, float(com.get("subsidized_price", 0.0)))
-    com["subsidized_price"] = sub_price
-    mkt_price = float(com["market_price"]) if com.get("market_price") is not None else None
-    if mkt_price is not None:
-        com["market_price"] = max(0.0, mkt_price)
-        com["subsidy_amount"] = round(max(0.0, com["market_price"] - sub_price), 2)
-        com["subsidy_percentage"] = round(min(100.0, max(0.0, ((com["market_price"] - sub_price) / (com["market_price"] or 1)) * 100)), 2)
-    else:
-        com["subsidy_amount"] = 0.0
-        com["subsidy_percentage"] = 0.0
-
-    is_official = (com.get("rate_type") in ["OFFICIAL_NFSA", "STATE_SUBSIDY"])
-    com["is_verified"] = bool(is_official and (ccode in ["COM-RIC", "COM-WHT", "COM-SUG", "COM-DAL"] or sub_price <= 30.0) and not com.get("is_demonstration", False))
-    com["is_demonstration"] = bool(com.get("is_demonstration", False) or com.get("rate_type") == "DEMONSTRATION")
-
-    if not com.get("category_pricing"):
-        if ccode == "COM-SUG":
-            com["category_pricing"] = {"AAY": 13.50, "PHH": 25.00, "NPHH": 25.00}
-        elif ccode in ["COM-RIC", "COM-WHT"]:
-            com["category_pricing"] = {"AAY": 0.0, "PHH": 0.0, "NPHH": 0.0}
-        elif ccode == "COM-DAL":
-            com["category_pricing"] = {"AAY": 30.0, "PHH": 30.0, "NPHH": 30.0}
-
-    if not com.get("official_source"):
-        source_map = {
-            "COM-RIC": "Tamil Nadu Universal PDS & NFSA (Free Rice Scheme)",
-            "COM-WHT": "Tamil Nadu PDS & PMGKAY (Free Entitlement for eligible cardholders)",
-            "COM-SUG": "Central AAY Scheme (₹13.50/kg) & TNPDS State Order (₹25.00/kg for other cards)",
-            "COM-DAL": "Tamil Nadu Special Public Distribution System (Special PDS Scheme, ₹30.00/kg)"
-        }
-        com["official_source"] = source_map.get(ccode, "National Food Security Act (NFSA)" if com.get("rate_type") == "OFFICIAL_NFSA" else "Tamil Nadu State Welfare Order")
-
-    return jsonify({"status": "success", "data": com}), 200
+    record.pop("_id", None)
+    return jsonify({"status": "success", "data": _enrich_commodity(record, db)}), 200
 
 
 @commodity_bp.route("", methods=["POST"])
 @role_required("admin")
 def create_commodity():
-    """Registers a new commodity with validation, duplicate checks, and configurable pricing."""
     data = request.get_json(silent=True) or {}
     errors = validate_commodity_payload(data)
     if errors:
@@ -213,159 +148,116 @@ def create_commodity():
     code = data["commodity_code"].strip().upper()
     name = data["name"].strip()
     db = get_db()
-
-    # Duplicate code prevention
     if db.commodities.find_one({"commodity_code": code}):
         return jsonify({"status": "error", "message": f"Commodity code '{code}' already exists"}), 409
-
-    # Duplicate name prevention
     if db.commodities.find_one({"name": {"$regex": f"^{re.escape(name)}$", "$options": "i"}}):
         return jsonify({"status": "error", "message": f"Commodity name '{name}' already exists"}), 409
 
+    legacy_rate = data.get("rate_type")
+    scheme = CommodityModel.normalize_scheme_classification(data.get("scheme_classification"), legacy_rate)
     doc = CommodityModel.create_doc(
-        commodity_code=code,
-        name=name,
-        unit=data.get("unit", "kg"),
-        subsidized_price=data.get("subsidized_price", 0.0),
-        market_price=data.get("market_price"),
-        rate_type=data.get("rate_type", "OFFICIAL_NFSA"),
-        description=data.get("description")
+        commodity_code=code, name=name, unit=data.get("unit", "kg"),
+        subsidized_price=data.get("subsidized_price"), market_price=data.get("market_price"),
+        rate_type=legacy_rate, scheme_classification=scheme,
+        category_pricing=data.get("category_pricing"), description=data.get("description"),
+        official_source=data.get("official_source"), verification_source=data.get("verification_source"),
+        is_verified=False,
     )
     db.commodities.insert_one(doc)
     doc.pop("_id", None)
-    logger.info(f"Commodity created: {code} ({name}) - Price: ₹{doc['subsidized_price']}")
-
-    return jsonify({
-        "status": "success",
-        "message": f"Commodity '{name}' registered successfully",
-        "data": doc
-    }), 201
+    logger.info(f"Commodity created: {code} ({name})")
+    return jsonify({"status": "success", "message": f"Commodity '{name}' registered successfully", "data": _enrich_commodity(doc, db)}), 201
 
 
 @commodity_bp.route("/<commodity_code>", methods=["PUT"])
 @role_required("admin")
 def update_commodity(commodity_code):
-    """Updates commodity pricing, classification, or details."""
     data = request.get_json(silent=True) or {}
     code = commodity_code.strip().upper()
     db = get_db()
-
     existing = db.commodities.find_one({"commodity_code": code})
     if not existing:
         return jsonify({"status": "error", "message": f"Commodity '{code}' not found"}), 404
 
+    validation_data = {"commodity_code": code, "name": data.get("name", existing.get("name", "")),
+                       "unit": data.get("unit", existing.get("unit", "kg"))}
+    validation_data["scheme_classification"] = existing.get("scheme_classification") or CommodityModel.normalize_scheme_classification(None, existing.get("rate_type"))
+    validation_data["rate_type"] = existing.get("rate_type") or CommodityModel.SCHEME_TO_LEGACY[validation_data["scheme_classification"]]
+    for key in ("subsidized_price", "market_price", "category_pricing", "scheme_classification", "rate_type"):
+        if key in data:
+            validation_data[key] = data[key]
+        elif key in ("category_pricing", "market_price", "subsidized_price"):
+            validation_data[key] = existing.get(key)
+    # A legacy generic-price update means the same issue price for every
+    # category; validate it as such instead of against stale category rates.
+    if "subsidized_price" in data and "category_pricing" not in data:
+        validation_data.pop("category_pricing", None)
+    errors = validate_commodity_payload(validation_data)
+    if errors:
+        return jsonify({"status": "error", "errors": errors, "message": errors[0]}), 400
+
     update_fields = {}
-    if "name" in data and data["name"]:
+    if "name" in data:
         new_name = data["name"].strip()
         conflict = db.commodities.find_one({"name": {"$regex": f"^{re.escape(new_name)}$", "$options": "i"}, "commodity_code": {"$ne": code}})
         if conflict:
-            return jsonify({"status": "error", "message": f"Commodity name '{new_name}' is already used by another commodity"}), 409
+            return jsonify({"status": "error", "message": f"Commodity name '{new_name}' is already used"}), 409
         update_fields["name"] = new_name
-
-    if "subsidized_price" in data:
-        try:
-            s_price = float(data["subsidized_price"])
-            if s_price < 0:
-                return jsonify({"status": "error", "message": "subsidized_price cannot be negative"}), 400
-            update_fields["subsidized_price"] = s_price
-        except (ValueError, TypeError):
-            return jsonify({"status": "error", "message": "subsidized_price must be numeric"}), 400
-
-    if "market_price" in data and data["market_price"] is not None:
-        try:
-            m_price = float(data["market_price"])
-            if m_price < 0:
-                return jsonify({"status": "error", "message": "market_price cannot be negative"}), 400
-            update_fields["market_price"] = m_price
-        except (ValueError, TypeError):
-            return jsonify({"status": "error", "message": "market_price must be numeric"}), 400
-
-    if "rate_type" in data and data["rate_type"]:
-        rtype = str(data["rate_type"]).strip().upper()
-        if rtype in CommodityModel.VALID_RATE_TYPES:
-            update_fields["rate_type"] = rtype
-
-    # Validate pricing relationships and unverified official rate claims
-    eff_sub = update_fields.get("subsidized_price", existing.get("subsidized_price", 0.0))
-    eff_mkt = update_fields.get("market_price", existing.get("market_price"))
-    if eff_mkt is not None and eff_mkt < eff_sub:
-        return jsonify({"status": "error", "message": "market_price cannot be less than subsidized_price"}), 400
-
-    eff_rate = update_fields.get("rate_type", existing.get("rate_type", "DEMONSTRATION"))
-    if eff_rate == "OFFICIAL_NFSA" and eff_sub > 15.0:
-        return jsonify({"status": "error", "message": "Unverified price cannot be labeled as OFFICIAL_NFSA. NFSA statutory maximum is ₹13.50/kg for sugar and ₹3.00/kg for grains. Use 'STATE_SUBSIDY' or 'DEMONSTRATION' instead."}), 400
-
-    if eff_mkt is not None:
-        update_fields["subsidy_amount"] = round(max(0.0, eff_mkt - eff_sub), 2)
-        update_fields["subsidy_percentage"] = round(min(100.0, max(0.0, ((eff_mkt - eff_sub) / eff_mkt) * 100)), 2) if eff_mkt > 0 else 0.0
-
-    is_official = (eff_rate in ["OFFICIAL_NFSA", "STATE_SUBSIDY"])
-    is_verified = bool(is_official and (code in ["COM-RIC", "COM-WHT", "COM-SUG", "COM-DAL"] or eff_sub <= 30.0))
-    update_fields["is_verified"] = is_verified
-    update_fields["is_demonstration"] = bool(eff_rate == "DEMONSTRATION")
-
-    if "category_pricing" in data and isinstance(data["category_pricing"], dict):
-        update_fields["category_pricing"] = data["category_pricing"]
-    if "official_source" in data and data["official_source"]:
-        update_fields["official_source"] = data["official_source"].strip()
-
+    if "unit" in data:
+        update_fields["unit"] = data["unit"].strip().lower()
     if "description" in data:
         update_fields["description"] = data["description"].strip()
-    if "unit" in data and data["unit"]:
-        update_fields["unit"] = data["unit"].strip().lower()
+    if "category_pricing" in data:
+        prices = {k: float(data["category_pricing"][k]) for k in CommodityModel.CATEGORY_KEYS}
+        update_fields["category_pricing"] = prices
+        update_fields["subsidized_price"] = data.get("subsidized_price", min(prices.values()))
+    if "subsidized_price" in data:
+        update_fields["subsidized_price"] = float(data["subsidized_price"])
+        if "category_pricing" not in data:
+            generic_price = float(data["subsidized_price"])
+            update_fields["category_pricing"] = {key: generic_price for key in CommodityModel.CATEGORY_KEYS}
+    if "market_price" in data:
+        update_fields["market_price"] = _safe_number(data["market_price"])
+    if "scheme_classification" in data or "rate_type" in data:
+        scheme = CommodityModel.normalize_scheme_classification(
+            data.get("scheme_classification"), data.get("rate_type")
+        )
+        update_fields["scheme_classification"] = scheme
+        update_fields["rate_type"] = CommodityModel.SCHEME_TO_LEGACY[scheme]
+        update_fields["is_demonstration"] = scheme == "DEMO_CUSTOM"
+        update_fields["is_verified"] = False
+    if "category_pricing" in data or "subsidized_price" in data or "scheme_classification" in data or "rate_type" in data:
+        update_fields["is_verified"] = False
+        update_fields["verification_source"] = None
+    if "official_source" in data:
+        update_fields["official_source"] = str(data["official_source"] or "").strip() or None
 
     if update_fields:
         db.commodities.update_one({"commodity_code": code}, {"$set": update_fields})
-
-    updated = db.commodities.find_one({"commodity_code": code}, {"_id": 0})
-    logger.info(f"Commodity updated: {code}")
-    return jsonify({
-        "status": "success",
-        "message": f"Commodity '{code}' updated successfully",
-        "data": updated
-    }), 200
+    updated = db.commodities.find_one({"commodity_code": code})
+    updated.pop("_id", None)
+    return jsonify({"status": "success", "message": f"Commodity '{code}' updated successfully", "data": _enrich_commodity(updated, db)}), 200
 
 
 @commodity_bp.route("/<commodity_code>", methods=["DELETE"])
 @role_required("admin")
 def delete_commodity(commodity_code):
-    """
-    Safely deletes a commodity.
-    Blocks deletion if the commodity is linked to active inventory or transactions.
-    """
     code = commodity_code.strip().upper()
     db = get_db()
     existing = db.commodities.find_one({"commodity_code": code})
     if not existing:
         return jsonify({"status": "error", "message": f"Commodity '{code}' not found"}), 404
 
-    cname = existing.get("name", "")
-    ccode = existing.get("commodity_code", code)
-    inv_count = db.inventory.count_documents({
-        "$or": [
-            {"commodity": {"$regex": f"^{re.escape(cname)}$", "$options": "i"}},
-            {"commodity_code": ccode}
-        ]
-    })
-    txn_count = db.transactions.count_documents({
-        "$or": [
-            {"commodity": {"$regex": f"^{re.escape(cname)}$", "$options": "i"}},
-            {"commodity_code": ccode}
-        ]
-    })
-
-    if inv_count > 0 or txn_count > 0:
-        return jsonify({
-            "status": "error",
-            "message": f"Cannot delete commodity '{code}' ({cname}): linked to {inv_count} regional inventory record(s) and {txn_count} distribution transaction(s). Deletion blocked to preserve operational integrity."
-        }), 409
-
+    name = existing.get("name", "")
+    links = {"$or": [
+        {"commodity": {"$regex": f"^{re.escape(name)}$", "$options": "i"}},
+        {"commodity_code": code}, {"commodity": code}
+    ]}
+    inventory_count = db.inventory.count_documents(links)
+    transaction_count = db.transactions.count_documents(links)
+    if inventory_count or transaction_count:
+        return jsonify({"status": "error", "message": f"Cannot delete commodity '{code}': linked to {inventory_count} inventory record(s) and {transaction_count} transaction(s)."}), 409
     result = db.commodities.delete_one({"commodity_code": code})
-    if result.deleted_count == 0:
+    if result.deleted_count != 1:
         return jsonify({"status": "error", "message": f"Commodity '{code}' not found"}), 404
-
-    logger.info(f"Commodity safely deleted: {code}")
-    return jsonify({
-        "status": "success",
-        "message": f"Commodity '{code}' deleted successfully"
-    }), 200
+    return jsonify({"status": "success", "message": f"Commodity '{code}' deleted successfully"}), 200

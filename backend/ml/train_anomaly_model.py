@@ -30,10 +30,7 @@ ANOMALY_FEATURE_COLS = [
 
 
 def train_anomaly_models():
-    """
-    Trains Isolation Forest as primary anomaly detector for PDS transactions.
-    Extracts behavioral features and saves the trained model and scaler.
-    """
+
     print("=" * 60)
     print("AI-POWERED SMART PDS - ANOMALY DETECTION MODEL TRAINING")
     print("=" * 60)
@@ -49,8 +46,6 @@ def train_anomaly_models():
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
     
-    # Train Isolation Forest
-    # Contamination set to 0.04 (~4% expected outlier rate in PDS transactions)
     iso_forest = IsolationForest(
         n_estimators=150,
         max_samples="auto",

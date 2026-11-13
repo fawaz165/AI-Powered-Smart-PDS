@@ -31,7 +31,8 @@ def test_inventory_alerts_calculations_against_db(client):
     calc_total_shortage = round(sum(a["shortage"] for a in alerts), 2)
     calc_total_procurement = round(sum(a["recommended_procurement"] for a in alerts), 2)
     calc_shortage_count = sum(1 for a in alerts if a["shortage"] > 0 or a["status"] == "SHORTAGE")
-    calc_sufficient_count = len(alerts) - calc_shortage_count
+    calc_sufficient_count = sum(1 for a in alerts if a["status"] == "SUFFICIENT")
+    calc_surplus_count = sum(1 for a in alerts if a["status"] in ("SURPLUS", "EXCESS"))
 
     # Assert server aggregates exactly match individual records
     assert data["total_stock"] == calc_total_stock
@@ -39,6 +40,8 @@ def test_inventory_alerts_calculations_against_db(client):
     assert data["total_procurement"] == calc_total_procurement
     assert data["shortage_count"] == calc_shortage_count
     assert data["sufficient_count"] == calc_sufficient_count
+    assert data["surplus_count"] == calc_surplus_count
+    assert calc_shortage_count + calc_sufficient_count + calc_surplus_count == len(alerts)
 
     # Verify against MongoDB collection directly
     db = get_db()
@@ -109,7 +112,7 @@ def test_stock_edit_refreshes_alerts_and_procurement(client):
         assert item_after["current_stock"] == 10000.0
         assert item_after["shortage"] == 0.0
         assert item_after["recommended_procurement"] == 0.0
-        assert item_after["status"] in ["SUFFICIENT", "EXCESS"]
+        assert item_after["status"] in ["SUFFICIENT", "EXCESS", "SURPLUS"]
     finally:
         db = get_db()
         db.inventory.delete_many({"region": region})
@@ -189,4 +192,107 @@ def test_inventory_changes_consistent_with_excel_reports(client):
     # Last Stock Verification must not be 'N/A' when last_updated exists
     last_verification = data_row[6]
     assert last_verification != "N/A"
+
+
+def test_inventory_difference_and_surplus_classification(client):
+    """
+    Item 7: Verify Difference calculation, Shortage/Sufficient/Surplus status classifications,
+    and handling of sparse sample warnings without fabricating zero demand.
+    """
+    res = client.get("/api/inventory/alerts")
+    assert res.status_code == 200
+    data = res.get_json()
+    alerts = data["data"]
+
+    for alert in alerts:
+        stock = alert["current_stock"]
+        demand = alert["predicted_demand"]
+        difference = alert.get("difference")
+        status = alert["status"]
+
+        # 1. Difference calculation: Difference == Current Stock - Predicted Demand
+        expected_diff = round(stock - demand, 2)
+        assert difference == expected_diff
+
+        # 2. Status classification verification:
+        if stock < demand:
+            assert status == "SHORTAGE"
+            assert alert["classification"] == "Shortage"
+            assert alert["shortage"] == round(demand - stock, 2)
+            assert alert["recommended_procurement"] == alert["shortage"]
+        elif stock > round(demand * 1.5, 2):
+            assert status in ["SURPLUS", "EXCESS"]
+            assert alert["classification"] == "Surplus"
+            assert alert["shortage"] == 0.0
+            assert alert["recommended_procurement"] == 0.0
+        else:
+            assert status == "SUFFICIENT"
+            assert alert["classification"] == "Sufficient"
+            assert alert["shortage"] == 0.0
+            assert alert["recommended_procurement"] == 0.0
+
+        # 3. Forecast period metadata check and monthly demand period clarification
+        assert "forecast_period" in alert
+        assert "forecast_label" in alert
+        assert alert.get("demand_period") == "MONTHLY"
+        assert alert.get("demand_unit") == "kg/month"
+
+        # 4. Check handling of sparse/zero predictions without fabricating genuine zero demand
+        if alert.get("predicted_demand") == 0.0:
+            assert alert["insufficient_data"] is True
+            assert "Genuine monthly demand is not zero" in alert["data_quality_warning"]
+
+    # Verify top-level API metadata reflects monthly timeframe
+    assert data.get("demand_period") == "MONTHLY"
+    assert data.get("demand_unit") == "kg/month"
+
+
+def test_inventory_audit_history_persistence_and_api(client):
+    """
+    Item 8: Verify stock adjustment logs to inventory_audit, appends adjustment_history,
+    and returns via GET /api/inventory/history.
+    """
+    test_region = "AuditTestRegion"
+    test_commodity = "Wheat"
+    test_user = "OfficerAuditTest"
+
+    try:
+        # Initial stock creation
+        res1 = client.put("/api/inventory/update-stock", json={
+            "commodity": test_commodity,
+            "region": test_region,
+            "current_stock": 500.0,
+            "updated_by": test_user
+        })
+        assert res1.status_code == 200
+
+        # Secondary stock adjustment
+        res2 = client.put("/api/inventory/update-stock", json={
+            "commodity": test_commodity,
+            "region": test_region,
+            "current_stock": 750.0,
+            "updated_by": test_user
+        })
+        assert res2.status_code == 200
+        data2 = res2.get_json()["data"]
+        assert data2["previous_stock"] == 500.0
+        assert data2["current_stock"] == 750.0
+        assert data2["difference"] == 250.0
+        assert data2["updated_by"] == test_user
+
+        # Fetch audit history via endpoint
+        res_hist = client.get(f"/api/inventory/history?region={test_region}")
+        assert res_hist.status_code == 200
+        hist_data = res_hist.get_json()["data"]
+        assert len(hist_data) >= 2
+        latest = hist_data[0]
+        assert latest["region"] == test_region
+        assert latest["commodity"] == test_commodity
+        assert latest["new_stock"] == 750.0
+        assert latest["previous_stock"] == 500.0
+        assert latest["updated_by"] == test_user
+    finally:
+        db = get_db()
+        db.inventory.delete_many({"region": test_region})
+        db.inventory_audit.delete_many({"region": test_region})
 

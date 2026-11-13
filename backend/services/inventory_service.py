@@ -1,6 +1,6 @@
 import threading
 import re
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pymongo import ReturnDocument
 from backend.database.mongo import get_db
 from backend.models.inventory import InventoryModel
@@ -24,8 +24,11 @@ class InventoryService:
         })
 
     @classmethod
-    def update_stock(cls, commodity: str, region: str, new_stock: float):
-        """Direct administrative update of stock level with validation preventing negative values."""
+    def update_stock(cls, commodity: str, region: str, new_stock: float, user: str = None):
+        """
+        Direct administrative update of stock level with validation preventing negative values,
+        audit logging to db.inventory_audit, adjustment history preservation, and timestamp recording.
+        """
         try:
             new_stock = float(new_stock)
         except (ValueError, TypeError):
@@ -43,15 +46,73 @@ class InventoryService:
                 ],
                 "region": {"$regex": f"^{re.escape(region)}$", "$options": "i"}
             })
+
+            now_dt = datetime.utcnow()
+            responsible_user = user or "Administrator"
+            resolved_commodity = inv.get("commodity", commodity) if inv else commodity
+            commodity_code = inv.get("commodity_code") if inv else None
+            previous_stock = float(inv.get("current_stock", 0.0)) if inv else 0.0
+            difference = round(new_stock - previous_stock, 2)
+
+            audit_entry = {
+                "commodity": resolved_commodity,
+                "commodity_code": commodity_code,
+                "region": region,
+                "previous_stock": previous_stock,
+                "new_stock": round(new_stock, 2),
+                "difference": difference,
+                "timestamp": now_dt,
+                "updated_by": responsible_user,
+                "action": "MANUAL_STOCK_ADJUSTMENT"
+            }
+
             if inv:
                 db.inventory.update_one(
                     {"_id": inv["_id"]},
-                    {"$set": {"current_stock": round(new_stock, 2), "last_updated": datetime.utcnow()}}
+                    {
+                        "$set": {
+                            "current_stock": round(new_stock, 2),
+                            "previous_stock": previous_stock,
+                            "last_updated": now_dt,
+                            "updated_by": responsible_user
+                        },
+                        "$push": {
+                            "adjustment_history": {
+                                "$each": [audit_entry],
+                                "$slice": -50  # Retain recent 50 adjustments
+                            }
+                        }
+                    }
                 )
             else:
                 doc = InventoryModel.create_doc(commodity=commodity, region=region, current_stock=round(new_stock, 2))
+                doc["previous_stock"] = 0.0
+                doc["updated_by"] = responsible_user
+                doc["adjustment_history"] = [audit_entry]
                 db.inventory.insert_one(doc)
-            return True
+
+            # Insert into standalone audit collection for immutable history logs
+            try:
+                db.inventory_audit.insert_one(audit_entry)
+            except Exception as e:
+                logger.warning(f"Could not write to inventory_audit collection: {e}")
+
+            logger.info(
+                f"[Stock Update] {resolved_commodity} in {region} updated from {previous_stock} kg "
+                f"to {round(new_stock, 2)} kg (Delta: {difference:+} kg) by {responsible_user}."
+            )
+
+            return {
+                "success": True,
+                "commodity": resolved_commodity,
+                "commodity_code": commodity_code,
+                "region": region,
+                "previous_stock": previous_stock,
+                "current_stock": round(new_stock, 2),
+                "difference": difference,
+                "updated_by": responsible_user,
+                "last_updated": now_dt.isoformat()
+            }
 
     @classmethod
     def process_transaction_distribution(cls, commodity: str, region: str, quantity: float,
@@ -283,6 +344,49 @@ class InventoryService:
         alerts = []
 
         predicted_demand_map = predicted_demand_map or {}
+        now = datetime.utcnow()
+        forecast_month = now.month + 1
+        forecast_year = now.year
+        if forecast_month > 12:
+            forecast_month = 1
+            forecast_year += 1
+        forecast_period = f"{forecast_year:04d}-{forecast_month:02d}"
+        month_names = ["", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+        forecast_label = f"{month_names[forecast_month]} {forecast_year}"
+
+        # Supply the model with observed database features rather than fixed demo inputs.
+        beneficiary_stats = {}
+        allocations = {}
+        for beneficiary in db.beneficiaries.find({}, {"_id": 0, "region": 1, "family_size": 1, "monthly_quota": 1}):
+            region_key = beneficiary.get("region", "")
+            stats = beneficiary_stats.setdefault(region_key, {"count": 0, "family_total": 0})
+            stats["count"] += 1
+            stats["family_total"] += int(beneficiary.get("family_size", 0) or 0)
+            for name, amount in (beneficiary.get("monthly_quota") or {}).items():
+                key = (region_key, name.lower())
+                allocations[key] = allocations.get(key, 0.0) + float(amount or 0)
+
+        history_start = now - timedelta(days=90)
+        history_by_key = {}
+        for txn in db.transactions.find(
+            {"timestamp": {"$gte": history_start, "$lt": now}},
+            {"_id": 0, "commodity": 1, "region": 1, "quantity": 1, "timestamp": 1}
+        ):
+            stamp = txn.get("timestamp")
+            if isinstance(stamp, str):
+                try:
+                    parsed_stamp = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+                    stamp = parsed_stamp.astimezone(timezone.utc).replace(tzinfo=None) if parsed_stamp.tzinfo else parsed_stamp
+                except ValueError:
+                    continue
+            if not isinstance(stamp, datetime):
+                continue
+            key = (txn.get("commodity", "").lower(), txn.get("region", ""))
+            slot = history_by_key.setdefault(key, {"last_30_days": 0.0, "last_90_days": 0.0})
+            quantity = float(txn.get("quantity", 0) or 0)
+            slot["last_90_days"] += quantity
+            if stamp >= now - timedelta(days=30):
+                slot["last_30_days"] += quantity
 
         for item in items:
             commodity = item.get("commodity")
@@ -297,32 +401,90 @@ class InventoryService:
             # Look up predicted demand from explicit map or compute via MLService
             pred_key = f"{commodity}_{region_name}"
             predicted_demand = predicted_demand_map.get(pred_key)
+            prediction_available = True
+            raw_pred_val = None
+            is_insufficient = False
+            data_warning = None
+
             if predicted_demand is None:
                 try:
                     from backend.services.ml_service import MLService
-                    commodity_defaults = {
-                        "Rice": 3500.0,
-                        "Wheat": 1800.0,
-                        "Sugar": 900.0,
-                        "Dal": 650.0
-                    }
-                    prev_target = commodity_defaults.get(commodity, stock if stock > 0 else 1000.0)
+                    stats = beneficiary_stats.get(region_name, {"count": 0, "family_total": 0})
+                    sample_size = stats.get("count", 0)
+                    history = history_by_key.get((str(commodity).lower(), region_name), {})
+                    prior_month_demand = history.get("last_30_days", 0.0)
                     pred_output = MLService.predict_demand({
                         "commodity": commodity,
                         "commodity_code": commodity_code,
                         "region": region_name,
+                        "month": forecast_month,
+                        "year": forecast_year,
+                        "beneficiary_count": stats["count"],
+                        "avg_family_size": (stats["family_total"] / stats["count"]) if stats["count"] else 0,
+                        "previous_demand": prior_month_demand,
+                        "previous_offtake": prior_month_demand,
+                        "historical_average_3m": history.get("last_90_days", 0.0) / 3.0,
+                        "allocated_quota": allocations.get((region_name, str(commodity).lower()), 0.0),
                         "current_stock": stock,
-                        "previous_demand": prev_target
+                        "safety_stock": buffer
                     }, save_audit=False)
                     predicted_demand = float(pred_output.get("predicted_demand", 0.0))
-                except Exception:
-                    card_count = db.beneficiaries.count_documents({"region": region_name}) or 500
-                    default_quota = 5.0 if commodity == "Rice" else (3.0 if commodity == "Wheat" else 1.0)
-                    predicted_demand = card_count * default_quota
+                    raw_pred_val = pred_output.get("calculation_breakdown", {}).get("raw_pipeline_prediction")
 
+                    # Validate prediction against sample size & identify negative/unusually small outputs
+                    if raw_pred_val is not None and float(raw_pred_val) <= 0:
+                        is_insufficient = True
+                        data_warning = (
+                            f"Notice: Sparse cardholder sample size ({sample_size} registered in {region_name}). "
+                            f"Raw model output was non-positive ({float(raw_pred_val):.1f} kg); high forecast uncertainty. Genuine monthly demand is not zero."
+                        )
+                    elif sample_size < 5 and predicted_demand < 50.0:
+                        is_insufficient = True
+                        data_warning = (
+                            f"Notice: Unusually low predicted demand ({predicted_demand:.1f} kg) "
+                            f"due to small demographic sample size ({sample_size} registered cardholder(s))."
+                        )
+                except Exception as exc:
+                    logger.warning(f"Demand forecast unavailable for {commodity} in {region_name}: {exc}")
+                    predicted_demand = None
+                    prediction_available = False
+
+            if predicted_demand is not None and float(predicted_demand) <= 0.0:
+                is_insufficient = True
+                if not data_warning:
+                    data_warning = (
+                        f"Notice: Non-positive predicted demand ({float(predicted_demand):.1f} kg). "
+                        f"Genuine monthly foodgrain demand is not zero."
+                    )
+
+            if not prediction_available:
+                alerts.append({
+                    "commodity": commodity, "commodity_code": commodity_code, "region": region_name,
+                    "current_stock": round(stock, 2), "predicted_demand": None,
+                    "difference": None,
+                    "buffer_stock": round(buffer, 2), "shortage": 0.0,
+                    "recommended_procurement": 0.0, "safety_stock_included": bool(include_safety_stock),
+                    "prediction_available": False, "forecast_period": forecast_period,
+                    "forecast_label": forecast_label,
+                    "demand_period": "MONTHLY",
+                    "demand_unit": "kg/month",
+                    "forecast_timeframe": f"Monthly Forecast ({forecast_label})",
+                    "is_zero_demand": False,
+                    "status": "UNAVAILABLE", "classification": "Unavailable", "alert_level": "NOTICE",
+                    "insufficient_data": True,
+                    "data_quality_warning": "Demand forecast unavailable; no substitute value was used.",
+                    "message": "Demand forecast unavailable; no substitute value was used."
+                })
+                continue
+
+            predicted_demand = float(predicted_demand)
+
+            # Difference = Current Stock - Predicted Demand
+            difference = round(stock - predicted_demand, 2)
             raw_shortage = round(predicted_demand - stock, 2)
             shortage = round(max(0.0, raw_shortage), 2)
 
+            # Procurement Required = max(0, Predicted Demand - Current Stock)
             # Consistent procurement calculation: include safety buffer only when configured
             if include_safety_stock:
                 gross_target = round(predicted_demand + buffer, 2)
@@ -330,27 +492,32 @@ class InventoryService:
             else:
                 recommended_procurement = shortage
 
+            # Three clear statuses: Shortage, Sufficient, Surplus
             if shortage > 0:
                 status = "SHORTAGE"
+                classification = "Shortage"
                 alert_level = "CRITICAL" if stock <= buffer else "WARNING"
                 if include_safety_stock and buffer > 0:
-                    msg = f"Potential shortage of {shortage} kg detected. Recommended procurement: {recommended_procurement} kg (satisfies demand + {buffer} kg safety buffer)."
+                    msg = f"Potential shortage of {shortage:,.1f} kg detected. Recommended procurement: {recommended_procurement:,.1f} kg (satisfies demand + {buffer} kg safety buffer)."
                 else:
-                    msg = f"Potential shortage of {shortage} kg detected. Recommended procurement: {recommended_procurement} kg."
+                    msg = f"Stock deficit of {shortage:,.1f} kg below anticipated monthly demand ({predicted_demand:,.1f} kg). Procurement required: {recommended_procurement:,.1f} kg."
             else:
                 if include_safety_stock and stock < (predicted_demand + buffer):
                     status = "SHORTAGE" if recommended_procurement > 0 else "SUFFICIENT"
+                    classification = "Shortage" if recommended_procurement > 0 else "Sufficient"
                     alert_level = "WARNING"
-                    msg = f"Stock ({stock} kg) meets predicted demand ({predicted_demand} kg), but buffer deficit requires {recommended_procurement} kg replenishment."
+                    msg = f"Stock ({stock:,.1f} kg) meets predicted demand ({predicted_demand:,.1f} kg), but buffer deficit requires {recommended_procurement:,.1f} kg replenishment."
                 elif stock > (predicted_demand * 1.5):
-                    status = "EXCESS"
+                    status = "SURPLUS"
+                    classification = "Surplus"
                     alert_level = "NOTICE"
-                    excess_qty = round(stock - predicted_demand, 2)
-                    msg = f"Excess inventory detected: {excess_qty} kg above anticipated monthly demand."
+                    surplus_qty = round(stock - predicted_demand, 2)
+                    msg = f"Surplus inventory detected: {surplus_qty:,.1f} kg above anticipated monthly demand ({predicted_demand:,.1f} kg)."
                 else:
                     status = "SUFFICIENT"
+                    classification = "Sufficient"
                     alert_level = "NORMAL"
-                    msg = "Stock levels are optimal and sufficient to satisfy demand."
+                    msg = f"Stock levels ({stock:,.1f} kg) meet anticipated monthly demand ({predicted_demand:,.1f} kg)."
 
             alerts.append({
                 "commodity": commodity,
@@ -358,12 +525,25 @@ class InventoryService:
                 "region": region_name,
                 "current_stock": round(stock, 2),
                 "predicted_demand": round(predicted_demand, 2),
+                "difference": difference,
                 "buffer_stock": round(buffer, 2),
                 "shortage": shortage,
                 "recommended_procurement": recommended_procurement,
                 "safety_stock_included": bool(include_safety_stock),
+                "prediction_available": True,
+                "forecast_period": forecast_period,
+                "forecast_label": forecast_label,
+                "demand_period": "MONTHLY",
+                "demand_unit": "kg/month",
+                "forecast_timeframe": f"Monthly Forecast ({forecast_label})",
+                "is_zero_demand": (predicted_demand == 0.0),
                 "status": status,
+                "status_legacy": "EXCESS" if status == "SURPLUS" else status,
+                "classification": classification,
                 "alert_level": alert_level,
+                "insufficient_data": is_insufficient,
+                "data_quality_warning": data_warning,
+                "raw_pipeline_prediction": raw_pred_val,
                 "message": msg
             })
 
