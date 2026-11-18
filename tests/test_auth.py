@@ -132,3 +132,93 @@ def test_first_user_registration_succeeds_with_bootstrap_key(client, monkeypatch
     }, headers={"X-Bootstrap-Key": "secure_secret_setup_key_2026"})
     assert res.status_code == 201
     assert res.get_json()["status"] == "success"
+
+
+def test_first_user_registration_invalid_bootstrap_key(client, monkeypatch):
+    """Verifies that registration is rejected with 401 when an invalid bootstrap key is supplied."""
+    from backend.database.mongo import get_db
+    real_db = get_db()
+    monkeypatch.setenv("BOOTSTRAP_ADMIN_KEY", "correct_secure_bootstrap_key")
+
+    class FakeDB:
+        def __getattr__(self, name):
+            if name == "users":
+                class FakeUsers:
+                    def count_documents(self, *args, **kwargs):
+                        return 0
+                    def find_one(self, *args, **kwargs):
+                        return None
+                    def insert_one(self, *args, **kwargs):
+                        return real_db.users.insert_one(*args, **kwargs)
+                return FakeUsers()
+            return getattr(real_db, name)
+
+    monkeypatch.setattr("backend.routes.auth_routes.get_db", lambda: FakeDB())
+
+    res = client.post("/api/auth/register", json={
+        "username": "attacker_admin",
+        "password": "some_password_123",
+        "role": "admin"
+    }, headers={"X-Bootstrap-Key": "wrong_invalid_bootstrap_key"})
+    assert res.status_code == 401
+    assert "Authentication required" in res.get_json()["message"]
+
+
+def test_first_user_registration_non_admin_officer_rejected(client, monkeypatch):
+    """Verifies that when database has 0 users, non-admin (officer) registration is forbidden with 403."""
+    from backend.database.mongo import get_db
+    real_db = get_db()
+    monkeypatch.setenv("BOOTSTRAP_ADMIN_KEY", "secure_secret_setup_key_2026")
+
+    class FakeDB:
+        def __getattr__(self, name):
+            if name == "users":
+                class FakeUsers:
+                    def count_documents(self, *args, **kwargs):
+                        return 0
+                    def find_one(self, *args, **kwargs):
+                        return None
+                    def insert_one(self, *args, **kwargs):
+                        return real_db.users.insert_one(*args, **kwargs)
+                return FakeUsers()
+            return getattr(real_db, name)
+
+    monkeypatch.setattr("backend.routes.auth_routes.get_db", lambda: FakeDB())
+
+    res = client.post("/api/auth/register", json={
+        "username": "first_officer_user",
+        "password": "officer_pass_123",
+        "role": "officer"
+    }, headers={"X-Bootstrap-Key": "secure_secret_setup_key_2026"})
+    assert res.status_code == 403
+    assert "administrator" in res.get_json()["message"]
+
+
+def test_first_user_registration_non_admin_dealer_rejected(client, monkeypatch):
+    """Verifies that when database has 0 users, non-admin (dealer) registration is forbidden with 403."""
+    from backend.database.mongo import get_db
+    real_db = get_db()
+    monkeypatch.setenv("BOOTSTRAP_ADMIN_KEY", "secure_secret_setup_key_2026")
+
+    class FakeDB:
+        def __getattr__(self, name):
+            if name == "users":
+                class FakeUsers:
+                    def count_documents(self, *args, **kwargs):
+                        return 0
+                    def find_one(self, *args, **kwargs):
+                        return None
+                    def insert_one(self, *args, **kwargs):
+                        return real_db.users.insert_one(*args, **kwargs)
+                return FakeUsers()
+            return getattr(real_db, name)
+
+    monkeypatch.setattr("backend.routes.auth_routes.get_db", lambda: FakeDB())
+
+    res = client.post("/api/auth/register", json={
+        "username": "first_dealer_user",
+        "password": "dealer_pass_123",
+        "role": "dealer"
+    }, headers={"X-Bootstrap-Key": "secure_secret_setup_key_2026"})
+    assert res.status_code == 403
+    assert "administrator" in res.get_json()["message"]

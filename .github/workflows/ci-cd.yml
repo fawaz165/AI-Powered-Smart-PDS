@@ -105,6 +105,11 @@ jobs:
           push: ${{ steps.meta.outputs.push == 'true' && env.DOCKERHUB_TOKEN != '' }}
           tags: ${{ steps.meta.outputs.tag }}
 
-      - name: Simulated Production Deployment Step
+      - name: Report Build & Publishing Summary
         run: |
-          echo "Deployment successful: Image pushed and container ready for production orchestration."
+          if [ "${{ steps.meta.outputs.push }}" = "true" ] && [ -n "$DOCKERHUB_TOKEN" ]; then
+            echo "Docker image successfully built and published to Docker Hub as: ${{ steps.meta.outputs.tag }}"
+          else
+            echo "Docker image successfully built locally as: ${{ steps.meta.outputs.tag }}"
+            echo "Docker Hub publishing skipped: DOCKERHUB_USERNAME / DOCKERHUB_TOKEN credentials not configured."
+          fi

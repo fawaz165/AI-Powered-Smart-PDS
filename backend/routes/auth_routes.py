@@ -59,9 +59,9 @@ def register():
         return jsonify({"status": "error", "message": "Username and password required"}), 400
 
     # Authorization guard:
-    # 1. When no users exist (initial deployment), unrestricted admin registration is NOT permitted.
+    # 1. When no users exist (initial deployment), only an administrator account can be bootstrapped.
     #    Initial registration strictly requires a valid BOOTSTRAP_ADMIN_KEY from the environment,
-    #    or direct initialization via the CLI seed script (`python backend/database/seed_db.py`).
+    #    and non-admin roles (e.g., officer, dealer) are strictly prohibited for the first account.
     # 2. When users already exist, registering any new user account strictly requires an Administrator JWT token.
     if total_users == 0:
         bootstrap_key = os.getenv("BOOTSTRAP_ADMIN_KEY", "").strip()
@@ -71,6 +71,12 @@ def register():
                 "status": "error",
                 "message": "Authentication required. Initial setup requires a valid BOOTSTRAP_ADMIN_KEY header/token, or run the CLI seed script ('python backend/database/seed_db.py')."
             }), 401
+
+        if role != "admin":
+            return jsonify({
+                "status": "error",
+                "message": "Forbidden. Initial bootstrap registration is restricted exclusively to administrator ('admin') accounts."
+            }), 403
     else:
         auth_header = request.headers.get("Authorization", "")
         token = auth_header.split(" ")[1] if auth_header.startswith("Bearer ") else request.args.get("token")

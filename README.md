@@ -149,6 +149,10 @@ docker compose up -d --build
 
 Docker Compose builds the application image and starts the application and MongoDB containers.
 
+*Quick Windows Launchers:*
+- **Docker Compose (Full Stack):** Double-click `run.bat` or run `.\run.bat` in CMD / PowerShell.
+- **Native Python (Local App + Docker MongoDB):** Run `.\run.ps1` in PowerShell.
+
 ### Step 4: Verify the Containers
 
 ```bash
@@ -236,7 +240,7 @@ $env:MONGO_URI="mongodb://localhost:27017/smart_pds_test_db"; python -m pytest t
 MONGO_URI="mongodb://localhost:27017/smart_pds_test_db" python -m pytest tests/ -v
 ```
 
-The automated test suite reports **86 passed tests (100% pass rate)**.
+The automated test suite reports **89 passed tests (100% pass rate)**.
 
 ## 8. Troubleshooting
 
