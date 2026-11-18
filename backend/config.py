@@ -12,7 +12,17 @@ if env_path.exists():
 class Config:
     """Base Configuration for AI-Powered Smart PDS"""
     BASE_DIR = BASE_DIR
-    SECRET_KEY = os.getenv("SECRET_KEY", "smart_pds_default_secret_key_2026")
+    # Security: Read SECRET_KEY from environment or generate ephemeral key in production
+    _env_secret = os.getenv("SECRET_KEY", "").strip()
+    if not _env_secret:
+        if os.getenv("FLASK_ENV") == "production":
+            import secrets
+            SECRET_KEY = secrets.token_hex(32)
+        else:
+            SECRET_KEY = "smart_pds_development_secret_key_2026"
+    else:
+        SECRET_KEY = _env_secret
+
     FLASK_ENV = os.getenv("FLASK_ENV", "development")
     DEBUG = os.getenv("DEBUG", "True").lower() in ("true", "1", "yes")
     PORT = int(os.getenv("PORT", 5000))

@@ -117,6 +117,7 @@ unused_files_backup/
 backend/ml/backup_original/
 database_backups/
 backend/database/backups/
+scratch/
 
 # ------------------------------------------------------------------------------
 # 10. NODE (if applicable)

@@ -15,11 +15,14 @@ from backend.models.transaction import TransactionModel
 from backend.utils.logger import logger
 
 
-def seed_database():
+def seed_database(target_db=None):
     """Seeds the database with essential administrative data, initial commodities, inventory, and beneficiaries."""
-    db_inst = Database()
-    db = db_inst.db
-    logger.info("Initializing database seed process...")
+    if target_db is not None:
+        db = target_db
+    else:
+        db_inst = Database()
+        db = db_inst.db
+    logger.info(f"Initializing database seed process on database: {db.name}...")
 
     # 1. Seed Administrative User
     # 1. Seed Roles: Admin, District Officer, and FPS Dealer

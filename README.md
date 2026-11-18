@@ -161,7 +161,23 @@ To inspect application logs:
 docker compose logs -f web
 ```
 
-### Step 5: Open the Application
+### Step 5: Initialize the Database (One-Time Setup)
+
+On a fresh installation, run the seed script to create initial commodities, demonstration beneficiaries, and default accounts:
+
+**Docker Compose:**
+```bash
+docker compose exec web python backend/database/seed_db.py
+```
+
+**Local Native Python:**
+```bash
+python backend/database/seed_db.py
+```
+
+*Note: Database seeding is idempotent and does not overwrite existing records.*
+
+### Step 6: Open the Application
 
 | Service | URL |
 |---|---|
@@ -169,10 +185,21 @@ docker compose logs -f web
 | Health Check | http://localhost:5000/api/health |
 | ML Status | http://localhost:5000/api/ml-status |
 
+#### Demonstration Accounts
+
+| Role | Username | Password | Scope |
+|---|---|---|---|
+| Administrator | `admin` | `admin123` | System configuration, commodities, and fraud review |
+| District Officer | `officer_chennai` | `officer123` | Chennai regional demand, inventory, and transaction audit |
+| FPS Dealer | `dealer_001` | `dealer123` | Anna Nagar Fair Price Shop (`FPS-CHN-001`) distribution |
+
 ### Useful Docker Commands
 
 ```bash
-# Stop containers
+# Stop containers safely (preserves MongoDB data volume)
+docker compose stop
+
+# Stop containers and remove network (preserves data volume)
 docker compose down
 
 # Restart containers
@@ -185,9 +212,11 @@ docker compose up -d --build
 docker compose logs -f web
 ```
 
-**Note:** Avoid `docker compose down -v` unless you intentionally want to remove the associated Docker volumes and their stored database data.
+**Note:** Avoid `docker compose down -v` unless you intentionally want to delete the persistent MongoDB data volume.
 
 ## 7. Testing
+
+The automated test suite runs against an isolated test database (`smart_pds_test_db`) without modifying demonstration or production data.
 
 Install the backend dependencies:
 
@@ -197,20 +226,33 @@ pip install -r backend/requirements.txt
 
 Run the automated test suite from the project root:
 
-```bash
-python -m pytest tests/ -v
+**Windows PowerShell:**
+```powershell
+$env:MONGO_URI="mongodb://localhost:27017/smart_pds_test_db"; python -m pytest tests/ -v
 ```
 
-The documented test run reports **81 passed tests**. Run the test suite again to verify the current code before updating this result.
+**Linux / macOS:**
+```bash
+MONGO_URI="mongodb://localhost:27017/smart_pds_test_db" python -m pytest tests/ -v
+```
 
-## 8. Limitations
+The automated test suite reports **83 passed tests (100% pass rate)**.
+
+## 8. Troubleshooting
+
+- **Port 5000 Conflict:** If port 5000 is occupied by another process, change `PORT=5001` in `.env` and restart containers (`docker compose up -d`).
+- **MongoDB Connection Error:** Ensure Docker Desktop is active and MongoDB has passed its health check (`docker compose ps`).
+- **Host Port Binding:** By default, MongoDB binds to `127.0.0.1:27017` to prevent unauthorized network exposure. To customize the local port, set `MONGO_PORT_BINDING=127.0.0.1:27018` in `.env`.
+- **Database Initialization:** If login fails with "Invalid username or password" on a fresh install, run the database seed command (`docker compose exec web python backend/database/seed_db.py`).
+
+## 9. Limitations
 
 - Uses synthetic datasets rather than real government distribution records.
 - ML predictions require validation using real-world data.
 - Anomaly detection identifies unusual patterns, not confirmed fraud.
 - Government-system integration is not currently implemented.
 
-## 9. Future Enhancements
+## 10. Future Enhancements
 
 - Biometric verification integration.
 - IoT-based smart weighing scales.

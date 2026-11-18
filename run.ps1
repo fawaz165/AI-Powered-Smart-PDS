@@ -29,9 +29,9 @@ try {
 if (-not $mongoReady) {
     Write-Host "[WARNING] MongoDB is not responding on 127.0.0.1:27017." -ForegroundColor Yellow
     if (Get-Command docker -ErrorAction SilentlyContinue) {
-        Write-Host "[INFO] Attempting to start smart_pds_mongo container..." -ForegroundColor Gray
-        docker start smart_pds_mongo | Out-Null
-        Start-Sleep -Seconds 2
+        Write-Host "[INFO] Attempting to start MongoDB service via Docker Compose..." -ForegroundColor Gray
+        docker compose up -d mongo | Out-Null
+        Start-Sleep -Seconds 3
     }
 }
 

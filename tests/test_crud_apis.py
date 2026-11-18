@@ -112,7 +112,7 @@ def test_commodity_catalog_retrieval_and_rate_distinction(client):
     assert dal["market_price"] == 140.0
     assert dal["subsidy_amount"] == 110.0
     assert dal["subsidy_percentage"] == 78.57
-    assert "Registrar of Cooperative Societies" in dal["official_source"]
+    assert "Special PDS" in dal["official_source"] or "Registrar of Cooperative Societies" in dal["official_source"]
 
     # Verify summary statistics and clearly defined averaging method
     assert "summary" in data

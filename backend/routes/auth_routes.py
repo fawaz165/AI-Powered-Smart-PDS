@@ -1,5 +1,5 @@
-from flask import Blueprint, request, jsonify
-from backend.services.auth_service import AuthService, token_required
+from flask import Blueprint, request, jsonify, current_app
+from backend.services.auth_service import AuthService, token_required, role_required
 from backend.database.mongo import get_db
 from backend.models.user import UserModel
 from backend.utils.logger import logger
@@ -41,24 +41,59 @@ def get_current_user():
 
 @auth_bp.route("/register", methods=["POST"])
 def register():
-    """Allows creating additional officer/admin users."""
+    """Allows creating user accounts with role-based administrative authorization."""
+    db = get_db()
+    total_users = db.users.count_documents({})
+
     data = request.get_json(silent=True) or {}
     username = data.get("username", "").strip().lower()
     password = data.get("password", "")
-    role = data.get("role", "officer")
+    role = str(data.get("role", "officer")).strip().lower()
     email = data.get("email")
     full_name = data.get("full_name")
+    region = data.get("region")
+    ration_shop_id = data.get("ration_shop_id")
 
     if not username or not password:
         return jsonify({"status": "error", "message": "Username and password required"}), 400
 
-    db = get_db()
+    # Authorization guard: Unauthorized users cannot register admin or officer accounts.
+    # If accounts already exist, creating any user account strictly requires an Administrator token.
+    if total_users > 0:
+        auth_header = request.headers.get("Authorization", "")
+        token = auth_header.split(" ")[1] if auth_header.startswith("Bearer ") else request.args.get("token")
+
+        if not token:
+            return jsonify({
+                "status": "error",
+                "message": "Authentication required. Only administrators can register new user accounts."
+            }), 401
+
+        payload = AuthService.verify_token(token)
+        if not payload:
+            return jsonify({"status": "error", "message": "Invalid or expired authentication token"}), 401
+
+        caller_role = str(payload.get("role", "")).strip().lower()
+        if caller_role != "admin":
+            return jsonify({
+                "status": "error",
+                "message": "Forbidden. Only users with the 'admin' role can register user accounts."
+            }), 403
+
     if db.users.find_one({"username": username}):
         return jsonify({"status": "error", "message": "User already exists"}), 409
 
-    user_doc = UserModel.create_user_doc(username, password, role, email, full_name)
+    user_doc = UserModel.create_user_doc(
+        username=username,
+        password=password,
+        role=role,
+        email=email,
+        full_name=full_name,
+        region=region,
+        ration_shop_id=ration_shop_id
+    )
     db.users.insert_one(user_doc)
-    logger.info(f"New user registered: {username}")
+    logger.info(f"New user registered: {username} (Role: {role})")
     return jsonify({
         "status": "success",
         "message": f"User {username} registered successfully"

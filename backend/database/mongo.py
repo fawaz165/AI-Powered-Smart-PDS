@@ -1,3 +1,4 @@
+import os
 import pymongo
 from pymongo import ASCENDING, DESCENDING
 from backend.config import Config
@@ -9,23 +10,53 @@ class Database:
     _instance = None
     _client = None
     _db = None
+    _current_uri = None
+    _current_db_name = None
 
-    def __new__(cls, uri: str = None, db_name: str = None):
-        if cls._instance is None:
+    def __new__(cls, uri: str = None, db_name: str = None, force_reconnect: bool = False):
+        target_uri = uri or os.getenv("MONGO_URI", Config.MONGO_URI)
+        target_db = db_name or os.getenv("DB_NAME", Config.DB_NAME)
+
+        # Enforce dedicated test database when running in testing mode
+        if (os.getenv("FLASK_ENV") == "testing" or os.getenv("TESTING") in ("1", "true", "True")) and not db_name:
+            target_db = os.getenv("TEST_DB_NAME", "smart_pds_test_db")
+            if "smart_pds_db" in target_uri:
+                target_uri = target_uri.replace("smart_pds_db", target_db)
+
+        if cls._instance is None or force_reconnect or cls._current_db_name != target_db or cls._current_uri != target_uri:
+            if cls._client:
+                try:
+                    cls._client.close()
+                except Exception:
+                    pass
             cls._instance = super(Database, cls).__new__(cls)
-            uri = uri or Config.MONGO_URI
-            db_name = db_name or Config.DB_NAME
+            cls._current_uri = target_uri
+            cls._current_db_name = target_db
             try:
-                cls._client = pymongo.MongoClient(uri, serverSelectionTimeoutMS=4000)
+                cls._client = pymongo.MongoClient(target_uri, serverSelectionTimeoutMS=4000)
                 # Verify connection
                 cls._client.admin.command("ping")
-                cls._db = cls._client[db_name]
-                logger.info(f"MongoDB connected successfully to database: {db_name}")
+                cls._db = cls._client[target_db]
+                logger.info(f"MongoDB connected successfully to database: {target_db}")
                 cls._create_indexes(cls._db)
             except Exception as e:
-                logger.error(f"Failed to connect to MongoDB at {uri}: {e}")
+                logger.error(f"Failed to connect to MongoDB at {target_uri}: {e}")
                 raise e
         return cls._instance
+
+    @classmethod
+    def reset_instance(cls):
+        """Allows resetting singleton instance for testing or reconfiguration."""
+        if cls._client:
+            try:
+                cls._client.close()
+            except Exception:
+                pass
+        cls._instance = None
+        cls._client = None
+        cls._db = None
+        cls._current_uri = None
+        cls._current_db_name = None
 
     @classmethod
     def _create_indexes(cls, db):

@@ -57,11 +57,21 @@ def create_app(config_class=Config):
     app.register_blueprint(ml_bp)
     app.register_blueprint(report_bp)
 
-    # Health check endpoint
+    # Health check endpoint with database ping verification
     @app.route("/api/health", methods=["GET"])
     def health_check():
+        db_connected = False
+        try:
+            db = Database().db
+            if db is not None:
+                db.command("ping")
+                db_connected = True
+        except Exception as e:
+            logger.warning(f"Health check DB ping failed: {e}")
+
         return jsonify({
             "status": "healthy",
+            "database": "connected" if db_connected else "disconnected",
             "service": "AI-Powered Smart Public Distribution System",
             "version": "1.0.0"
         }), 200
