@@ -73,3 +73,62 @@ def test_admin_can_register_new_officer(client):
 
     assert reg_res.status_code == 201
     assert reg_res.get_json()["status"] == "success"
+
+
+def test_first_user_registration_requires_bootstrap_key(client, monkeypatch):
+    """Verifies that when database has 0 users, unauthenticated registration is rejected without bootstrap key."""
+    from backend.database.mongo import get_db
+    real_db = get_db()
+
+    class FakeDB:
+        def __getattr__(self, name):
+            if name == "users":
+                class FakeUsers:
+                    def count_documents(self, *args, **kwargs):
+                        return 0
+                    def find_one(self, *args, **kwargs):
+                        return None
+                    def insert_one(self, *args, **kwargs):
+                        return real_db.users.insert_one(*args, **kwargs)
+                return FakeUsers()
+            return getattr(real_db, name)
+
+    monkeypatch.setattr("backend.routes.auth_routes.get_db", lambda: FakeDB())
+
+    res = client.post("/api/auth/register", json={
+        "username": "first_admin_hacker",
+        "password": "some_password_123",
+        "role": "admin"
+    })
+    assert res.status_code == 401
+    assert "BOOTSTRAP_ADMIN_KEY" in res.get_json()["message"]
+
+
+def test_first_user_registration_succeeds_with_bootstrap_key(client, monkeypatch):
+    """Verifies that when database has 0 users, registration succeeds with matching BOOTSTRAP_ADMIN_KEY."""
+    from backend.database.mongo import get_db
+    real_db = get_db()
+    monkeypatch.setenv("BOOTSTRAP_ADMIN_KEY", "secure_secret_setup_key_2026")
+
+    class FakeDB:
+        def __getattr__(self, name):
+            if name == "users":
+                class FakeUsers:
+                    def count_documents(self, *args, **kwargs):
+                        return 0
+                    def find_one(self, *args, **kwargs):
+                        return None
+                    def insert_one(self, *args, **kwargs):
+                        return real_db.users.insert_one(*args, **kwargs)
+                return FakeUsers()
+            return getattr(real_db, name)
+
+    monkeypatch.setattr("backend.routes.auth_routes.get_db", lambda: FakeDB())
+
+    res = client.post("/api/auth/register", json={
+        "username": "bootstrap_admin_test",
+        "password": "admin_secure_123",
+        "role": "admin"
+    }, headers={"X-Bootstrap-Key": "secure_secret_setup_key_2026"})
+    assert res.status_code == 201
+    assert res.get_json()["status"] == "success"

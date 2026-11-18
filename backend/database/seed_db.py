@@ -131,7 +131,7 @@ def seed_database(target_db=None):
     for c in commodities:
         db.commodities.update_one(
             {"name": c["name"]},
-            {"$set": CommodityModel.create_doc(
+            {"$setOnInsert": CommodityModel.create_doc(
                 commodity_code=c["commodity_code"],
                 name=c["name"],
                 unit=c["unit"],
@@ -147,7 +147,7 @@ def seed_database(target_db=None):
             )},
             upsert=True
         )
-    logger.info("Seeded 4 core commodities with verified Tamil Nadu PDS statutory and Special PDS rates")
+    logger.info("Verified 4 core commodities (existing records preserved)")
 
     # 3. Seed Ration Shops
     ration_shops = [
@@ -161,10 +161,10 @@ def seed_database(target_db=None):
     for s in ration_shops:
         db.ration_shops.update_one(
             {"shop_id": s["shop_id"]},
-            {"$set": s},
+            {"$setOnInsert": s},
             upsert=True
         )
-    logger.info("Seeded 6 Fair Price Shops across 5 districts")
+    logger.info("Verified 6 Fair Price Shops across 5 districts (existing records preserved)")
 
     # 4. Seed Inventory with realistic stocks (including the prompt's exact 3,800 kg Rice Chennai scenario)
     inventory_items = [

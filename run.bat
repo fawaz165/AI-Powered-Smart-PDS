@@ -9,6 +9,17 @@ echo.
 
 cd /d "%~dp0"
 
+:: Resolve configured host port from environment or .env file (default: 5000)
+set "APP_PORT=%PORT%"
+if "%APP_PORT%"=="" (
+    if exist ".env" (
+        for /f "usebackq tokens=1,2 delims==" %%a in (".env") do (
+            if /i "%%a"=="PORT" set "APP_PORT=%%b"
+        )
+    )
+)
+if "%APP_PORT%"=="" set "APP_PORT=5000"
+
 :: Confirm this launcher is in the project root.
 if not exist "docker-compose.yml" if not exist "compose.yml" if not exist "compose.yaml" (
     echo ERROR: Docker Compose file not found.
@@ -82,12 +93,12 @@ if errorlevel 1 (
 
 :: Wait for the Flask health endpoint.
 echo.
-echo Waiting for Smart PDS to become healthy...
+echo Waiting for Smart PDS to become healthy on port %APP_PORT%...
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$ready=$false; for($i=0; $i -lt 90; $i++) { try { $r=Invoke-WebRequest 'http://localhost:5000/api/health' -UseBasicParsing -TimeoutSec 5; if($r.StatusCode -eq 200) { $ready=$true; break } } catch {}; Start-Sleep -Seconds 2 }; if($ready) { exit 0 } else { exit 1 }"
+  "$port = '%APP_PORT%'; $ready=$false; for($i=0; $i -lt 90; $i++) { try { $r=Invoke-WebRequest \"http://localhost:$port/api/health\" -UseBasicParsing -TimeoutSec 5; if($r.StatusCode -eq 200) { $ready=$true; break } } catch {}; Start-Sleep -Seconds 2 }; if($ready) { exit 0 } else { exit 1 }"
 
 if errorlevel 1 (
-    echo ERROR: Smart PDS did not respond successfully.
+    echo ERROR: Smart PDS did not respond successfully on port %APP_PORT%.
     docker compose ps
     docker compose logs --tail=80
     pause
@@ -99,10 +110,10 @@ echo ===================================================
 echo       SMART PDS STARTED SUCCESSFULLY!
 echo ===================================================
 echo.
-echo Website: http://localhost:5000
+echo Website: http://localhost:%APP_PORT%
 echo.
 echo Opening Smart PDS...
-start "" "http://localhost:5000"
+start "" "http://localhost:%APP_PORT%"
 
 echo.
 echo Docker containers will continue running after this window closes.

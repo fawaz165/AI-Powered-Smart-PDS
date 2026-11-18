@@ -59,8 +59,9 @@ jobs:
           TEST_MONGO_URI: mongodb://localhost:27017/smart_pds_test_db
           TEST_DB_NAME: smart_pds_test_db
           SECRET_KEY: test_pipeline_secret_key_2026
+          PYTHONPATH: .
         run: |
-          pytest tests/ -v
+          python -m pytest tests/ -v
 
   docker:
     name: Build & Push Docker Image
@@ -82,13 +83,22 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Determine Docker Image Tag
+        id: meta
+        run: |
+          if [ -n "${{ secrets.DOCKERHUB_USERNAME }}" ]; then
+            echo "tag=${{ secrets.DOCKERHUB_USERNAME }}/ai-smart-pds:latest" >> $GITHUB_OUTPUT
+          else
+            echo "tag=smartpds/ai-smart-pds:latest" >> $GITHUB_OUTPUT
+          fi
+
       - name: Build and Push Docker Image
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile
           push: ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' }}
-          tags: ${{ secrets.DOCKERHUB_USERNAME || 'smartpds' }}/ai-smart-pds:latest
+          tags: ${{ steps.meta.outputs.tag }}
 
       - name: Simulated Production Deployment Step
         run: |

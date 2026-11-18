@@ -1,3 +1,4 @@
+import os
 from flask import Blueprint, request, jsonify, current_app
 from backend.services.auth_service import AuthService, token_required, role_required
 from backend.database.mongo import get_db
@@ -57,9 +58,20 @@ def register():
     if not username or not password:
         return jsonify({"status": "error", "message": "Username and password required"}), 400
 
-    # Authorization guard: Unauthorized users cannot register admin or officer accounts.
-    # If accounts already exist, creating any user account strictly requires an Administrator token.
-    if total_users > 0:
+    # Authorization guard:
+    # 1. When no users exist (initial deployment), unrestricted admin registration is NOT permitted.
+    #    Initial registration strictly requires a valid BOOTSTRAP_ADMIN_KEY from the environment,
+    #    or direct initialization via the CLI seed script (`python backend/database/seed_db.py`).
+    # 2. When users already exist, registering any new user account strictly requires an Administrator JWT token.
+    if total_users == 0:
+        bootstrap_key = os.getenv("BOOTSTRAP_ADMIN_KEY", "").strip()
+        req_bootstrap_key = (request.headers.get("X-Bootstrap-Key") or data.get("bootstrap_key") or "").strip()
+        if not bootstrap_key or req_bootstrap_key != bootstrap_key:
+            return jsonify({
+                "status": "error",
+                "message": "Authentication required. Initial setup requires a valid BOOTSTRAP_ADMIN_KEY header/token, or run the CLI seed script ('python backend/database/seed_db.py')."
+            }), 401
+    else:
         auth_header = request.headers.get("Authorization", "")
         token = auth_header.split(" ")[1] if auth_header.startswith("Bearer ") else request.args.get("token")
 

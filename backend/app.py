@@ -69,9 +69,17 @@ def create_app(config_class=Config):
         except Exception as e:
             logger.warning(f"Health check DB ping failed: {e}")
 
+        if not db_connected:
+            return jsonify({
+                "status": "unhealthy",
+                "database": "disconnected",
+                "service": "AI-Powered Smart Public Distribution System",
+                "version": "1.0.0"
+            }), 503
+
         return jsonify({
             "status": "healthy",
-            "database": "connected" if db_connected else "disconnected",
+            "database": "connected",
             "service": "AI-Powered Smart Public Distribution System",
             "version": "1.0.0"
         }), 200

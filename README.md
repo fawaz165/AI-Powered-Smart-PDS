@@ -236,7 +236,7 @@ $env:MONGO_URI="mongodb://localhost:27017/smart_pds_test_db"; python -m pytest t
 MONGO_URI="mongodb://localhost:27017/smart_pds_test_db" python -m pytest tests/ -v
 ```
 
-The automated test suite reports **83 passed tests (100% pass rate)**.
+The automated test suite reports **86 passed tests (100% pass rate)**.
 
 ## 8. Troubleshooting
 
