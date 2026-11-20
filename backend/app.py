@@ -38,7 +38,13 @@ def create_app(config_class=Config):
 
     # Initialize Database connection
     try:
-        Database(uri=app.config["MONGO_URI"], db_name=app.config["DB_NAME"])
+        db_inst = Database(uri=app.config["MONGO_URI"], db_name=app.config["DB_NAME"])
+        # On fresh deployment (0 users), automatically initialize essential seed data
+        if app.config.get("FLASK_ENV") != "testing" and not app.config.get("TESTING"):
+            if db_inst.db.users.count_documents({}) == 0:
+                logger.info("Fresh database detected (0 users). Initializing demonstration data...")
+                from backend.database.seed_db import seed_database
+                seed_database(target_db=db_inst.db)
     except Exception as e:
         logger.error(f"Database initialization warning: {e}")
 

@@ -240,14 +240,16 @@ $env:MONGO_URI="mongodb://localhost:27017/smart_pds_test_db"; python -m pytest t
 MONGO_URI="mongodb://localhost:27017/smart_pds_test_db" python -m pytest tests/ -v
 ```
 
-The automated test suite reports **89 passed tests (100% pass rate)**.
+The automated test suite reports **90 passed tests (100% pass rate)**.
 
 ## 8. Troubleshooting
 
 - **Automatic Port Conflict Resolution:** The launcher scripts (`run.bat` and `run.ps1`) automatically detect if application port 5000 or MongoDB host port 27018 are in use by other applications, automatically selecting the next available ports (e.g. 5001, 27019) and keeping container routing, health checks, and browser URLs in sync without manual configuration.
 - **Manual Host Port Customization:** You can explicitly set `PORT=5001` and `MONGO_PORT_BINDING=127.0.0.1:27019` in your `.env` file if specific fixed ports are desired.
 - **MongoDB Connection Error:** Ensure Docker Desktop is active and MongoDB has passed its health check (`docker compose ps`).
-- **Database Initialization:** If login fails with "Invalid username or password" on a fresh install, run the database seed command (`docker compose exec web python backend/database/seed_db.py`).
+- **Safe Admin Password Reset:** If you ever need to reset only the demo admin password without touching other users or database records, run:
+  `docker compose exec web python backend/database/reset_admin_password.py`
+- **Database Initialization:** On fresh installations, the system automatically initializes demonstration users and scheme catalog data if the database has 0 users. You can also manually re-run seeding at any time: `docker compose exec web python backend/database/seed_db.py`.
 
 ## 9. Limitations
 

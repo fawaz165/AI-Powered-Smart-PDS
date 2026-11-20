@@ -222,3 +222,28 @@ def test_first_user_registration_non_admin_dealer_rejected(client, monkeypatch):
     }, headers={"X-Bootstrap-Key": "secure_secret_setup_key_2026"})
     assert res.status_code == 403
     assert "administrator" in res.get_json()["message"]
+
+
+def test_reset_admin_password_utility(client):
+    """Verifies that reset_admin_password safely resets only the admin password and permits login."""
+    from backend.database.reset_admin_password import reset_admin_password
+
+    # Reset admin password to a new temporary password
+    reset_admin_password("new_temp_admin_pass_456")
+
+    # Login with new password should succeed
+    login_new = client.post("/api/auth/login", json={
+        "username": "admin",
+        "password": "new_temp_admin_pass_456"
+    })
+    assert login_new.status_code == 200
+    assert login_new.get_json()["status"] == "success"
+
+    # Reset back to default admin123
+    reset_admin_password("admin123")
+    login_orig = client.post("/api/auth/login", json={
+        "username": "admin",
+        "password": "admin123"
+    })
+    assert login_orig.status_code == 200
+    assert login_orig.get_json()["status"] == "success"
