@@ -20,6 +20,17 @@ if "%APP_PORT%"=="" (
 )
 if "%APP_PORT%"=="" set "APP_PORT=5000"
 
+:: Resolve configured host MongoDB binding from environment or .env file (default: 127.0.0.1:27018)
+set "MONGO_BINDING=%MONGO_PORT_BINDING%"
+if "%MONGO_BINDING%"=="" (
+    if exist ".env" (
+        for /f "usebackq tokens=1,2 delims==" %%a in (".env") do (
+            if /i "%%a"=="MONGO_PORT_BINDING" set "MONGO_BINDING=%%b"
+        )
+    )
+)
+if "%MONGO_BINDING%"=="" set "MONGO_BINDING=127.0.0.1:27018"
+
 :: Confirm this launcher is in the project root.
 if not exist "docker-compose.yml" if not exist "compose.yml" if not exist "compose.yaml" (
     echo ERROR: Docker Compose file not found.
@@ -79,6 +90,43 @@ if errorlevel 1 (
 
 echo Docker Engine is ready.
 echo.
+
+:: Check for host port conflicts before launching Docker containers
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+  "$appPort = [int]'%APP_PORT%';" ^
+  "$mongoBind = '%MONGO_BINDING%';" ^
+  "$mongoPort = if ($mongoBind -match '(\d+)$') { [int]$matches[1] } else { 27018 };" ^
+  "$hasConflict = $false;" ^
+  "function Test-PortOccupied($p) {" ^
+  "  try { $t = New-Object System.Net.Sockets.TcpClient; $t.Connect('127.0.0.1', $p); $t.Close(); return $true } catch { return $false }" ^
+  "};" ^
+  "$dockerWebRunning = $false;" ^
+  "$dockerMongoRunning = $false;" ^
+  "if (Get-Command docker -ErrorAction SilentlyContinue) {" ^
+  "  try {" ^
+  "    $running = docker compose ps --services --filter 'status=running' 2>$null;" ^
+  "    if ($running -contains 'web') { $dockerWebRunning = $true };" ^
+  "    if ($running -contains 'mongo') { $dockerMongoRunning = $true }" ^
+  "  } catch {}" ^
+  "};" ^
+  "if (-not $dockerWebRunning -and (Test-PortOccupied $appPort)) {" ^
+  "  Write-Host 'ERROR: Application port ' $appPort ' is already occupied by another service.' -ForegroundColor Red;" ^
+  "  Write-Host 'To resolve this conflict, please stop the conflicting process or change PORT=' ($appPort + 1) ' in your .env file.' -ForegroundColor Yellow;" ^
+  "  $hasConflict = $true" ^
+  "};" ^
+  "if (-not $dockerMongoRunning -and (Test-PortOccupied $mongoPort)) {" ^
+  "  Write-Host 'ERROR: MongoDB host port ' $mongoPort ' is already occupied by another service.' -ForegroundColor Red;" ^
+  "  Write-Host 'To resolve this conflict, set MONGO_PORT_BINDING=127.0.0.1:' ($mongoPort + 1) ' in your .env file.' -ForegroundColor Yellow;" ^
+  "  $hasConflict = $true" ^
+  "};" ^
+  "if ($hasConflict) { exit 1 } else { exit 0 }"
+
+if errorlevel 1 (
+    echo.
+    echo Please resolve the port conflict above before continuing.
+    pause
+    exit /b 1
+)
 
 :: Start the application and database without deleting persistent data.
 echo Starting Smart PDS containers...

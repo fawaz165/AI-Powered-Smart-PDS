@@ -5,7 +5,7 @@ services:
     restart: unless-stopped
     ports:
       # Localhost-only binding by default to prevent public network exposure
-      - "${MONGO_PORT_BINDING:-127.0.0.1:27017}:27017"
+      - "${MONGO_PORT_BINDING:-127.0.0.1:27018}:27017"
     volumes:
       - mongo_data:/data/db
     environment:

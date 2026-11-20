@@ -29,10 +29,16 @@ if ($env:PORT -and ($env:PORT -as [int])) {
 }
 $env:PORT = "$appPort"
 
+# Resolve MongoDB host port binding (default 27018)
+$mongoHostPort = 27018
+if ($env:MONGO_PORT_BINDING -match '(\d+)$') {
+    $mongoHostPort = [int]$matches[1]
+}
+
 # 3. Configure MongoDB connection for native Windows execution
-# Ensure native execution uses localhost, never the Docker internal hostname 'mongo'
+# Ensure native execution uses localhost, pointing to the Docker container host port or local MongoDB
 if (-not $env:MONGO_URI -or $env:MONGO_URI -match "mongodb://mongo[:/]") {
-    $env:MONGO_URI = "mongodb://localhost:27017/smart_pds_db"
+    $env:MONGO_URI = "mongodb://localhost:$mongoHostPort/smart_pds_db"
 }
 if (-not $env:DB_NAME) {
     $env:DB_NAME = "smart_pds_db"
@@ -47,7 +53,7 @@ if (Test-Path ".\.venv\Scripts\Activate.ps1") {
     & ".\venv\Scripts\Activate.ps1"
 }
 
-# 5. Prevent conflict with existing containerized Flask app
+# 5. Prevent conflict with existing containerized Flask app & check port availability
 # If 'web' service is running in Docker Compose, stop it so native Flask can bind to $appPort
 if (Get-Command docker -ErrorAction SilentlyContinue) {
     try {
@@ -59,11 +65,27 @@ if (Get-Command docker -ErrorAction SilentlyContinue) {
     } catch {}
 }
 
-# 6. Check and ensure MongoDB is available on 127.0.0.1:27017
+# Verify if $appPort is occupied by any external process
+$appPortInUse = $false
+try {
+    $tcpCheck = New-Object System.Net.Sockets.TcpClient
+    $tcpCheck.Connect('127.0.0.1', $appPort)
+    $tcpCheck.Close()
+    $appPortInUse = $true
+} catch {
+    $appPortInUse = $false
+}
+if ($appPortInUse) {
+    Write-Host "[ERROR] Application port $appPort is already in use by another application or service." -ForegroundColor Red
+    Write-Host "Please stop the conflicting process or change PORT=$($appPort + 1) in your .env file." -ForegroundColor Yellow
+    exit 1
+}
+
+# 6. Check and ensure MongoDB is available on 127.0.0.1:$mongoHostPort
 $mongoReady = $false
 try {
     $tcp = New-Object System.Net.Sockets.TcpClient
-    $tcp.Connect('127.0.0.1', 27017)
+    $tcp.Connect('127.0.0.1', $mongoHostPort)
     $tcp.Close()
     $mongoReady = $true
 } catch {
@@ -71,17 +93,30 @@ try {
 }
 
 if (-not $mongoReady) {
-    Write-Host "[INFO] MongoDB is not running on 127.0.0.1:27017." -ForegroundColor Yellow
+    # Check if a standalone MongoDB is already listening on default 27017
+    try {
+        $tcp27017 = New-Object System.Net.Sockets.TcpClient
+        $tcp27017.Connect('127.0.0.1', 27017)
+        $tcp27017.Close()
+        Write-Host "[INFO] Local standalone MongoDB detected on 127.0.0.1:27017. Using local instance." -ForegroundColor Green
+        $mongoHostPort = 27017
+        $env:MONGO_URI = "mongodb://localhost:27017/smart_pds_db"
+        $mongoReady = $true
+    } catch {}
+}
+
+if (-not $mongoReady) {
+    Write-Host "[INFO] MongoDB is not running on 127.0.0.1:$mongoHostPort." -ForegroundColor Yellow
     if (Get-Command docker -ErrorAction SilentlyContinue) {
         Write-Host "[INFO] Starting MongoDB service via Docker Compose (docker compose up -d mongo)..." -ForegroundColor Cyan
         docker compose up -d mongo | Out-Null
 
-        Write-Host "[INFO] Waiting for MongoDB to become ready on 127.0.0.1:27017..." -ForegroundColor Gray
+        Write-Host "[INFO] Waiting for MongoDB to become ready on 127.0.0.1:$mongoHostPort..." -ForegroundColor Gray
         for ($i = 0; $i -lt 30; $i++) {
             Start-Sleep -Seconds 1
             try {
                 $tcp = New-Object System.Net.Sockets.TcpClient
-                $tcp.Connect('127.0.0.1', 27017)
+                $tcp.Connect('127.0.0.1', $mongoHostPort)
                 $tcp.Close()
                 $mongoReady = $true
                 break
@@ -91,9 +126,9 @@ if (-not $mongoReady) {
 }
 
 if ($mongoReady) {
-    Write-Host "[INFO] MongoDB is active on 127.0.0.1:27017" -ForegroundColor Green
+    Write-Host "[INFO] MongoDB is active on 127.0.0.1:$mongoHostPort" -ForegroundColor Green
 } else {
-    Write-Host "[WARNING] Could not confirm MongoDB on 127.0.0.1:27017. Native Flask might fail to connect." -ForegroundColor Red
+    Write-Host "[WARNING] Could not confirm MongoDB on 127.0.0.1:$mongoHostPort. Native Flask might fail to connect." -ForegroundColor Red
 }
 
 Write-Host ""
