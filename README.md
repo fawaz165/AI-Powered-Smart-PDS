@@ -244,9 +244,9 @@ The automated test suite reports **89 passed tests (100% pass rate)**.
 
 ## 8. Troubleshooting
 
-- **Port 5000 Conflict:** If port 5000 is occupied by another process, change `PORT=5001` in `.env` and restart containers (`docker compose up -d`).
+- **Automatic Port Conflict Resolution:** The launcher scripts (`run.bat` and `run.ps1`) automatically detect if application port 5000 or MongoDB host port 27018 are in use by other applications, automatically selecting the next available ports (e.g. 5001, 27019) and keeping container routing, health checks, and browser URLs in sync without manual configuration.
+- **Manual Host Port Customization:** You can explicitly set `PORT=5001` and `MONGO_PORT_BINDING=127.0.0.1:27019` in your `.env` file if specific fixed ports are desired.
 - **MongoDB Connection Error:** Ensure Docker Desktop is active and MongoDB has passed its health check (`docker compose ps`).
-- **Host Port Binding:** By default, MongoDB binds to `127.0.0.1:27018` on the host (mapped to container port 27017) to prevent port conflicts with local MongoDB services on port 27017. To customize the local host port, set `MONGO_PORT_BINDING=127.0.0.1:27019` in `.env`.
 - **Database Initialization:** If login fails with "Invalid username or password" on a fresh install, run the database seed command (`docker compose exec web python backend/database/seed_db.py`).
 
 ## 9. Limitations

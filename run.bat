@@ -91,42 +91,68 @@ if errorlevel 1 (
 echo Docker Engine is ready.
 echo.
 
-:: Check for host port conflicts before launching Docker containers
-powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$appPort = [int]'%APP_PORT%';" ^
+:: Automatically detect and resolve available host ports for Web and MongoDB
+echo Checking port availability...
+for /f "usebackq tokens=1,2 delims==" %%A in (`powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+  "$prefWeb = [int]'%APP_PORT%';" ^
   "$mongoBind = '%MONGO_BINDING%';" ^
-  "$mongoPort = if ($mongoBind -match '(\d+)$') { [int]$matches[1] } else { 27018 };" ^
-  "$hasConflict = $false;" ^
-  "function Test-PortOccupied($p) {" ^
-  "  try { $t = New-Object System.Net.Sockets.TcpClient; $t.Connect('127.0.0.1', $p); $t.Close(); return $true } catch { return $false }" ^
+  "$prefMongo = if ($mongoBind -match '(\d+)$') { [int]$matches[1] } else { 27018 };" ^
+  "function Test-PortOccupied([int]$p) {" ^
+  "  try {" ^
+  "    $c = New-Object System.Net.Sockets.TcpClient;" ^
+  "    $iar = $c.BeginConnect('127.0.0.1', $p, $null, $null);" ^
+  "    if ($iar.AsyncWaitHandle.WaitOne(150, $false) -and $c.Connected) { $c.EndConnect($iar); $c.Close(); return $true };" ^
+  "    $c.Close();" ^
+  "  } catch {};" ^
+  "  try { $l1 = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Parse('127.0.0.1'), $p); $l1.ExclusiveAddressUse = $true; $l1.Start(); $l1.Stop() } catch { return $true };" ^
+  "  try { $l2 = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Any, $p); $l2.ExclusiveAddressUse = $true; $l2.Start(); $l2.Stop() } catch { return $true };" ^
+  "  return $false;" ^
   "};" ^
-  "$dockerWebRunning = $false;" ^
-  "$dockerMongoRunning = $false;" ^
+  "$dockerWeb = 0; $dockerMongo = 0;" ^
   "if (Get-Command docker -ErrorAction SilentlyContinue) {" ^
   "  try {" ^
-  "    $running = docker compose ps --services --filter 'status=running' 2>$null;" ^
-  "    if ($running -contains 'web') { $dockerWebRunning = $true };" ^
-  "    if ($running -contains 'mongo') { $dockerMongoRunning = $true }" ^
+  "    $lines = docker compose ps --format json 2>$null;" ^
+  "    if ($lines) { foreach ($l in ($lines -split '\r?\n')) {" ^
+  "      if (-not $l.Trim()) { continue };" ^
+  "      try {" ^
+  "        $o = $l | ConvertFrom-Json;" ^
+  "        if ($o.Service -eq 'web' -and $o.State -eq 'running') { foreach($pub in $o.Publishers) { if($pub.PublishedPort -gt 0) { $dockerWeb = [int]$pub.PublishedPort; break } } };" ^
+  "        if ($o.Service -eq 'mongo' -and $o.State -eq 'running') { foreach($pub in $o.Publishers) { if($pub.PublishedPort -gt 0) { $dockerMongo = [int]$pub.PublishedPort; break } } };" ^
+  "      } catch {}" ^
+  "    }}" ^
   "  } catch {}" ^
   "};" ^
-  "if (-not $dockerWebRunning -and (Test-PortOccupied $appPort)) {" ^
-  "  Write-Host 'ERROR: Application port ' $appPort ' is already occupied by another service.' -ForegroundColor Red;" ^
-  "  Write-Host 'To resolve this conflict, please stop the conflicting process or change PORT=' ($appPort + 1) ' in your .env file.' -ForegroundColor Yellow;" ^
-  "  $hasConflict = $true" ^
+  "function Get-AvailablePort([int]$p, [int]$cur) {" ^
+  "  if ($cur -gt 0 -and $cur -eq $p) { return $p };" ^
+  "  $c = $p;" ^
+  "  while (Test-PortOccupied $c) {" ^
+  "    if ($cur -gt 0 -and $cur -eq $c) { return $c };" ^
+  "    $c++;" ^
+  "    if ($c -gt 65535) { break };" ^
+  "  };" ^
+  "  return $c;" ^
   "};" ^
-  "if (-not $dockerMongoRunning -and (Test-PortOccupied $mongoPort)) {" ^
-  "  Write-Host 'ERROR: MongoDB host port ' $mongoPort ' is already occupied by another service.' -ForegroundColor Red;" ^
-  "  Write-Host 'To resolve this conflict, set MONGO_PORT_BINDING=127.0.0.1:' ($mongoPort + 1) ' in your .env file.' -ForegroundColor Yellow;" ^
-  "  $hasConflict = $true" ^
-  "};" ^
-  "if ($hasConflict) { exit 1 } else { exit 0 }"
-
-if errorlevel 1 (
-    echo.
-    echo Please resolve the port conflict above before continuing.
-    pause
-    exit /b 1
+  "$finalWeb = Get-AvailablePort $prefWeb $dockerWeb;" ^
+  "$finalMongo = Get-AvailablePort $prefMongo $dockerMongo;" ^
+  "if ($finalWeb -ne $prefWeb) { [Console]::Error.WriteLine('[NOTICE] Web port ' + $prefWeb + ' is occupied. Automatically selected available port: ' + $finalWeb) };" ^
+  "if ($finalMongo -ne $prefMongo) { [Console]::Error.WriteLine('[NOTICE] MongoDB host port ' + $prefMongo + ' is occupied. Automatically selected available port: ' + $finalMongo) };" ^
+  "Write-Output ('APP_PORT=' + $finalWeb);" ^
+  "Write-Output ('MONGO_PORT=' + $finalMongo);"` ) do (
+    if "%%A"=="APP_PORT" set "APP_PORT=%%B"
+    if "%%A"=="MONGO_PORT" set "MONGO_PORT=%%B"
 )
+
+:: Export selected ports to environment for Docker Compose
+set "PORT=%APP_PORT%"
+set "MONGO_PORT_BINDING=127.0.0.1:%MONGO_PORT%"
+
+echo.
+echo ===================================================
+echo   Port Allocation:
+echo   - Web Application Port:    %APP_PORT%
+echo   - MongoDB Host Port:       %MONGO_PORT% (mapped to container 27017)
+echo ===================================================
+echo.
 
 :: Start the application and database without deleting persistent data.
 echo Starting Smart PDS containers...

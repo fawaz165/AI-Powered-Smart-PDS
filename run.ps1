@@ -22,29 +22,119 @@ if (Test-Path $envFile) {
     }
 }
 
-# 2. Resolve application port (respecting $env:PORT or .env, defaulting to 5000)
-$appPort = 5000
+# 2. Port availability helper functions
+function Test-PortOccupied([int]$p) {
+    try {
+        $c = New-Object System.Net.Sockets.TcpClient
+        $iar = $c.BeginConnect('127.0.0.1', $p, $null, $null)
+        if ($iar.AsyncWaitHandle.WaitOne(150, $false) -and $c.Connected) {
+            $c.EndConnect($iar)
+            $c.Close()
+            return $true
+        }
+        $c.Close()
+    } catch {}
+    try {
+        $l1 = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Parse('127.0.0.1'), $p)
+        $l1.ExclusiveAddressUse = $true
+        $l1.Start()
+        $l1.Stop()
+    } catch { return $true }
+    try {
+        $l2 = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Any, $p)
+        $l2.ExclusiveAddressUse = $true
+        $l2.Start()
+        $l2.Stop()
+    } catch { return $true }
+    return $false
+}
+
+function Get-AvailablePort([int]$p, [int]$curOwnerPort = 0) {
+    if ($curOwnerPort -gt 0 -and $curOwnerPort -eq $p) { return $p }
+    $c = $p
+    while (Test-PortOccupied $c) {
+        if ($curOwnerPort -gt 0 -and $curOwnerPort -eq $c) { return $c }
+        $c++
+        if ($c -gt 65535) { break }
+    }
+    return $c
+}
+
+# 3. Resolve application port and automatically allocate available port
+$prefAppPort = 5000
 if ($env:PORT -and ($env:PORT -as [int])) {
-    $appPort = [int]$env:PORT
+    $prefAppPort = [int]$env:PORT
+}
+
+# Stop containerized Flask web container if running to prevent port conflict with native Flask
+if (Get-Command docker -ErrorAction SilentlyContinue) {
+    try {
+        $runningContainers = docker compose ps --services --filter "status=running" 2>$null
+        if ($runningContainers -contains "web") {
+            Write-Host "[INFO] Stopping containerized Flask web container to prevent port conflict..." -ForegroundColor Yellow
+            docker compose stop web | Out-Null
+        }
+    } catch {}
+}
+
+$appPort = Get-AvailablePort $prefAppPort
+if ($appPort -ne $prefAppPort) {
+    Write-Host "[NOTICE] Application port $prefAppPort is in use by another process. Automatically selected alternative port: $appPort" -ForegroundColor Yellow
 }
 $env:PORT = "$appPort"
 
-# Resolve MongoDB host port binding (default 27018)
-$mongoHostPort = 27018
+# 4. Resolve MongoDB host port binding and find available port
+$prefMongoHostPort = 27018
 if ($env:MONGO_PORT_BINDING -match '(\d+)$') {
-    $mongoHostPort = [int]$matches[1]
+    $prefMongoHostPort = [int]$matches[1]
 }
 
-# 3. Configure MongoDB connection for native Windows execution
-# Ensure native execution uses localhost, pointing to the Docker container host port or local MongoDB
-if (-not $env:MONGO_URI -or $env:MONGO_URI -match "mongodb://mongo[:/]") {
+# Check if local standalone MongoDB is running on 27017
+$mongoReady = $false
+try {
+    $tcp27017 = New-Object System.Net.Sockets.TcpClient
+    $tcp27017.Connect('127.0.0.1', 27017)
+    $tcp27017.Close()
+    Write-Host "[INFO] Local standalone MongoDB detected on 127.0.0.1:27017. Using local instance." -ForegroundColor Green
+    $mongoHostPort = 27017
+    $env:MONGO_URI = "mongodb://localhost:27017/smart_pds_db"
+    $mongoReady = $true
+} catch {}
+
+if (-not $mongoReady) {
+    $dockerMongoPort = 0
+    if (Get-Command docker -ErrorAction SilentlyContinue) {
+        try {
+            $lines = docker compose ps --format json 2>$null
+            if ($lines) {
+                foreach ($l in ($lines -split "`r?`n")) {
+                    if (-not $l.Trim()) { continue }
+                    try {
+                        $o = $l | ConvertFrom-Json
+                        if ($o.Service -eq 'mongo' -and $o.State -eq 'running') {
+                            foreach ($pub in $o.Publishers) {
+                                if ($pub.PublishedPort -gt 0) { $dockerMongoPort = [int]$pub.PublishedPort; break }
+                            }
+                        }
+                    } catch {}
+                }
+            }
+        } catch {}
+    }
+
+    $mongoHostPort = Get-AvailablePort $prefMongoHostPort $dockerMongoPort
+    if ($mongoHostPort -ne $prefMongoHostPort) {
+        Write-Host "[NOTICE] Preferred MongoDB host port $prefMongoHostPort is in use. Automatically selected alternative port: $mongoHostPort" -ForegroundColor Yellow
+    }
+    $env:MONGO_PORT_BINDING = "127.0.0.1:$mongoHostPort"
     $env:MONGO_URI = "mongodb://localhost:$mongoHostPort/smart_pds_db"
 }
+
 if (-not $env:DB_NAME) {
     $env:DB_NAME = "smart_pds_db"
 }
 
-# 4. Activate Virtual Environment if available
+# 5. Activate Virtual Environment if available
 if (Test-Path ".\.venv\Scripts\Activate.ps1") {
     Write-Host "[INFO] Activating virtual environment (.venv)..." -ForegroundColor Gray
     & ".\.venv\Scripts\Activate.ps1"
@@ -53,75 +143,32 @@ if (Test-Path ".\.venv\Scripts\Activate.ps1") {
     & ".\venv\Scripts\Activate.ps1"
 }
 
-# 5. Prevent conflict with existing containerized Flask app & check port availability
-# If 'web' service is running in Docker Compose, stop it so native Flask can bind to $appPort
-if (Get-Command docker -ErrorAction SilentlyContinue) {
-    try {
-        $runningContainers = docker compose ps --services --filter "status=running" 2>$null
-        if ($runningContainers -contains "web") {
-            Write-Host "[INFO] Stopping containerized Flask web container to prevent port $appPort conflict..." -ForegroundColor Yellow
-            docker compose stop web | Out-Null
-        }
-    } catch {}
-}
-
-# Verify if $appPort is occupied by any external process
-$appPortInUse = $false
-try {
-    $tcpCheck = New-Object System.Net.Sockets.TcpClient
-    $tcpCheck.Connect('127.0.0.1', $appPort)
-    $tcpCheck.Close()
-    $appPortInUse = $true
-} catch {
-    $appPortInUse = $false
-}
-if ($appPortInUse) {
-    Write-Host "[ERROR] Application port $appPort is already in use by another application or service." -ForegroundColor Red
-    Write-Host "Please stop the conflicting process or change PORT=$($appPort + 1) in your .env file." -ForegroundColor Yellow
-    exit 1
-}
-
-# 6. Check and ensure MongoDB is available on 127.0.0.1:$mongoHostPort
-$mongoReady = $false
-try {
-    $tcp = New-Object System.Net.Sockets.TcpClient
-    $tcp.Connect('127.0.0.1', $mongoHostPort)
-    $tcp.Close()
-    $mongoReady = $true
-} catch {
-    $mongoReady = $false
-}
-
+# 6. Ensure MongoDB is active on 127.0.0.1:$mongoHostPort
 if (-not $mongoReady) {
-    # Check if a standalone MongoDB is already listening on default 27017
     try {
-        $tcp27017 = New-Object System.Net.Sockets.TcpClient
-        $tcp27017.Connect('127.0.0.1', 27017)
-        $tcp27017.Close()
-        Write-Host "[INFO] Local standalone MongoDB detected on 127.0.0.1:27017. Using local instance." -ForegroundColor Green
-        $mongoHostPort = 27017
-        $env:MONGO_URI = "mongodb://localhost:27017/smart_pds_db"
+        $tcp = New-Object System.Net.Sockets.TcpClient
+        $tcp.Connect('127.0.0.1', $mongoHostPort)
+        $tcp.Close()
         $mongoReady = $true
-    } catch {}
+    } catch {
+        $mongoReady = $false
+    }
 }
 
 if (-not $mongoReady) {
-    Write-Host "[INFO] MongoDB is not running on 127.0.0.1:$mongoHostPort." -ForegroundColor Yellow
-    if (Get-Command docker -ErrorAction SilentlyContinue) {
-        Write-Host "[INFO] Starting MongoDB service via Docker Compose (docker compose up -d mongo)..." -ForegroundColor Cyan
-        docker compose up -d mongo | Out-Null
+    Write-Host "[INFO] Starting MongoDB service via Docker Compose (docker compose up -d mongo)..." -ForegroundColor Cyan
+    docker compose up -d mongo | Out-Null
 
-        Write-Host "[INFO] Waiting for MongoDB to become ready on 127.0.0.1:$mongoHostPort..." -ForegroundColor Gray
-        for ($i = 0; $i -lt 30; $i++) {
-            Start-Sleep -Seconds 1
-            try {
-                $tcp = New-Object System.Net.Sockets.TcpClient
-                $tcp.Connect('127.0.0.1', $mongoHostPort)
-                $tcp.Close()
-                $mongoReady = $true
-                break
-            } catch {}
-        }
+    Write-Host "[INFO] Waiting for MongoDB to become ready on 127.0.0.1:$mongoHostPort..." -ForegroundColor Gray
+    for ($i = 0; $i -lt 30; $i++) {
+        Start-Sleep -Seconds 1
+        try {
+            $tcp = New-Object System.Net.Sockets.TcpClient
+            $tcp.Connect('127.0.0.1', $mongoHostPort)
+            $tcp.Close()
+            $mongoReady = $true
+            break
+        } catch {}
     }
 }
 
@@ -131,6 +178,12 @@ if ($mongoReady) {
     Write-Host "[WARNING] Could not confirm MongoDB on 127.0.0.1:$mongoHostPort. Native Flask might fail to connect." -ForegroundColor Red
 }
 
+Write-Host ""
+Write-Host "===================================================" -ForegroundColor Cyan
+Write-Host "  Port Allocation:" -ForegroundColor White
+Write-Host "  - Web Application Port:    $appPort" -ForegroundColor White
+Write-Host "  - MongoDB Host Port:       $mongoHostPort (mapped to internal 27017)" -ForegroundColor White
+Write-Host "===================================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Access URL:  http://localhost:$appPort" -ForegroundColor Yellow
 Write-Host ""
